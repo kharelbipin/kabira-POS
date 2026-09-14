@@ -60,26 +60,44 @@ export const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({
 
   const startCamera = async () => {
     setCameraError(null);
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      setCameraError('Camera access is not supported by this browser. Please upload an invoice file or photo instead.');
+      setCameraActive(false);
+      return;
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+        });
+      } catch (idealErr) {
+        // Fall back to basic video constraint if ideal environment constraint fails
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
       setCameraStream(stream);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        videoRef.current.play().catch(() => {});
       }
       setCameraActive(true);
       try {
         localStorage.setItem('pos_camera_permission_granted', 'true');
       } catch (e) {}
     } catch (err: any) {
-      console.error('Camera error', err);
-      setCameraError(err.message || 'Unable to access camera. Please check browser permissions or upload an image instead.');
+      console.warn('Camera access unavailable or permission denied:', err?.name || err?.message || err);
+      const isPermDenied = err?.name === 'NotAllowedError' || err?.message?.toLowerCase().includes('permission');
+      setCameraError(
+        isPermDenied
+          ? 'Camera permission denied or blocked. Please enable camera in browser settings or upload an invoice photo directly.'
+          : (err?.message || 'Unable to access camera. Please check permissions or upload an image instead.')
+      );
       setCameraActive(false);
     }
   };
@@ -501,16 +519,28 @@ Subtotal: $593.50  Tax: $49.00  Invoice Total: $642.50`,
             <div className="space-y-4">
               <div className="relative aspect-4/3 bg-black rounded-xl overflow-hidden border border-[#262626] flex items-center justify-center">
                 {cameraError ? (
-                  <div className="p-6 text-center space-y-2">
+                  <div className="p-6 text-center space-y-3 max-w-sm">
                     <AlertCircle className="w-8 h-8 text-amber-400 mx-auto" />
-                    <p className="text-xs text-white">{cameraError}</p>
-                    <button
-                      type="button"
-                      onClick={startCamera}
-                      className="px-3 py-1.5 bg-[#262626] hover:bg-[#333333] text-xs text-white rounded-md cursor-pointer"
-                    >
-                      Retry Camera
-                    </button>
+                    <p className="text-xs text-[#E5E5E5] leading-relaxed">{cameraError}</p>
+                    <div className="flex items-center justify-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={startCamera}
+                        className="px-3 py-1.5 bg-[#262626] hover:bg-[#333333] text-xs font-semibold text-white rounded-md cursor-pointer transition-colors"
+                      >
+                        Retry Camera
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveMode('upload');
+                          fileInputRef.current?.click();
+                        }}
+                        className="px-3 py-1.5 bg-[#C5A059] hover:bg-[#D4AF37] text-xs font-bold text-black rounded-md cursor-pointer transition-colors"
+                      >
+                        Upload File Instead
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <>

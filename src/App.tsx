@@ -26,12 +26,13 @@ import { ShiftsView } from './components/shifts/ShiftsView';
 import { ChecksView } from './components/checks/ChecksView';
 import { OnlineStoreView } from './components/onlineStore/OnlineStoreView';
 import { ManagerSettingsCenter } from './components/settings/ManagerSettingsCenter';
+import { CheckUploadDirectView } from './components/checks/CheckUploadDirectView';
 import { MobileFastCameraView } from './components/mobile/MobileFastCameraView';
 import { MobileQueueBusterView } from './components/mobile/MobileQueueBusterView';
 import { PosBridgeHubModal } from './components/bridge/PosBridgeHubModal';
 import { CustomerDisplayView } from './components/display/CustomerDisplayView';
 import { posBridge } from './services/posBridge';
-import { Landmark } from 'lucide-react';
+import { Landmark, Boxes, BarChart3, Settings, ShieldAlert } from 'lucide-react';
 
 import { LoginModal } from './components/LoginModal';
 import { CheckoutModal } from './components/CheckoutModal';
@@ -41,6 +42,8 @@ import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { CustomerSelectModal } from './components/CustomerSelectModal';
 import { ItemDiscountModal } from './components/ItemDiscountModal';
 import { MobileInvoiceCaptureView } from './components/invoice/MobileInvoiceCaptureView';
+import { StandalonePaymentFallbackModal } from './components/payment/StandalonePaymentFallbackModal';
+import { AllFunctionsMenuModal } from './components/AllFunctionsMenuModal';
 
 export default function App() {
   // Authentication & Current User (AU-01)
@@ -48,10 +51,45 @@ export default function App() {
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(true);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
 
+  // Standalone Customer Smartphone Check & ID Intake Form (Phase 2 CC-006, CC-036)
+  const checkUploadSession = useMemo(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const sid = params.get('mobileCheck') || params.get('checkUpload') || params.get('check') || params.get('checkSession');
+      const tok = params.get('token') || undefined;
+      const view = params.get('view');
+      if (sid || view === 'check-upload' || view === 'check' || window.location.hash.startsWith('#check-upload')) {
+        return {
+          sessionId: sid || tok || `chk-${Date.now()}`,
+          token: tok || sid || `INTAKE-${Math.floor(1000 + Math.random() * 9000)}`,
+        };
+      }
+    } catch (e) {}
+    return null;
+  }, []);
+
+  // Standalone Mobile AI Shelf Camera Form (INV-02 to INV-18)
+  const shelfCameraSession = useMemo(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const sid = params.get('mobileShelf') || params.get('shelfSession');
+      const view = params.get('view');
+      const loc = params.get('loc') || undefined;
+      if (sid || view === 'shelf-camera' || view === 'shelf' || window.location.hash.startsWith('#shelf-camera')) {
+        return {
+          sessionId: sid || `shelf-${Date.now()}`,
+          location: loc,
+        };
+      }
+    } catch (e) {}
+    return null;
+  }, []);
+
   // Mobile QR Phone Camera Intake View (INV-02 to INV-18)
   const [mobileSessionParam, setMobileSessionParam] = useState<{ sessionId: string; token?: string } | null>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
+      if (params.get('mobileCheck') || params.get('mobileShelf')) return null;
       const sid = params.get('mobileUpload') || params.get('session');
       const tok = params.get('token') || undefined;
       if (sid) {
@@ -91,6 +129,8 @@ export default function App() {
   const [itemDiscountTarget, setItemDiscountTarget] = useState<CartItem | null>(null);
   const [showBridgeHubModal, setShowBridgeHubModal] = useState<boolean>(false);
   const [showCustomerDisplayModal, setShowCustomerDisplayModal] = useState<boolean>(false);
+  const [showPaymentFallbackModal, setShowPaymentFallbackModal] = useState<boolean>(false);
+  const [showAllFunctionsModal, setShowAllFunctionsModal] = useState<boolean>(false);
 
   // Standalone Customer-Facing Display Detection (PB-018)
   const isCustomerDisplayMode = useMemo(() => {
@@ -159,8 +199,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (isCustomerDisplayMode || checkUploadSession || shelfCameraSession || mobileSessionParam) {
+      setIsAuthenticating(false);
+      return;
+    }
     loadAllData();
-  }, [loadAllData]);
+  }, [loadAllData, isCustomerDisplayMode, checkUploadSession, shelfCameraSession, mobileSessionParam]);
 
   // Cart Operations (CA-01, CA-02, CA-03)
   const handleAddToCart = (product: Product) => {
@@ -413,6 +457,48 @@ export default function App() {
     p => p.active && p.stockQuantity <= p.lowStockThreshold
   ).length;
 
+  // Standalone Customer Check & ID Upload Form (opens directly on QR code scan)
+  if (checkUploadSession) {
+    return (
+      <CheckUploadDirectView
+        sessionId={checkUploadSession.sessionId}
+        token={checkUploadSession.token}
+        onExit={() => {
+          window.location.search = '';
+        }}
+      />
+    );
+  }
+
+  // Standalone Mobile AI Shelf Photo Camera Form (opens directly on shelf QR scan)
+  if (shelfCameraSession) {
+    return (
+      <MobileFastCameraView
+        mode="shelf"
+        sessionId={shelfCameraSession.sessionId}
+        onExit={() => {
+          window.location.search = '';
+        }}
+      />
+    );
+  }
+
+  // Standalone Mobile Invoice Capture View
+  if (mobileSessionParam) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#0E0E0E] flex flex-col">
+        <MobileInvoiceCaptureView
+          sessionId={mobileSessionParam.sessionId}
+          token={mobileSessionParam.token}
+          onComplete={() => {
+            setMobileSessionParam(null);
+            window.location.search = '';
+          }}
+        />
+      </div>
+    );
+  }
+
   if (isCustomerDisplayMode) {
     return <CustomerDisplayView />;
   }
@@ -467,10 +553,11 @@ export default function App() {
             setShowCustomerDisplayModal(true);
           }
         }}
+        onOpenAllFunctions={() => setShowAllFunctionsModal(true)}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-hidden relative">
+      <main className="flex-1 min-h-0 overflow-hidden relative">
         {currentTab === 'dashboard' && (
           <DashboardView
             onNavigateToInventory={() => setCurrentTab('inventory')}
@@ -530,51 +617,45 @@ export default function App() {
         )}
 
         {currentTab === 'checks' && (
-          currentUser?.role === 'Cashier' ? (
+          <ChecksView
+            currentUser={currentUser}
+            settings={settings}
+            onRefreshData={loadAllData}
+          />
+        )}
+
+        {currentTab === 'inventory' && (
+          currentUser?.role === 'Cashier' && !settings?.cashierPermissions?.allowInventory ? (
             <div className="h-full flex flex-col items-center justify-center bg-[#0D0D0D] text-[#E5E5E5] p-6">
               <div className="max-w-md w-full bg-[#141414] border border-[#262626] rounded-2xl p-8 text-center space-y-4 shadow-xl">
-                <div className="w-16 h-16 rounded-full bg-red-950/40 border border-red-800/40 text-red-400 mx-auto flex items-center justify-center">
-                  <Landmark className="w-8 h-8" />
+                <div className="w-16 h-16 rounded-full bg-amber-950/40 border border-amber-800/40 text-amber-400 mx-auto flex items-center justify-center">
+                  <Boxes className="w-8 h-8" />
                 </div>
-                <h2 className="text-xl font-bold text-white uppercase tracking-wider">Access Restricted</h2>
+                <h2 className="text-xl font-bold text-white uppercase tracking-wider">Inventory Restricted</h2>
                 <p className="text-sm text-[#888888] leading-relaxed">
-                  The Checks & Banking module is restricted to <strong>Admin</strong> and <strong>Manager</strong> personnel only. Cashier credentials are not authorized to view bank accounts, accounts payable checks, or cash drawers.
+                  Inventory catalog management and stock audits are restricted to <strong>Manager</strong> and <strong>Admin</strong> accounts, unless explicitly granted by management in Settings.
                 </p>
-                <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
+                <div className="pt-2 flex justify-center">
                   <button
                     onClick={() => setCurrentTab('pos')}
-                    className="px-4 py-2.5 rounded-xl bg-[#262626] hover:bg-[#333333] text-white text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                    className="px-5 py-2.5 rounded-xl bg-[#C5A059] hover:bg-[#B38F46] text-black text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
                   >
                     Return to POS Register
-                  </button>
-                  <button
-                    onClick={() => setShowLoginModal(true)}
-                    className="px-4 py-2.5 rounded-xl bg-[#C5A059] hover:bg-[#B38F46] text-black text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
-                  >
-                    Manager / Admin Login
                   </button>
                 </div>
               </div>
             </div>
           ) : (
-            <ChecksView
+            <InventoryView
+              products={products}
+              categories={categories}
               currentUser={currentUser}
               settings={settings}
-              onRefreshData={loadAllData}
+              onRefresh={() => api.getProducts().then(setProducts)}
+              initialSubTab="catalog"
+              onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
             />
           )
-        )}
-
-        {currentTab === 'inventory' && (
-          <InventoryView
-            products={products}
-            categories={categories}
-            currentUser={currentUser}
-            settings={settings}
-            onRefresh={() => api.getProducts().then(setProducts)}
-            initialSubTab="catalog"
-            onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
-          />
         )}
 
         {currentTab === 'receiving' && (
@@ -602,7 +683,31 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'reports' && <ReportsView />}
+        {currentTab === 'reports' && (
+          currentUser?.role === 'Cashier' && !settings?.cashierPermissions?.allowReports ? (
+            <div className="h-full flex flex-col items-center justify-center bg-[#0D0D0D] text-[#E5E5E5] p-6">
+              <div className="max-w-md w-full bg-[#141414] border border-[#262626] rounded-2xl p-8 text-center space-y-4 shadow-xl">
+                <div className="w-16 h-16 rounded-full bg-amber-950/40 border border-amber-800/40 text-amber-400 mx-auto flex items-center justify-center">
+                  <BarChart3 className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl font-bold text-white uppercase tracking-wider">Reports Restricted</h2>
+                <p className="text-sm text-[#888888] leading-relaxed">
+                  Financial and operational reporting is restricted to <strong>Manager</strong> and <strong>Admin</strong> accounts, unless granted by an administrator.
+                </p>
+                <div className="pt-2 flex justify-center">
+                  <button
+                    onClick={() => setCurrentTab('pos')}
+                    className="px-5 py-2.5 rounded-xl bg-[#C5A059] hover:bg-[#B38F46] text-black text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  >
+                    Return to POS Register
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <ReportsView />
+          )
+        )}
 
         {currentTab === 'users' && (
           <UsersView
@@ -613,11 +718,33 @@ export default function App() {
         )}
 
         {currentTab === 'settings' && (
-          <ManagerSettingsCenter
-            settings={settings}
-            currentUser={currentUser}
-            onRefresh={() => api.getSettings().then(setSettings)}
-          />
+          currentUser?.role === 'Cashier' ? (
+            <div className="h-full flex flex-col items-center justify-center bg-[#0D0D0D] text-[#E5E5E5] p-6">
+              <div className="max-w-md w-full bg-[#141414] border border-[#262626] rounded-2xl p-8 text-center space-y-4 shadow-xl">
+                <div className="w-16 h-16 rounded-full bg-red-950/40 border border-red-800/40 text-red-400 mx-auto flex items-center justify-center">
+                  <Settings className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl font-bold text-white uppercase tracking-wider">Settings Restricted</h2>
+                <p className="text-sm text-[#888888] leading-relaxed">
+                  POS configuration, payment gateways, and system settings are strictly reserved for <strong>Manager</strong> and <strong>Admin</strong> staff.
+                </p>
+                <div className="pt-2 flex justify-center">
+                  <button
+                    onClick={() => setCurrentTab('pos')}
+                    className="px-5 py-2.5 rounded-xl bg-[#C5A059] hover:bg-[#B38F46] text-black text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                  >
+                    Return to POS Register
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <ManagerSettingsCenter
+              settings={settings}
+              currentUser={currentUser}
+              onRefresh={() => api.getSettings().then(setSettings)}
+            />
+          )
         )}
 
         {currentTab === 'audit' && <AuditLogsView />}
@@ -726,22 +853,92 @@ export default function App() {
         </div>
       )}
 
-      {/* Mobile Invoice Capture Fullscreen Overlay (INV-02 to INV-18) */}
-      {mobileSessionParam && (
-        <div className="fixed inset-0 z-50 bg-[#0E0E0E] flex flex-col">
-          <MobileInvoiceCaptureView
-            sessionId={mobileSessionParam.sessionId}
-            token={mobileSessionParam.token}
-            onComplete={() => {
-              setMobileSessionParam(null);
-              if (window.history && window.history.pushState) {
-                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-                window.history.pushState({ path: newUrl }, '', newUrl);
-              }
-            }}
-          />
-        </div>
-      )}
+      {/* Standalone Emergency Payment Fallback Modal (Separate Menu) */}
+      <StandalonePaymentFallbackModal
+        isOpen={showPaymentFallbackModal}
+        onClose={() => setShowPaymentFallbackModal(false)}
+        cartGrandTotal={grandTotal}
+        cartItemCount={cartItems.length}
+        settings={settings}
+        currentUser={currentUser}
+        onPaymentSuccess={async details => {
+          playBeep('success');
+          if (cartItems.length > 0) {
+            // Finalize active cart order with fallback payment tender
+            await handleCompleteOrder({
+              method: details.method,
+              cardBrand: details.cardBrand,
+              cardLast4: details.cardLast4,
+              authCode: details.authCode,
+              processorTxId: details.processorTxId,
+              paymentSessionId: details.paymentSessionId,
+              fallbackMethod: details.fallbackMethod,
+              isFallback: true,
+            });
+          } else {
+            // Standalone emergency fallback charge: log order & show receipt
+            try {
+              const fallbackOrder = await api.createOrder({
+                items: [
+                  {
+                    product: {
+                      id: 'fallback-custom-charge',
+                      name: `Emergency Charge (${details.fallbackMethod.replace(/_/g, ' ')})`,
+                      sku: 'FALLBACK-PAY',
+                      price: details.amountPaid,
+                      category: 'Other',
+                      stockQuantity: 999,
+                      barcode: '00000000',
+                      costPrice: 0,
+                    },
+                    quantity: 1,
+                    price: details.amountPaid,
+                    taxable: false,
+                  },
+                ],
+                subtotal: details.amountPaid,
+                discountTotal: 0,
+                taxTotal: 0,
+                grandTotal: details.amountPaid,
+                payment: {
+                  method: details.method,
+                  cardBrand: details.cardBrand,
+                  cardLast4: details.cardLast4,
+                  authCode: details.authCode,
+                  processorTxId: details.processorTxId,
+                  fallbackMethod: details.fallbackMethod,
+                  isFallback: true,
+                },
+              });
+              setLastCompletedOrder(fallbackOrder);
+              setShowReceiptModal(true);
+              loadAllData();
+            } catch (err) {
+              console.error('Failed to log standalone fallback payment:', err);
+            }
+          }
+        }}
+      />
+
+      {/* Global All System Functions Directory Modal */}
+      <AllFunctionsMenuModal
+        isOpen={showAllFunctionsModal}
+        onClose={() => setShowAllFunctionsModal(false)}
+        onNavigateTab={tab => setCurrentTab(tab as any)}
+        onOpenModal={modalName => {
+          if (modalName === 'checkout-fallback') {
+            setShowPaymentFallbackModal(true);
+          } else if (modalName === 'held-orders') {
+            setShowHeldOrdersModal(true);
+          } else if (modalName === 'scanner') {
+            setShowScannerModal(true);
+          } else if (modalName === 'customer-display') {
+            setShowCustomerDisplayModal(true);
+          } else if (modalName === 'bridge-hub') {
+            setShowBridgeHubModal(true);
+          }
+        }}
+      />
     </div>
   );
 }

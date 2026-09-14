@@ -8,6 +8,9 @@ import {
   Smartphone,
   Split,
   ShieldCheck,
+  ShieldAlert,
+  ArrowRight,
+  Wifi,
   CheckCircle2,
   X,
   AlertCircle,
@@ -617,7 +620,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <label className="block text-xs font-bold uppercase tracking-widest text-[#A3A3A3] mb-2.5">
               Select Payment Method
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
               <button
                 type="button"
                 id="pay-method-cash"
@@ -643,7 +646,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 }`}
               >
                 <CreditCard className="w-6 h-6 mb-1 text-[#C5A059]" />
-                <span className="text-xs font-bold uppercase tracking-wider">Credit / Debit</span>
+                <span className="text-xs font-bold uppercase tracking-wider">Terminal Card</span>
               </button>
 
               <button
@@ -672,6 +675,21 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               >
                 <Split className="w-6 h-6 mb-1 text-[#C5A059]" />
                 <span className="text-xs font-bold uppercase tracking-wider">Split Payment</span>
+              </button>
+
+              <button
+                type="button"
+                id="pay-method-fallback"
+                onClick={() => { setMethod('fallback'); setError(null); }}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer ${
+                  method === 'fallback'
+                    ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-sm'
+                    : 'bg-[#141414] border-[#262626] text-[#A3A3A3] hover:bg-[#1A1A1A] hover:text-[#E5E5E5]'
+                }`}
+              >
+                <ShieldAlert className="w-6 h-6 mb-1 text-amber-400" />
+                <span className="text-xs font-bold uppercase tracking-wider">Fallback Menu</span>
+                <span className="text-[10px] text-[#737373] mt-0.5">QR / Phone / Keyed</span>
               </button>
             </div>
           </div>
@@ -855,7 +873,121 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           )}
 
           {method === 'card' && (
-            <div className="bg-[#141414] p-4 sm:p-5 rounded-2xl border border-[#262626]">
+            <div className="bg-[#141414] p-5 rounded-2xl border border-[#262626] space-y-4">
+              <div className="flex items-center justify-between border-b border-[#222222] pb-3">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    Counter PIN Pad Terminal Online
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-[#888888]">
+                  IP: {settings?.terminalIp || '192.168.1.180:8080'}
+                </span>
+              </div>
+
+              <div className="p-4 bg-[#191919] rounded-xl border border-[#2A2A2A] text-center space-y-2">
+                <div className="w-12 h-12 rounded-full bg-[#C5A059]/15 text-[#C5A059] mx-auto flex items-center justify-center">
+                  <CreditCard className="w-6 h-6" />
+                </div>
+                <h4 className="font-serif italic font-bold text-base text-white">
+                  Insert, Tap, or Swipe on Counter Terminal
+                </h4>
+                <p className="text-xs text-[#888888] max-w-sm mx-auto">
+                  Customer is prompted on customer-facing Verifone/Pax device for EMV Chip or PIN verification.
+                </p>
+
+                {/* Card Brand Selector */}
+                <div className="flex items-center justify-center space-x-2 pt-2">
+                  {(['Visa', 'Mastercard', 'Amex'] as const).map(brand => (
+                    <button
+                      key={brand}
+                      type="button"
+                      onClick={() => setCardBrand(brand)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                        cardBrand === brand
+                          ? 'bg-[#C5A059] text-black shadow-xs'
+                          : 'bg-[#222222] text-[#888888] hover:text-white'
+                      }`}
+                    >
+                      {brand}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                id="btn-process-terminal-card"
+                disabled={isProcessing}
+                onClick={async () => {
+                  try {
+                    setIsProcessing(true);
+                    await onCompleteOrder({
+                      method: 'card',
+                      amount: effectiveGrandTotal,
+                      pointsRedeemed: applyLoyaltyPoints ? pointsToRedeem : 0,
+                      pointsDiscountAmount: pointsDiscount,
+                      cardBrand,
+                      cardLast4: Math.floor(1000 + Math.random() * 9000).toString(),
+                      authCode: `AUTH-${Math.floor(100000 + Math.random() * 900000)}`,
+                      fallbackMethod: 'card_terminal',
+                    });
+                    playBeep('success');
+                  } catch (err: any) {
+                    playBeep('error');
+                    setError(err.message || 'Terminal charge failed');
+                    setIsProcessing(false);
+                  }
+                }}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#C5A059] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#C5A059] text-black font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center space-x-2 transition-all cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>
+                  {isProcessing ? 'Waiting for PIN Pad Approval...' : `Process Terminal Card ($${effectiveGrandTotal.toFixed(2)})`}
+                </span>
+              </button>
+
+              {/* Notice & switch to Fallback Menu */}
+              <div className="p-3 rounded-xl bg-[#1A1A1A] border border-[#2B2B2B] flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-xs text-[#AAAAAA]">
+                    Terminal frozen, offline, or customer wants QR / Phone checkout?
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playBeep('click');
+                    setMethod('fallback');
+                  }}
+                  className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-bold text-[11px] uppercase tracking-wider transition-colors cursor-pointer shrink-0 ml-2"
+                >
+                  Switch to Fallback Menu →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {method === 'fallback' && (
+            <div className="bg-[#141414] p-4 sm:p-5 rounded-2xl border border-amber-500/30">
+              <div className="flex items-center justify-between mb-3 border-b border-[#262626] pb-2.5">
+                <div className="flex items-center space-x-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-400" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                    Emergency Payment Fallback Center
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMethod('card')}
+                  className="text-[11px] text-[#888888] hover:text-[#C5A059] transition-colors cursor-pointer"
+                >
+                  ← Back to Terminal
+                </button>
+              </div>
+
               <CardPaymentFallbackManager
                 amountDue={effectiveGrandTotal}
                 orderNumber={`ORD-${Date.now().toString().slice(-5)}`}

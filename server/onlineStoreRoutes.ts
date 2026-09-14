@@ -19,6 +19,7 @@ let currentStoreConfig: OnlineStoreConfig = {
   id: 'web-cfg-377',
   businessId: 'biz-377-spirits',
   storeId: 'store-granbury-01',
+  enabled: true,
   websiteStatus: 'live',
   subdomain: '377spirits.yourpos.com',
   customDomain: 'www.377spirits.com',

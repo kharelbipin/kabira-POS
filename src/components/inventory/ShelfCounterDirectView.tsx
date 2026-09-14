@@ -127,6 +127,13 @@ export const ShelfCounterDirectView: React.FC<ShelfCounterDirectViewProps> = ({
     setErrorMessage(null);
 
     try {
+      // Proactively stage photo to backend API session
+      api.uploadShelfPhotos(shelfSessionId, {
+        photoUrl: imageDataUrl,
+        label: shelfLocation,
+        photos: [{ url: imageDataUrl, label: shelfLocation }],
+      }).catch(e => console.warn('Backend shelf photo staging notice:', e));
+
       // Call backend AI shelf counter service or fallback to intelligent vision detector
       const aiResult = await api.countShelfBottlesWithAi(imageDataUrl, shelfLocation).catch(() => null);
 
@@ -188,6 +195,14 @@ export const ShelfCounterDirectView: React.FC<ShelfCounterDirectViewProps> = ({
       localStorage.setItem('pos_last_shelf_count_event', JSON.stringify({ shelfSessionId, totalCount, timestamp: Date.now() }));
     } catch (err) {
       console.warn('LocalStorage save failed:', err);
+    }
+
+    if (shelfImage) {
+      api.uploadShelfPhotos(shelfSessionId, {
+        photoUrl: shelfImage,
+        label: shelfLocation,
+        photos: [{ url: shelfImage, label: shelfLocation }],
+      }).catch(() => {});
     }
 
     playBeep('success');

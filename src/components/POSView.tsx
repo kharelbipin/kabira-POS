@@ -293,7 +293,6 @@ export const POSView: React.FC<POSViewProps> = ({
 
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [selectedSize, setSelectedSize] = useState<string>('all');
-  const [showMoreMenu, setShowMoreMenu] = useState<boolean>(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set(['prod-1', 'prod-3', 'prod-4']));
 
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
@@ -307,6 +306,18 @@ export const POSView: React.FC<POSViewProps> = ({
     playBeep('click');
   };
 
+  // Tobacco & Alcohol Cutoff Age for Cashier / Manager register (not Admin)
+  const isCashierOrManagerRegister = currentUser?.role === 'Cashier' || currentUser?.role === 'Manager';
+  const cutoffDate = useMemo(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 21);
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }, []);
+
   const activeCategoryTitle = useMemo(() => {
     if (selectedCategoryId === 'all') return 'All Products';
     if (selectedCategoryId === 'favorites') return 'Favorites';
@@ -315,10 +326,10 @@ export const POSView: React.FC<POSViewProps> = ({
   }, [selectedCategoryId, categories]);
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-84px)] overflow-hidden bg-[#F8FAFC] text-slate-800 select-none">
+    <div className="h-full flex-1 min-h-0 flex flex-col overflow-hidden bg-[#F8FAFC] text-slate-800 select-none">
       {/* Action Keys Bar directly under navigation matching mockup */}
-      <div className="bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between gap-2 overflow-x-auto shrink-0 shadow-2xs">
-        <div className="flex items-center space-x-2">
+      <div className="bg-white border-b border-slate-200 px-4 py-1.5 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar shrink-0 shadow-2xs">
+        <div className="flex items-center space-x-2 shrink-0 flex-nowrap">
           {/* [+ Add Item (F4)] in Warm Golden Amber with bold Plus Icon */}
           <button
             type="button"
@@ -326,7 +337,7 @@ export const POSView: React.FC<POSViewProps> = ({
               playBeep('click');
               setShowAddManualModal(true);
             }}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-[#F3C067] hover:bg-[#F59E0B] text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#F3C067] hover:bg-[#F59E0B] text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4 text-slate-950 stroke-[3]" />
             <span>Add Item (F4)</span>
@@ -339,7 +350,7 @@ export const POSView: React.FC<POSViewProps> = ({
               playBeep('click');
               if (onOpenScannerModal) onOpenScannerModal();
             }}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-[#1E293B] hover:bg-[#0F172A] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#1E293B] hover:bg-[#0F172A] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
           >
             <ScanBarcode className="w-4 h-4" />
             <span>Scan (F3)</span>
@@ -349,7 +360,7 @@ export const POSView: React.FC<POSViewProps> = ({
           <button
             type="button"
             onClick={handleLottoSale}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-[#059669] hover:bg-[#047857] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#059669] hover:bg-[#047857] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
           >
             <Ticket className="w-4 h-4" />
             <span>Lotto Sale (F6)</span>
@@ -359,7 +370,7 @@ export const POSView: React.FC<POSViewProps> = ({
           <button
             type="button"
             onClick={handleLottoPayout}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-[#E11D48] hover:bg-[#BE123C] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#E11D48] hover:bg-[#BE123C] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
           >
             <DollarSign className="w-4 h-4" />
             <span>Lotto Payout (F7)</span>
@@ -372,7 +383,7 @@ export const POSView: React.FC<POSViewProps> = ({
               playBeep('click');
               onOpenCustomerModal();
             }}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
           >
             <UserCheck className="w-4 h-4 text-slate-600" />
             <span>Customer (F8)</span>
@@ -385,7 +396,7 @@ export const POSView: React.FC<POSViewProps> = ({
               playBeep('click');
               setPriceCheckModal(true);
             }}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
           >
             <Search className="w-4 h-4 text-slate-600" />
             <span>Price Check</span>
@@ -399,146 +410,112 @@ export const POSView: React.FC<POSViewProps> = ({
               playBeep('click');
               setShowCartTransferModal(true);
             }}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
             title="Import or Export queue-busting carts via QR/code (US-013 & US-014)"
           >
             <ScanBarcode className="w-4 h-4 text-amber-700" />
             <span>Mobile Cart</span>
           </button>
-
-          {/* [••• More ▾] Dropdown */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowMoreMenu(prev => !prev)}
-              className="flex items-center space-x-1 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
-            >
-              <span>More</span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
-            </button>
-
-            {showMoreMenu && (
-              <div className="absolute left-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1.5 text-xs text-slate-700 animate-in fade-in zoom-in-95">
-                <button
-                  onClick={() => {
-                    setShowMoreMenu(false);
-                    setShowManualDrawerModal(true);
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-slate-100 flex items-center space-x-2 font-medium"
-                >
-                  <Landmark className="w-4 h-4 text-amber-600" />
-                  <span>Open Drawer (F10)</span>
-                </button>
-                <a
-                  href="?view=check-upload"
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => setShowMoreMenu(false)}
-                  className="w-full text-left px-3.5 py-2 hover:bg-slate-100 flex items-center space-x-2 font-medium text-slate-700"
-                >
-                  <Ticket className="w-4 h-4 text-emerald-600" />
-                  <span>Launch Check Intake Form</span>
-                </a>
-                <a
-                  href="?view=shelf-counter"
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => setShowMoreMenu(false)}
-                  className="w-full text-left px-3.5 py-2 hover:bg-slate-100 flex items-center space-x-2 font-medium text-slate-700"
-                >
-                  <Sparkles className="w-4 h-4 text-sky-600" />
-                  <span>Launch AI Shelf Counter</span>
-                </a>
-                <div className="border-t border-slate-100 my-1"></div>
-                <button
-                  onClick={() => {
-                    setShowMoreMenu(false);
-                    onClearCart();
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center space-x-2 font-medium"
-                >
-                  <XCircle className="w-4 h-4" />
-                  <span>Clear Cart (Cancel Sale)</span>
-                </button>
-              </div>
-            )}
-          </div>
         </div>
+
+        {/* Tobacco & Alcohol Cutoff Age Compliance Bar (Cashier & Manager register only, not Admin) */}
+        {isCashierOrManagerRegister && (
+          <div
+            id="pos-age-cutoff-display"
+            className="flex items-center space-x-2 shrink-0 bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-white shadow-2xs whitespace-nowrap ml-auto"
+            title="Legal sale compliance: Customers must be born on or before this date to purchase tobacco or alcohol (21+)"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <div className="flex items-center space-x-1.5 text-[11px] font-mono whitespace-nowrap">
+              <span className="text-slate-300 font-sans font-bold uppercase text-[10px] tracking-wide">
+                Tobacco / Alcohol:
+              </span>
+              <span className="font-bold text-amber-300 font-mono tracking-tight bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
+                {cutoffDate}
+              </span>
+              <span className="text-[9px] font-sans font-black text-amber-400/90 uppercase bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30">
+                21+
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 3-Column Layout matching Mockup */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* LEFT COLUMN: Categories Sidebar (Width ~230px) */}
-        <div className="w-56 xl:w-60 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto p-3 space-y-1">
-          <div className="px-2 py-1 text-[11px] font-black uppercase tracking-wider text-slate-400">
+        <div className="w-52 xl:w-56 bg-white border-r border-slate-200 flex flex-col shrink-0 h-full overflow-hidden p-2.5">
+          <div className="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0">
             CATEGORIES
           </div>
 
-          {/* All Products */}
-          <button
-            onClick={() => setSelectedCategoryId('all')}
-            className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer ${
-              selectedCategoryId === 'all'
-                ? 'bg-amber-100 text-amber-950 font-black border border-amber-300 shadow-2xs'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent font-semibold'
-            }`}
-          >
-            <LayoutGrid className="w-4 h-4 text-amber-700 shrink-0" />
-            <span className="truncate">All Products</span>
-          </button>
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1">
+            {/* All Products */}
+            <button
+              onClick={() => setSelectedCategoryId('all')}
+              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer ${
+                selectedCategoryId === 'all'
+                  ? 'bg-amber-100 text-amber-950 font-black border border-amber-300 shadow-2xs'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent font-semibold'
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4 text-amber-700 shrink-0" />
+              <span className="truncate">All Products</span>
+            </button>
 
-          {/* Individual Categories with custom icons */}
-          {categories.map(cat => {
-            const Icon = getCategoryIcon(cat.name);
-            const isSelected = selectedCategoryId === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategoryId(cat.id)}
-                className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-amber-100 text-amber-950 font-black border border-amber-300 shadow-2xs'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent font-semibold'
-                }`}
-              >
-                <Icon
-                  className={`w-4 h-4 shrink-0 ${
-                    isSelected ? 'text-amber-700' : 'text-slate-400'
+            {/* Individual Categories with custom icons */}
+            {categories.map(cat => {
+              const Icon = getCategoryIcon(cat.name);
+              const isSelected = selectedCategoryId === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategoryId(cat.id)}
+                  className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-amber-100 text-amber-950 font-black border border-amber-300 shadow-2xs'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent font-semibold'
                   }`}
-                />
-                <span className="truncate">{cat.name}</span>
-              </button>
-            );
-          })}
+                >
+                  <Icon
+                    className={`w-4 h-4 shrink-0 ${
+                      isSelected ? 'text-amber-700' : 'text-slate-400'
+                    }`}
+                  />
+                  <span className="truncate">{cat.name}</span>
+                </button>
+              );
+            })}
 
-          {/* Favorites Filter */}
-          <button
-            onClick={() => setSelectedCategoryId('favorites')}
-            className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer ${
-              selectedCategoryId === 'favorites'
-                ? 'bg-amber-100 text-amber-950 font-black border border-amber-300 shadow-2xs'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent font-semibold'
-            }`}
-          >
-            <Star className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
-            <span>Staff Picks & Favorites</span>
-          </button>
+            {/* Favorites Filter */}
+            <button
+              onClick={() => setSelectedCategoryId('favorites')}
+              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer ${
+                selectedCategoryId === 'favorites'
+                  ? 'bg-amber-100 text-amber-950 font-black border border-amber-300 shadow-2xs'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent font-semibold'
+              }`}
+            >
+              <Star className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
+              <span>Staff Picks & Favorites</span>
+            </button>
+          </div>
 
           {/* Bottom Sidebar Promo Card matching Mockup */}
-          <div className="mt-auto pt-3">
-            <div className="relative rounded-2xl overflow-hidden shadow-xs border border-amber-900/40 bg-gradient-to-br from-[#0F172A] via-[#1E1B4B] to-[#1E293B] text-white p-3.5">
+          <div className="mt-auto pt-2 shrink-0">
+            <div className="relative rounded-2xl overflow-hidden shadow-xs border border-amber-900/40 bg-gradient-to-br from-[#0F172A] via-[#1E1B4B] to-[#1E293B] text-white p-3">
               <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-amber-500/10 rounded-full blur-xl pointer-events-none"></div>
-              <div className="relative z-10 space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#F3C067] block">
+              <div className="relative z-10 space-y-0.5">
+                <span className="text-[9px] font-black uppercase tracking-widest text-[#F3C067] block">
                   GRANBURY, TEXAS
                 </span>
-                <h4 className="text-xs font-black tracking-tight text-white uppercase leading-tight">
+                <h4 className="text-[11px] font-black tracking-tight text-white uppercase leading-tight">
                   GOOD SPIRITS
                 </h4>
-                <p className="text-[11px] font-serif italic text-amber-200/90 leading-tight">
+                <p className="text-[10px] font-serif italic text-amber-200/90 leading-tight">
                   Great Company.
                 </p>
-                <span className="text-[9px] text-slate-400 block pt-1 font-mono">
+                <span className="text-[8.5px] text-slate-400 block pt-0.5 font-mono">
                   Fine Liquor & Craft Provisions
                 </span>
               </div>
@@ -547,9 +524,9 @@ export const POSView: React.FC<POSViewProps> = ({
         </div>
 
         {/* MIDDLE COLUMN: Product Catalog Grid */}
-        <div className="flex-1 flex flex-col min-w-0 bg-[#F8FAFC]">
+        <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-[#F8FAFC] h-full overflow-hidden">
           {/* Header Row: Category Title, Count & Sort Controls */}
-          <div className="px-5 py-3 flex items-center justify-between border-b border-slate-200 bg-white shrink-0">
+          <div className="px-4 py-2 flex items-center justify-between border-b border-slate-200 bg-white shrink-0">
             <div className="flex items-center space-x-2">
               <h2 className="text-base font-black text-slate-900 tracking-tight">
                 {activeCategoryTitle}
@@ -600,7 +577,7 @@ export const POSView: React.FC<POSViewProps> = ({
           </div>
 
           {/* Product Cards Grid matching user mockup */}
-          <div className="flex-1 p-4 overflow-y-auto">
+          <div className="flex-1 min-h-0 p-3.5 overflow-y-auto">
             {filteredProducts.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8 text-slate-400">
                 <ShoppingBag className="w-12 h-12 text-slate-300 mb-2" />
@@ -789,7 +766,7 @@ export const POSView: React.FC<POSViewProps> = ({
       </div>
 
       {/* Full-width Footer Status Bar matching final ui.png */}
-      <div className="bg-white border-t border-slate-200 px-5 py-1.5 text-xs text-slate-500 flex items-center justify-between shrink-0 shadow-2xs z-10">
+      <div className="bg-white border-t border-slate-200 px-4 h-8 text-xs text-slate-500 flex items-center justify-between shrink-0 shadow-2xs z-10">
         <div className="flex items-center space-x-3">
           <span className="flex items-center space-x-1.5">
             <Sun className="w-3.5 h-3.5 text-amber-500" />

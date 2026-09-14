@@ -95,14 +95,31 @@ export const AiShelfCounterModal: React.FC<AiShelfCounterModalProps> = ({
     }
 
     // Check for existing or incoming mobile uploads for this session
-    const checkForMobileUploads = () => {
+    const checkForMobileUploads = async () => {
+      // 1. Local storage check for instant same-browser reaction
       try {
         const raw = localStorage.getItem(`pos_mobile_shelf_uploads_${shelfSessionId}`);
         if (raw) {
-          const uploads: { id: string; url: string; label: string }[] = JSON.parse(raw);
+          const uploads = JSON.parse(raw);
           if (Array.isArray(uploads) && uploads.length > 0) {
-            const urls = uploads.map(u => u.url);
-            setMultipleShelfImages(urls);
+            const urls = uploads.map((u: any) => u.url).filter(Boolean);
+            if (urls.length > 0) {
+              setMultipleShelfImages(prev => Array.from(new Set([...prev, ...urls])));
+              if (!selectedImage || selectedImage === SAMPLE_SHELF_PRESETS[0].imageUrl) {
+                setSelectedImage(urls[urls.length - 1]);
+              }
+            }
+          }
+        }
+      } catch (e) {}
+
+      // 2. Backend server endpoint check for cross-device smartphone uploads
+      try {
+        const res = await api.getShelfPhotos(shelfSessionId);
+        if (res && res.success && Array.isArray(res.photos) && res.photos.length > 0) {
+          const urls = res.photos.map(p => p.url).filter(Boolean);
+          if (urls.length > 0) {
+            setMultipleShelfImages(prev => Array.from(new Set([...prev, ...urls])));
             if (!selectedImage || selectedImage === SAMPLE_SHELF_PRESETS[0].imageUrl) {
               setSelectedImage(urls[urls.length - 1]);
             }
@@ -128,26 +145,44 @@ export const AiShelfCounterModal: React.FC<AiShelfCounterModalProps> = ({
 
   const startCamera = async () => {
     setCameraError(null);
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      setCameraError('Camera access is not supported by this browser. Please scan the QR code above or upload photos.');
+      setCameraActive(false);
+      return;
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+        });
+      } catch (idealErr) {
+        // Fall back to basic video constraint if environment constraints fail
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
       setCameraStream(stream);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        videoRef.current.play().catch(() => {});
       }
       setCameraActive(true);
       try {
         localStorage.setItem('pos_camera_permission_granted', 'true');
       } catch (e) {}
     } catch (err: any) {
-      console.error('Camera error', err);
-      setCameraError(err.message || 'Unable to access camera. Please check permissions or upload an image.');
+      console.warn('Camera access unavailable or permission denied:', err?.name || err?.message || err);
+      const isPermDenied = err?.name === 'NotAllowedError' || err?.message?.toLowerCase().includes('permission');
+      setCameraError(
+        isPermDenied
+          ? 'Camera permission denied or blocked. Please allow camera in browser settings, scan the QR code above with any phone, or upload shelf photos.'
+          : (err?.message || 'Unable to access camera. Please check permissions or upload an image.')
+      );
       setCameraActive(false);
     }
   };
@@ -326,7 +361,6 @@ export const AiShelfCounterModal: React.FC<AiShelfCounterModalProps> = ({
             type="button"
             onClick={() => {
               setActiveTab('camera');
-              startCamera();
             }}
             className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors cursor-pointer ${
               activeTab === 'camera'
@@ -537,18 +571,30 @@ export const AiShelfCounterModal: React.FC<AiShelfCounterModalProps> = ({
                 />
 
                 {!cameraActive && (
-                  <div className="p-6 text-center space-y-2">
+                  <div className="p-6 text-center space-y-3 max-w-md mx-auto">
                     <Camera className="w-10 h-10 text-[#555555] mx-auto" />
-                    <p className="text-xs text-[#888888]">
-                      {cameraError || 'Or use this terminal’s webcam / USB inspection camera'}
+                    <p className="text-xs text-[#AAAAAA] leading-relaxed">
+                      {cameraError || 'Or snap directly using this terminal’s webcam or USB inspection camera.'}
                     </p>
-                    <button
-                      type="button"
-                      onClick={startCamera}
-                      className="px-4 py-2 bg-[#222222] hover:bg-[#2C2C2C] text-white font-bold text-xs rounded-lg transition-colors cursor-pointer border border-[#444444]"
-                    >
-                      Start Terminal Camera
-                    </button>
+                    <div className="flex items-center justify-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={startCamera}
+                        className="px-4 py-2 bg-[#222222] hover:bg-[#2C2C2C] text-white font-bold text-xs rounded-lg transition-colors cursor-pointer border border-[#444444]"
+                      >
+                        {cameraError ? 'Retry Terminal Camera' : 'Start Terminal Camera'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('upload');
+                          fileInputRef.current?.click();
+                        }}
+                        className="px-4 py-2 bg-[#C5A059] hover:bg-[#D4AF37] text-black font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                      >
+                        Upload Photos
+                      </button>
+                    </div>
                   </div>
                 )}
 

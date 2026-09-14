@@ -179,6 +179,7 @@ export type PaymentMethod =
   | 'card'
   | 'contactless'
   | 'split'
+  | 'fallback'
   | 'card_terminal'
   | 'tap_to_pay_phone'
   | 'customer_qr'
@@ -429,6 +430,14 @@ export interface StoreSettings {
   autoUpdateProductCost?: boolean; // When true, automatically update master cost on confirmation; when false, require manager approval
   targetProfitMarginPercent?: number; // Target markup margin (e.g. 35%) for recommended selling price
   defaultReceivingLocation?: string; // Default stockroom location (e.g. "Main Liquor Storage", "Front Sales Floor")
+  // Cashier Access & RBAC Controls
+  cashierPermissions?: {
+    allowInventory?: boolean;
+    allowReports?: boolean;
+    allowAllFunctions?: boolean;
+    allowCheckIssuanceRegister?: boolean;
+    allowDepositBatches?: boolean;
+  };
 }
 
 export interface Vendor {
@@ -1105,6 +1114,7 @@ export interface OnlineStoreConfig {
   hideOutOfStock: boolean;
   publishedVersion: number;
   lastPublishedAt?: string;
+  navigationMenuItems?: { id: string; label: string; link: string; active: boolean; order?: number }[];
   createdAt: string;
   updatedAt: string;
 }

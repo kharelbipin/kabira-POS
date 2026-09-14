@@ -20,13 +20,31 @@ import {
 
 export const ReportsView: React.FC = () => {
   const [report, setReport] = useState<SalesReport | null>(null);
-  const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'all'>('all');
+  const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'custom' | 'all'>('all');
+  const [startDate, setStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  });
+  const [endDate, setEndDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [showCustomPicker, setShowCustomPicker] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const fetchReport = async () => {
+  const fetchReport = async (
+    overridePeriod?: 'today' | 'week' | 'month' | 'custom' | 'all',
+    customStart?: string,
+    customEnd?: string
+  ) => {
+    const activePeriod = overridePeriod || period;
+    const start = customStart !== undefined ? customStart : startDate;
+    const end = customEnd !== undefined ? customEnd : endDate;
     setIsLoading(true);
     try {
-      const data = await api.getSalesReport(period);
+      const data = await api.getSalesReport(
+        activePeriod,
+        activePeriod === 'custom' ? start : undefined,
+        activePeriod === 'custom' ? end : undefined
+      );
       setReport(data);
     } catch (err) {
       console.error(err);
@@ -39,13 +57,59 @@ export const ReportsView: React.FC = () => {
     fetchReport();
   }, [period]);
 
+  const handleApplyCustomRange = () => {
+    playBeep('click');
+    setPeriod('custom');
+    fetchReport('custom', startDate, endDate);
+  };
+
+  const handleQuickPreset = (days: number) => {
+    playBeep('click');
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - days);
+    const startStr = start.toISOString().slice(0, 10);
+    const endStr = end.toISOString().slice(0, 10);
+    setStartDate(startStr);
+    setEndDate(endStr);
+    setPeriod('custom');
+    fetchReport('custom', startStr, endStr);
+  };
+
+  const handleSetPresetNamed = (preset: 'today' | 'yesterday' | 'month_to_date' | 'this_year') => {
+    playBeep('click');
+    const now = new Date();
+    let startStr = '';
+    let endStr = now.toISOString().slice(0, 10);
+
+    if (preset === 'today') {
+      startStr = endStr;
+    } else if (preset === 'yesterday') {
+      const y = new Date();
+      y.setDate(now.getDate() - 1);
+      startStr = y.toISOString().slice(0, 10);
+      endStr = startStr;
+    } else if (preset === 'month_to_date') {
+      const m = new Date(now.getFullYear(), now.getMonth(), 1);
+      startStr = m.toISOString().slice(0, 10);
+    } else if (preset === 'this_year') {
+      const yr = new Date(now.getFullYear(), 0, 1);
+      startStr = yr.toISOString().slice(0, 10);
+    }
+
+    setStartDate(startStr);
+    setEndDate(endStr);
+    setPeriod('custom');
+    fetchReport('custom', startStr, endStr);
+  };
+
   const handleExportCSV = () => {
     if (!report) return;
     playBeep('click');
 
     let csvContent = 'data:text/csv;charset=utf-8,';
     csvContent += 'Metric,Value\n';
-    csvContent += `Period,${report.period || 'all'}\n`;
+    csvContent += `Period,${period === 'custom' ? `${startDate} to ${endDate}` : (report.period || 'all')}\n`;
     csvContent += `Total Sales,$${(report.totalSales ?? 0).toFixed(2)}\n`;
     csvContent += `Completed Orders,${report.completedOrdersCount ?? 0}\n`;
     csvContent += `Average Order Value,$${(report.averageOrderValue ?? 0).toFixed(2)}\n`;
@@ -58,10 +122,11 @@ export const ReportsView: React.FC = () => {
       csvContent += `"${p.name}",${p.quantitySold ?? 0},$${(p.revenue ?? 0).toFixed(2)}\n`;
     });
 
+    const filePeriod = period === 'custom' ? `${startDate}_to_${endDate}` : period;
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `sales-report-${period}-${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `sales-report-${filePeriod}-${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -70,50 +135,175 @@ export const ReportsView: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-[calc(100vh-84px)] overflow-y-auto bg-[#0A0A0A] text-[#E5E5E5] p-4 md:p-6 select-none space-y-6">
       {/* Top Header & Period Selector (RE-02) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0D0D0D] p-4 rounded-xl border border-[#262626]">
-        <div>
-          <h2 className="text-xl font-serif italic font-bold text-[#F5F5F5] flex items-center space-x-2">
-            <BarChart3 className="w-5 h-5 text-[#C5A059]" />
-            <span>Executive Sales & Inventory Analytics</span>
-          </h2>
-          <p className="text-xs text-[#737373] mt-0.5 font-sans">Real-time revenue, register metrics, and staff performance</p>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          {/* Period Pills */}
-          <div className="flex bg-[#141414] p-1 rounded-lg border border-[#262626] text-xs">
-            {(['today', 'week', 'month', 'all'] as const).map(p => (
-              <button
-                key={p}
-                id={`report-period-${p}`}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1 font-bold text-xs uppercase tracking-wider rounded capitalize transition-all cursor-pointer ${
-                  period === p ? 'bg-[#C5A059] text-black shadow-sm' : 'text-[#737373] hover:text-white'
-                }`}
-              >
-                {p === 'all' ? 'All Time' : p}
-              </button>
-            ))}
+      <div className="flex flex-col gap-3 bg-[#0D0D0D] p-4 rounded-xl border border-[#262626]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-serif italic font-bold text-[#F5F5F5] flex items-center space-x-2">
+              <BarChart3 className="w-5 h-5 text-[#C5A059]" />
+              <span>Executive Sales & Inventory Analytics</span>
+            </h2>
+            <p className="text-xs text-[#737373] mt-0.5 font-sans">
+              Real-time revenue, register metrics, date-range analysis, and staff performance
+            </p>
           </div>
 
-          <button
-            id="report-export-btn"
-            onClick={handleExportCSV}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#141414] hover:bg-[#1A1A1A] text-[#A3A3A3] hover:text-white text-xs font-bold uppercase tracking-wider border border-[#262626] transition-colors cursor-pointer"
-            title="Download CSV report (RE-06)"
-          >
-            <Download className="w-3.5 h-3.5 text-[#C5A059]" />
-            <span>Export CSV</span>
-          </button>
+          <div className="flex items-center flex-wrap gap-2">
+            {/* Period Pills */}
+            <div className="flex bg-[#141414] p-1 rounded-lg border border-[#262626] text-xs">
+              {(['today', 'week', 'month', 'all'] as const).map(p => (
+                <button
+                  key={p}
+                  id={`report-period-${p}`}
+                  onClick={() => {
+                    setShowCustomPicker(false);
+                    setPeriod(p);
+                  }}
+                  className={`px-3 py-1 font-bold text-xs uppercase tracking-wider rounded capitalize transition-all cursor-pointer ${
+                    period === p ? 'bg-[#C5A059] text-black shadow-sm' : 'text-[#737373] hover:text-white'
+                  }`}
+                >
+                  {p === 'all' ? 'All Time' : p}
+                </button>
+              ))}
+              <button
+                id="report-period-custom"
+                onClick={() => {
+                  setShowCustomPicker(prev => !prev);
+                  if (period !== 'custom') setPeriod('custom');
+                }}
+                className={`px-3 py-1 font-bold text-xs uppercase tracking-wider rounded capitalize transition-all cursor-pointer flex items-center gap-1 ${
+                  period === 'custom' ? 'bg-[#C5A059] text-black shadow-sm' : 'text-[#737373] hover:text-white'
+                }`}
+              >
+                <Calendar className="w-3 h-3" />
+                <span>Date Range</span>
+              </button>
+            </div>
 
-          <button
-            onClick={fetchReport}
-            className="p-1.5 text-[#737373] hover:text-white rounded hover:bg-[#141414] cursor-pointer transition-colors"
-            title="Refresh analytics"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
+            <button
+              id="report-export-btn"
+              onClick={handleExportCSV}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[#141414] hover:bg-[#1A1A1A] text-[#A3A3A3] hover:text-white text-xs font-bold uppercase tracking-wider border border-[#262626] transition-colors cursor-pointer"
+              title="Download CSV report (RE-06)"
+            >
+              <Download className="w-3.5 h-3.5 text-[#C5A059]" />
+              <span>Export CSV</span>
+            </button>
+
+            <button
+              onClick={() => fetchReport()}
+              className="p-1.5 text-[#737373] hover:text-white rounded hover:bg-[#141414] cursor-pointer transition-colors"
+              title="Refresh analytics"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
+
+        {/* Expandable Date Range Picker Box */}
+        {(showCustomPicker || period === 'custom') && (
+          <div className="pt-3 border-t border-[#222222] flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-[#111111] p-3 rounded-lg">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-[#AAAAAA] flex items-center gap-1 uppercase tracking-wider">
+                <Calendar className="w-3.5 h-3.5 text-[#C5A059]" />
+                Date Range:
+              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex items-center gap-1 bg-[#1A1A1A] border border-[#333333] rounded px-2 py-1">
+                  <span className="text-[10px] uppercase font-bold text-[#777777]">From</span>
+                  <input
+                    id="report-start-date"
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleApplyCustomRange()}
+                    className="bg-transparent text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <span className="text-xs text-[#737373] font-bold">to</span>
+                <div className="flex items-center gap-1 bg-[#1A1A1A] border border-[#333333] rounded px-2 py-1">
+                  <span className="text-[10px] uppercase font-bold text-[#777777]">To</span>
+                  <input
+                    id="report-end-date"
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleApplyCustomRange()}
+                    className="bg-transparent text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  id="report-apply-range-btn"
+                  onClick={handleApplyCustomRange}
+                  className="px-3 py-1.5 rounded bg-[#C5A059] text-black font-black text-xs uppercase tracking-wider hover:bg-[#B38F46] transition-colors cursor-pointer shadow-xs"
+                >
+                  Apply Range
+                </button>
+              </div>
+            </div>
+
+            {/* Quick shortcuts */}
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-[11px] text-[#666666] mr-1">Presets:</span>
+              <button
+                type="button"
+                onClick={() => handleSetPresetNamed('today')}
+                className="px-2 py-0.5 rounded bg-[#1C1C1C] hover:bg-[#282828] text-[11px] text-[#BBBBBB] hover:text-white transition-colors cursor-pointer"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetPresetNamed('yesterday')}
+                className="px-2 py-0.5 rounded bg-[#1C1C1C] hover:bg-[#282828] text-[11px] text-[#BBBBBB] hover:text-white transition-colors cursor-pointer"
+              >
+                Yesterday
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickPreset(7)}
+                className="px-2 py-0.5 rounded bg-[#1C1C1C] hover:bg-[#282828] text-[11px] text-[#BBBBBB] hover:text-white transition-colors cursor-pointer"
+              >
+                Last 7D
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickPreset(30)}
+                className="px-2 py-0.5 rounded bg-[#1C1C1C] hover:bg-[#282828] text-[11px] text-[#BBBBBB] hover:text-white transition-colors cursor-pointer"
+              >
+                Last 30D
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetPresetNamed('month_to_date')}
+                className="px-2 py-0.5 rounded bg-[#1C1C1C] hover:bg-[#282828] text-[11px] text-[#BBBBBB] hover:text-white transition-colors cursor-pointer"
+              >
+                This Month
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetPresetNamed('this_year')}
+                className="px-2 py-0.5 rounded bg-[#1C1C1C] hover:bg-[#282828] text-[11px] text-[#BBBBBB] hover:text-white transition-colors cursor-pointer"
+              >
+                YTD
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Active Range Banner */}
+        {period === 'custom' && (
+          <div className="text-xs text-[#C5A059] bg-[#C5A059]/10 border border-[#C5A059]/30 px-3 py-1.5 rounded-lg flex items-center justify-between">
+            <span className="flex items-center gap-1.5 font-mono">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Active Date Range: <strong>{startDate}</strong> &rarr; <strong>{endDate}</strong></span>
+            </span>
+            <span className="text-[11px] font-bold text-[#D5D5D5]">
+              {report?.completedOrdersCount ?? 0} completed orders analyzed
+            </span>
+          </div>
+        )}
       </div>
 
       {report && (

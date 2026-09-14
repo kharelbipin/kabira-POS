@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StoreSettings, User } from '../../types';
 import { api } from '../../utils/api';
 import { playBeep } from '../../utils/audio';
@@ -38,6 +38,7 @@ import {
   HardDrive,
   KeyRound,
   Percent,
+  Download,
 } from 'lucide-react';
 
 interface ManagerSettingsCenterProps {
@@ -246,6 +247,32 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
     offlineTransactionCacheLimit: 500,
     autoDailyBackupHour: 3,
   });
+
+  const [dbStats, setDbStats] = useState<any>(null);
+  const [isFlushingDb, setIsFlushingDb] = useState<boolean>(false);
+  const [dbFlushMsg, setDbFlushMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeSection === 'backup') {
+      api.getDatabaseStatus().then(setDbStats).catch(console.error);
+    }
+  }, [activeSection]);
+
+  const handleManualDbFlush = async () => {
+    setIsFlushingDb(true);
+    setDbFlushMsg(null);
+    try {
+      const res = await api.flushDatabaseSave();
+      setDbStats(res.stats);
+      setDbFlushMsg('Database successfully synchronized and flushed to persistent disk.');
+      playBeep('success');
+    } catch {
+      setDbFlushMsg('Error flushing database to disk.');
+      playBeep('error');
+    } finally {
+      setIsFlushingDb(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1400,23 +1427,118 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
 
             {/* SECTION 17: BACKUP & SYNC */}
             {activeSection === 'backup' && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
-                  Cloud Replication & Offline Storage
-                </h3>
-                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    <div>
-                      <span className="text-xs font-bold text-emerald-950 block">Database Sync Status</span>
-                      <span className="text-[11px] text-emerald-800">{formData.cloudSyncStatus}</span>
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                      Database Engine & Cloud Persistence
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Crash-safe file-backed disk store with automatic debounced flush on every transaction.
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={handleManualDbFlush}
+                      disabled={isFlushingDb}
+                      className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold flex items-center space-x-1.5 transition-colors disabled:opacity-50"
+                    >
+                      <HardDrive className={`w-3.5 h-3.5 ${isFlushingDb ? 'animate-pulse text-amber-700' : 'text-amber-600'}`} />
+                      <span>{isFlushingDb ? 'Flushing...' : 'Save & Flush to Disk'}</span>
+                    </button>
+                    <a
+                      href="/api/database/export"
+                      download
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-2xs"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Export DB (.JSON)</span>
+                    </a>
+                  </div>
+                </div>
+
+                {dbFlushMsg && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-900 flex items-center space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{dbFlushMsg}</span>
+                  </div>
+                )}
+
+                {/* Database Metrics Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold block">Engine Type</span>
+                    <span className="text-xs font-extrabold text-slate-900 mt-1 block truncate">
+                      {dbStats?.engine || 'Persistent Disk Store'}
+                    </span>
+                    <span className="text-[10px] text-emerald-600 font-semibold mt-0.5 flex items-center space-x-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Active & Healthy</span>
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold block">Database File Size</span>
+                    <span className="text-sm font-black text-slate-900 mt-1 block">
+                      {dbStats?.sizeFormatted || 'Calculating...'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Atomic JSON file</span>
+                  </div>
+
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold block">Last Disk Save</span>
+                    <span className="text-xs font-bold text-slate-800 mt-1 block truncate">
+                      {dbStats?.lastSavedAt ? new Date(dbStats.lastSavedAt).toLocaleTimeString() : 'Just now'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Auto-synced</span>
+                  </div>
+
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold block">Total Products</span>
+                    <span className="text-sm font-black text-amber-700 mt-1 block">
+                      {dbStats?.counts?.products ?? '—'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Catalog records</span>
+                  </div>
+                </div>
+
+                {/* Table Inventory / Breakdown */}
+                {dbStats?.counts && (
+                  <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4">
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2.5">
+                      Collection Record Breakdown
+                    </h4>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-xs">
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <span className="text-slate-500 text-[10px] block font-semibold">Orders</span>
+                        <span className="font-black text-slate-900 text-sm">{dbStats.counts.orders || 0}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <span className="text-slate-500 text-[10px] block font-semibold">Customers</span>
+                        <span className="font-black text-slate-900 text-sm">{dbStats.counts.customers || 0}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <span className="text-slate-500 text-[10px] block font-semibold">Shifts</span>
+                        <span className="font-black text-slate-900 text-sm">{dbStats.counts.shifts || 0}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <span className="text-slate-500 text-[10px] block font-semibold">Checks</span>
+                        <span className="font-black text-slate-900 text-sm">{dbStats.counts.checkTransactions || 0}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <span className="text-slate-500 text-[10px] block font-semibold">Adjustments</span>
+                        <span className="font-black text-slate-900 text-sm">{dbStats.counts.inventoryAdjustments || 0}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <span className="text-slate-500 text-[10px] block font-semibold">Audit Logs</span>
+                        <span className="font-black text-slate-900 text-sm">{dbStats.counts.auditLogs || 0}</span>
+                      </div>
                     </div>
                   </div>
-                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                    Live
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+                )}
+
+                <div className="grid grid-cols-2 gap-4 pt-2">
                   <div>
                     <label className="text-xs font-semibold text-slate-700 block mb-1">Offline Cache Capacity (Transactions)</label>
                     <input
@@ -1427,10 +1549,10 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Daily Automated Snapshot Hour</label>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">Automated Snapshot Schedule</label>
                     <input
                       type="text"
-                      value="03:00 AM CST (Nightly)"
+                      value="Continuous on-write + 03:00 AM CST Daily"
                       disabled
                       className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-500"
                     />

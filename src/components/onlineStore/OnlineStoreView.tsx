@@ -13,12 +13,15 @@ import {
   Plus,
   ArrowRight,
   Layers,
+  Compass,
+  Server,
 } from 'lucide-react';
 import { OnlineStoreConfig, User, StoreSettings } from '../../types';
 import { api } from '../../utils/api';
 import { playBeep } from '../../utils/audio';
 
 import { WebsiteSettingsTab } from './WebsiteSettingsTab';
+import { WebsiteMenuManagerTab } from './WebsiteMenuManagerTab';
 import { WebProductsTab } from './WebProductsTab';
 import { OnlineOrdersTab } from './OnlineOrdersTab';
 import { StorefrontSimulatorTab } from './StorefrontSimulatorTab';
@@ -34,8 +37,8 @@ export const OnlineStoreView: React.FC<OnlineStoreViewProps> = ({
   settings,
 }) => {
   const [subTab, setSubTab] = useState<
-    'settings' | 'products' | 'orders' | 'preview' | 'analytics'
-  >('settings');
+    'menu' | 'settings' | 'products' | 'orders' | 'preview' | 'analytics'
+  >('preview');
   const [config, setConfig] = useState<OnlineStoreConfig | null>(null);
   const [canRollback, setCanRollback] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -194,6 +197,32 @@ export const OnlineStoreView: React.FC<OnlineStoreViewProps> = ({
         {/* Sub Navigation Buttons */}
         <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar bg-[#161616] p-1 rounded-xl border border-[#282828]">
           <button
+            id="subtab-storefront-preview"
+            onClick={() => setSubTab('preview')}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+              subTab === 'preview'
+                ? 'bg-[#B91C1C] text-white shadow-sm font-black'
+                : 'text-[#AAAAAA] hover:text-white hover:bg-[#202020]'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5 text-amber-400" />
+            <span>377 Spirits Storefront</span>
+          </button>
+
+          <button
+            id="subtab-website-menu"
+            onClick={() => setSubTab('menu')}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+              subTab === 'menu'
+                ? 'bg-[#C5A059] text-black shadow-sm'
+                : 'text-[#888888] hover:text-white hover:bg-[#202020]'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5" />
+            <span>Website Menu & Hosting</span>
+          </button>
+
+          <button
             id="subtab-website-settings"
             onClick={() => setSubTab('settings')}
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
@@ -233,19 +262,6 @@ export const OnlineStoreView: React.FC<OnlineStoreViewProps> = ({
           </button>
 
           <button
-            id="subtab-storefront-preview"
-            onClick={() => setSubTab('preview')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              subTab === 'preview'
-                ? 'bg-[#C5A059] text-black shadow-sm'
-                : 'text-[#888888] hover:text-white hover:bg-[#202020]'
-            }`}
-          >
-            <Eye className="w-3.5 h-3.5" />
-            <span>Storefront Preview</span>
-          </button>
-
-          <button
             id="subtab-coupons-analytics"
             onClick={() => setSubTab('analytics')}
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
@@ -263,6 +279,18 @@ export const OnlineStoreView: React.FC<OnlineStoreViewProps> = ({
       {/* Main SubTab Content Area */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
         <div className="max-w-7xl mx-auto">
+          {subTab === 'menu' && (
+            <WebsiteMenuManagerTab
+              config={config}
+              canRollback={canRollback}
+              onConfigUpdated={updated => {
+                setConfig(updated);
+                loadConfig();
+              }}
+              onPreviewStorefront={() => setSubTab('preview')}
+            />
+          )}
+
           {subTab === 'settings' && (
             <WebsiteSettingsTab
               config={config}
@@ -286,6 +314,7 @@ export const OnlineStoreView: React.FC<OnlineStoreViewProps> = ({
                 // When an order is placed in simulator, allow admin to switch to orders tab
                 setSubTab('orders');
               }}
+              onOpenAdminTab={tab => setSubTab(tab as any)}
             />
           )}
 

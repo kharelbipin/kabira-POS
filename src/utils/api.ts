@@ -592,8 +592,12 @@ class ApiService {
   }
 
   // Reports
-  async getSalesReport(period: 'today' | 'week' | 'month' | 'all' = 'today'): Promise<SalesReport> {
-    return this.request<SalesReport>(`/reports/sales?period=${period}`);
+  async getSalesReport(period: string = 'today', startDate?: string, endDate?: string): Promise<SalesReport> {
+    const query = new URLSearchParams();
+    query.set('period', period);
+    if (startDate) query.set('startDate', startDate);
+    if (endDate) query.set('endDate', endDate);
+    return this.request<SalesReport>(`/reports/sales?${query.toString()}`);
   }
 
   // Settings
@@ -1170,16 +1174,40 @@ class ApiService {
     return this.request(`/check-cashing/qr/session/${token}`);
   }
 
+  async getPendingCheckQrSessions(): Promise<{ sessions: CheckQrSession[] }> {
+    return this.request('/check-cashing/qr/pending');
+  }
+
   async submitCheckQrImages(token: string, payload: {
+    name?: string;
+    phone?: string;
+    idType?: string;
+    idNumber?: string;
+    checkAmount?: number;
+    checkType?: string;
+    checkNumber?: string;
+    issuerName?: string;
     checkFrontUrl?: string;
     checkBackUrl?: string;
     customerIdFrontUrl?: string;
     customerIdBackUrl?: string;
+    [key: string]: any;
   }): Promise<{ message: string; session: CheckQrSession }> {
     return this.request(`/check-cashing/qr/session/${token}/submit`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  async uploadShelfPhotos(sessionId: string, payload: { photos?: any[]; photoUrl?: string; label?: string }): Promise<any> {
+    return this.request(`/inventory/ai-shelf-count/sessions/${sessionId}/photos`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getShelfPhotos(sessionId: string): Promise<{ success: boolean; photos: { id: string; url: string; label: string; timestamp: number }[] }> {
+    return this.request(`/inventory/ai-shelf-count/sessions/${sessionId}/photos`);
   }
 
   async getDepositBatches(): Promise<DepositBatch[]> {
@@ -1607,6 +1635,23 @@ class ApiService {
 
   async getPaymentAuditLogs(): Promise<{ auditLogs: PaymentAuditLog[] }> {
     return this.request('/payments/audit-log');
+  }
+
+  // Database Management
+  async getDatabaseStatus(): Promise<{
+    status: string;
+    engine: string;
+    dbFilePath: string;
+    sizeBytes: number;
+    sizeFormatted: string;
+    lastSavedAt: string;
+    counts: Record<string, number>;
+  }> {
+    return this.request('/database/status');
+  }
+
+  async flushDatabaseSave(): Promise<{ success: boolean; message: string; stats: any }> {
+    return this.request('/database/save', { method: 'POST' });
   }
 }
 

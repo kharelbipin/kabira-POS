@@ -1,150 +1,155 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Camera,
   CheckCircle2,
   Upload,
-  RefreshCw,
   FileCheck,
   ShieldCheck,
   AlertCircle,
   Sparkles,
-  ArrowLeft,
-  X,
   User,
   Phone,
   DollarSign,
-  Image as ImageIcon,
+  CreditCard,
+  Building2,
+  Calendar,
+  MapPin,
+  FileText,
+  BadgeCheck,
 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { playBeep } from '../../utils/audio';
+import {
+  extractIdInformationFromImage,
+  extractCheckInformationFromImage,
+  ExtractedIdData,
+  ExtractedCheckData,
+} from '../../utils/idOcrService';
 
 interface CheckUploadDirectViewProps {
   sessionId?: string;
   token?: string;
-  onExit?: () => void;
 }
 
 export const CheckUploadDirectView: React.FC<CheckUploadDirectViewProps> = ({
   sessionId = `chk-session-${Date.now()}`,
   token = `INTAKE-${Math.floor(1000 + Math.random() * 9000)}`,
-  onExit,
 }) => {
+  // Form Data (Auto-filled by OCR)
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerIdType, setCustomerIdType] = useState('Driver License');
+  const [customerIdNumber, setCustomerIdNumber] = useState('');
+  const [customerIdState, setCustomerIdState] = useState('TX');
+  const [customerDob, setCustomerDob] = useState('');
+  const [customerExpiration, setCustomerExpiration] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+
   const [checkAmount, setCheckAmount] = useState('');
   const [checkType, setCheckType] = useState('payroll');
+  const [checkNumber, setCheckNumber] = useState('');
+  const [issuerName, setIssuerName] = useState('');
+  const [micrRoutingNumber, setMicrRoutingNumber] = useState('');
+  const [micrAccountNumber, setMicrAccountNumber] = useState('');
 
-  // Photo captures
+  // Photos
   const [frontImage, setFrontImage] = useState<string | null>(null);
   const [backImage, setBackImage] = useState<string | null>(null);
   const [idImage, setIdImage] = useState<string | null>(null);
 
-  // Active target for camera capture
+  // OCR Extraction States
+  const [isProcessingIdOcr, setIsProcessingIdOcr] = useState(false);
+  const [idOcrResult, setIdOcrResult] = useState<ExtractedIdData | null>(null);
+  const [isProcessingCheckOcr, setIsProcessingCheckOcr] = useState(false);
+  const [checkOcrResult, setCheckOcrResult] = useState<ExtractedCheckData | null>(null);
+
+  // Active target for upload
   const [captureTarget, setCaptureTarget] = useState<'front' | 'back' | 'id'>('front');
-  const [isLiveCameraActive, setIsLiveCameraActive] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
-  // Auto trigger camera dialog for front of check on initial load
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (fileInputRef.current && !frontImage) {
-        setCaptureTarget('front');
-        fileInputRef.current.click();
-      }
-    }, 350);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const triggerCameraCapture = (target: 'front' | 'back' | 'id') => {
+  const triggerUpload = (target: 'front' | 'back' | 'id') => {
     setCaptureTarget(target);
     if (fileInputRef.current) {
+      fileInputRef.current.value = '';
       fileInputRef.current.click();
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const dataUrl = reader.result as string;
-      if (captureTarget === 'front') {
+      playBeep('click');
+
+      if (captureTarget === 'id') {
+        setIdImage(dataUrl);
+        setIsProcessingIdOcr(true);
+        setErrorMessage(null);
+        try {
+          const ocr = await extractIdInformationFromImage(dataUrl, customerName);
+          setIdOcrResult(ocr);
+          setCustomerName(ocr.fullName);
+          setCustomerIdType(ocr.idType);
+          setCustomerIdNumber(ocr.idNumber);
+          setCustomerIdState(ocr.idState);
+          setCustomerDob(ocr.dateOfBirth);
+          setCustomerExpiration(ocr.expirationDate);
+          if (ocr.address) {
+            setCustomerAddress(`${ocr.address.street}, ${ocr.address.city}, ${ocr.address.state} ${ocr.address.zip}`);
+          }
+          playBeep('success');
+        } catch (err) {
+          console.error('ID OCR failed', err);
+        } finally {
+          setIsProcessingIdOcr(false);
+        }
+      } else if (captureTarget === 'front') {
         setFrontImage(dataUrl);
-        // Automatically prompt for back of check next
-        setTimeout(() => {
-          setCaptureTarget('back');
-          if (fileInputRef.current) fileInputRef.current.click();
-        }, 600);
+        setIsProcessingCheckOcr(true);
+        setErrorMessage(null);
+        try {
+          const checkOcr = await extractCheckInformationFromImage(dataUrl);
+          setCheckOcrResult(checkOcr);
+          setCheckAmount(checkOcr.checkAmount.toFixed(2));
+          setCheckNumber(checkOcr.checkNumber);
+          setIssuerName(checkOcr.issuerName);
+          setMicrRoutingNumber(checkOcr.routingNumber);
+          setMicrAccountNumber(checkOcr.accountNumber);
+          if (checkOcr.payeeName && !customerName) {
+            setCustomerName(checkOcr.payeeName);
+          }
+          playBeep('success');
+        } catch (err) {
+          console.error('Check OCR failed', err);
+        } finally {
+          setIsProcessingCheckOcr(false);
+        }
       } else if (captureTarget === 'back') {
         setBackImage(dataUrl);
-      } else if (captureTarget === 'id') {
-        setIdImage(dataUrl);
       }
-      playBeep('click');
     };
     reader.readAsDataURL(file);
-  };
-
-  const startLiveCamera = async (target: 'front' | 'back' | 'id') => {
-    setCaptureTarget(target);
-    try {
-      setErrorMessage(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-      setIsLiveCameraActive(true);
-    } catch (err: any) {
-      setErrorMessage('Direct live feed unavailable. Using native phone camera shutter.');
-      triggerCameraCapture(target);
-    }
-  };
-
-  const stopLiveCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    setIsLiveCameraActive(false);
-  };
-
-  const captureFromLiveVideo = () => {
-    if (!videoRef.current) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth || 1280;
-    canvas.height = videoRef.current.videoHeight || 720;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-      if (captureTarget === 'front') {
-        setFrontImage(dataUrl);
-        setCaptureTarget('back');
-      } else if (captureTarget === 'back') {
-        setBackImage(dataUrl);
-        stopLiveCamera();
-      } else if (captureTarget === 'id') {
-        setIdImage(dataUrl);
-        stopLiveCamera();
-      }
-      playBeep('success');
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!frontImage) {
-      setErrorMessage('Please capture the front of the check.');
+      setErrorMessage('Please capture or upload the front of your check.');
+      return;
+    }
+    if (!idImage) {
+      setErrorMessage("Please capture or upload a clear photo of your Driver's License or Government ID.");
+      return;
+    }
+    if (!customerName.trim()) {
+      setErrorMessage('Customer name is required.');
       return;
     }
 
@@ -152,43 +157,35 @@ export const CheckUploadDirectView: React.FC<CheckUploadDirectViewProps> = ({
     setErrorMessage(null);
 
     try {
-      // Broadcast / Save locally for immediate cross-tab sync with cashier register
-      const uploadPayload = {
+      await api.submitCheckQrImages(token, {
         sessionId,
         token,
-        customerName: customerName || 'Walk-in Customer',
-        customerPhone,
+        name: customerName.trim(),
+        customerName: customerName.trim(),
+        phone: customerPhone.trim() || undefined,
+        customerPhone: customerPhone.trim() || undefined,
+        idType: customerIdType,
+        customerIdType,
+        idNumber: customerIdNumber.trim() || undefined,
+        customerIdNumber: customerIdNumber.trim() || undefined,
+        idState: customerIdState,
+        customerIdState,
         checkAmount: parseFloat(checkAmount) || 0,
         checkType,
+        checkNumber: checkNumber.trim() || undefined,
+        issuerName: issuerName.trim() || undefined,
+        micrRoutingNumber: micrRoutingNumber.trim() || undefined,
+        micrAccountNumber: micrAccountNumber.trim() || undefined,
         checkFrontUrl: frontImage,
-        checkBackUrl: backImage || frontImage,
-        idPhotoUrl: idImage,
-        timestamp: Date.now(),
-        status: 'submitted',
-      };
-
-      try {
-        localStorage.setItem(`pos_mobile_check_upload_${sessionId}`, JSON.stringify(uploadPayload));
-        localStorage.setItem('pos_last_check_intake_event', JSON.stringify({ sessionId, timestamp: Date.now() }));
-      } catch (storageErr) {
-        console.warn('Storage fallback warning:', storageErr);
-      }
-
-      // Submit to backend API
-      try {
-        await api.submitCheckQrImages(sessionId, {
-          checkFrontUrl: frontImage,
-          checkBackUrl: backImage || undefined,
-          customerIdFrontUrl: idImage || undefined,
-        });
-      } catch (apiErr) {
-        console.warn('Backend API notification handled via local persistence:', apiErr);
-      }
+        checkBackUrl: backImage || undefined,
+        customerIdFrontUrl: idImage,
+      });
 
       playBeep('success');
       setIsSuccess(true);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to transmit check images. Please retry.');
+      setErrorMessage(err?.message || 'Failed to transmit check and ID documents. Please try again.');
+      playBeep('error');
     } finally {
       setIsSubmitting(false);
     }
@@ -198,266 +195,277 @@ export const CheckUploadDirectView: React.FC<CheckUploadDirectViewProps> = ({
     setFrontImage(null);
     setBackImage(null);
     setIdImage(null);
+    setIdOcrResult(null);
+    setCheckOcrResult(null);
     setCheckAmount('');
+    setCheckNumber('');
+    setIssuerName('');
     setIsSuccess(false);
-    setErrorMessage(null);
-    setCaptureTarget('front');
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F17] text-white flex flex-col font-sans antialiased select-none">
-      {/* Hidden high-speed direct camera capture input */}
+    <div className="min-h-screen bg-[#0A0D14] text-slate-100 flex flex-col font-sans select-none">
+      {/* Hidden native file input without forcing live webcam prompt */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
-        className="hidden"
         onChange={handleFileChange}
+        className="hidden"
       />
 
-      {/* Top Header */}
-      <header className="bg-[#111827] border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-20 shadow-md">
-        <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-xl bg-[#C5A059] text-black flex items-center justify-center font-black shadow-sm">
-            <FileCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="font-bold text-sm text-white tracking-wide">377 Spirits</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-mono font-bold">
-                Check Intake
+      {/* Header - Customer Intake Form Only (No POS access) */}
+      <header className="bg-[#101524] border-b border-slate-800 px-4 py-3 shrink-0">
+        <div className="max-w-lg mx-auto flex items-center justify-between">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#C5A059]/20 border border-[#C5A059]/50 flex items-center justify-center text-[#C5A059] font-black text-sm shadow-xs">
+              377
+            </div>
+            <div>
+              <h1 className="text-sm font-black text-white tracking-tight uppercase">
+                377 Spirits Check Intake
+              </h1>
+              <span className="text-[10px] text-slate-400 font-mono">
+                Terminal Document Drop • #{token}
               </span>
             </div>
-            <span className="text-[11px] text-slate-400 font-mono">
-              Terminal #01 Link • Ref #{token}
-            </span>
+          </div>
+          <div className="flex items-center space-x-1.5 bg-emerald-950/60 border border-emerald-500/40 px-2.5 py-1 rounded-full text-[10px] text-emerald-400 font-bold">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Encrypted Intake</span>
           </div>
         </div>
-
-        {onExit && (
-          <button
-            onClick={onExit}
-            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors cursor-pointer flex items-center space-x-1"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Exit</span>
-          </button>
-        )}
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-lg mx-auto w-full p-4 flex flex-col space-y-4">
+      {/* Main Body */}
+      <main className="flex-1 max-w-lg w-full mx-auto p-4 flex flex-col justify-start space-y-4">
         {isSuccess ? (
-          <div className="my-auto bg-gradient-to-b from-emerald-950/40 to-slate-900 border border-emerald-500/40 rounded-2xl p-6 text-center shadow-xl space-y-4 animate-in fade-in zoom-in-95">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center ring-8 ring-emerald-500/10">
-              <CheckCircle2 className="w-10 h-10" />
+          /* Success Screen: Explicitly states documents sent to POS with no option to enter POS */
+          <div className="bg-[#121829] border border-emerald-500/40 rounded-2xl p-6 text-center space-y-5 shadow-2xl my-auto animate-in fade-in zoom-in-95">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/50 shadow-lg">
+              <CheckCircle2 className="w-9 h-9" />
             </div>
 
-            <div>
-              <h2 className="text-xl font-black text-white">Check Uploaded Successfully!</h2>
-              <p className="text-xs text-slate-300 mt-1">
-                Your check has been securely transferred to Cashier Terminal #01 at 377 Spirits.
+            <div className="space-y-1">
+              <h2 className="text-lg font-black uppercase text-white tracking-wider">
+                Check & ID Transmitted!
+              </h2>
+              <p className="text-xs text-slate-300">
+                Your check and government ID images have been received by Cashier Terminal #01.
               </p>
             </div>
 
-            <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl text-left space-y-1.5 text-xs">
+            <div className="bg-[#1A2238] rounded-xl p-3.5 text-xs text-left space-y-2 border border-slate-700/60 font-mono">
               <div className="flex justify-between text-slate-400">
-                <span>Confirmation ID:</span>
-                <span className="font-mono text-amber-400 font-bold">{token}</span>
+                <span>Intake Reference:</span>
+                <span className="text-amber-400 font-bold">{token}</span>
               </div>
-              {customerName && (
-                <div className="flex justify-between text-slate-400">
-                  <span>Customer Name:</span>
-                  <span className="text-white font-medium">{customerName}</span>
-                </div>
-              )}
+              <div className="flex justify-between text-slate-400">
+                <span>Payee / Name:</span>
+                <span className="text-white font-bold">{customerName}</span>
+              </div>
               {checkAmount && (
                 <div className="flex justify-between text-slate-400">
-                  <span>Declared Amount:</span>
+                  <span>Check Amount:</span>
                   <span className="text-emerald-400 font-bold">${parseFloat(checkAmount).toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-slate-400">
-                <span>Images Attached:</span>
-                <span className="text-white">
-                  Front {backImage ? '+ Back' : ''} {idImage ? '+ ID Photo' : ''}
-                </span>
+                <span>Attached Files:</span>
+                <span className="text-emerald-300 font-bold">Check Front, Check Back, Driver License</span>
               </div>
             </div>
 
-            <div className="pt-2 space-y-2">
+            <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-3 text-[11px] text-amber-200 text-left leading-relaxed">
+              Please present your physical photo ID to the cashier at the counter. The cashier will review the check images and dispense your cash payout from the register drawer.
+            </div>
+
+            <div className="pt-2">
               <button
                 type="button"
                 onClick={handleResetForAnother}
-                className="w-full py-3.5 bg-[#C5A059] hover:bg-[#B38F46] text-black font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-transform active:scale-98 cursor-pointer"
+                className="w-full py-3 bg-[#C5A059] hover:bg-[#B38F46] text-black font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-transform active:scale-98 cursor-pointer"
               >
-                Upload Another Check
+                Upload Another Check / ID
               </button>
-              {onExit && (
-                <button
-                  type="button"
-                  onClick={onExit}
-                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-colors cursor-pointer"
-                >
-                  Return to POS Terminal
-                </button>
-              )}
             </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Live Camera Modal / Overlay */}
-            {isLiveCameraActive && (
-              <div className="fixed inset-0 z-50 bg-black flex flex-col">
-                <div className="bg-slate-900/90 px-4 py-3 flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-400 uppercase">
-                    Capturing {captureTarget === 'front' ? 'Check Front' : captureTarget === 'back' ? 'Check Back' : 'ID'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={stopLiveCamera}
-                    className="p-1 rounded bg-slate-800 text-slate-300 text-xs font-bold"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-                  <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                  <div className="absolute inset-x-6 inset-y-16 border-2 border-dashed border-amber-400/70 rounded-2xl pointer-events-none flex items-center justify-center">
-                    <span className="bg-black/70 px-3 py-1.5 rounded-full text-xs text-amber-300 font-medium">
-                      Align check inside border
-                    </span>
-                  </div>
-                </div>
-                <div className="p-5 bg-slate-950 flex items-center justify-center">
-                  <button
-                    type="button"
-                    onClick={captureFromLiveVideo}
-                    className="w-16 h-16 rounded-full bg-white border-4 border-amber-400 flex items-center justify-center shadow-xl active:scale-95 transition-transform cursor-pointer"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-amber-400"></div>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Banner Guide */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex items-start space-x-3">
-              <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <div className="text-xs">
-                <span className="font-bold text-white block">Fast Smartphone Check Intake</span>
-                <span className="text-slate-400 text-[11px]">
-                  Click the boxes below to snap photos. Your pictures are sent directly to the register without loading delays.
+            {/* Top Prompt */}
+            <div className="bg-[#121829] border border-slate-800 rounded-xl p-3 text-xs text-slate-300 flex items-start space-x-2.5">
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-white block">Fast Check & ID Mobile Intake</span>
+                <span className="text-[11px] text-slate-400">
+                  Upload your check photos and Driver&apos;s License. Our OCR will automatically read the fields for you!
                 </span>
               </div>
             </div>
 
-            {/* Photo Cards Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              {/* Check Front Photo Card */}
+            {/* 3 Document Capture Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {/* 1. Driver License / ID Photo (Required) */}
               <div
-                onClick={() => triggerCameraCapture('front')}
-                className={`relative rounded-xl border-2 p-3 text-center transition-all cursor-pointer flex flex-col items-center justify-center min-h-[140px] overflow-hidden ${
+                onClick={() => triggerUpload('id')}
+                className={`relative rounded-xl border-2 p-3 text-center transition-all cursor-pointer flex flex-col items-center justify-center min-h-[135px] overflow-hidden ${
+                  idImage
+                    ? 'border-emerald-500/80 bg-emerald-950/20'
+                    : 'border-amber-500/50 bg-[#141A2D] hover:border-amber-400'
+                }`}
+              >
+                {idImage ? (
+                  <>
+                    <img src={idImage} alt="Customer ID" className="w-full h-20 object-cover rounded-lg mb-1" />
+                    <span className="text-[10px] font-bold text-emerald-400 flex items-center space-x-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>ID Attached</span>
+                    </span>
+                    <span className="text-[9px] text-slate-400 underline mt-0.5">Tap to replace</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-9 h-9 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mb-1.5">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-black text-white uppercase">1. Driver License</span>
+                    <span className="text-[10px] text-amber-300/80 mt-0.5">Front of ID (Required)</span>
+                  </>
+                )}
+              </div>
+
+              {/* 2. Check Front (Required) */}
+              <div
+                onClick={() => triggerUpload('front')}
+                className={`relative rounded-xl border-2 p-3 text-center transition-all cursor-pointer flex flex-col items-center justify-center min-h-[135px] overflow-hidden ${
                   frontImage
                     ? 'border-emerald-500/80 bg-emerald-950/20'
-                    : 'border-amber-400/50 bg-slate-900/60 hover:border-amber-400'
+                    : 'border-slate-700 bg-[#141A2D] hover:border-slate-500'
                 }`}
               >
                 {frontImage ? (
                   <>
-                    <img src={frontImage} alt="Check Front" className="w-full h-24 object-cover rounded-lg mb-1" />
-                    <span className="text-[11px] font-bold text-emerald-400 flex items-center space-x-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Front Captured</span>
+                    <img src={frontImage} alt="Check Front" className="w-full h-20 object-cover rounded-lg mb-1" />
+                    <span className="text-[10px] font-bold text-emerald-400 flex items-center space-x-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Check Front OK</span>
                     </span>
-                    <span className="text-[10px] text-slate-400 underline mt-0.5">Tap to retake</span>
+                    <span className="text-[9px] text-slate-400 underline mt-0.5">Tap to replace</span>
                   </>
                 ) : (
                   <>
-                    <div className="w-10 h-10 rounded-full bg-amber-400/10 text-amber-400 flex items-center justify-center mb-2">
-                      <Camera className="w-5 h-5" />
+                    <div className="w-9 h-9 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center mb-1.5">
+                      <Camera className="w-4 h-4" />
                     </div>
-                    <span className="text-xs font-bold text-white">Click Check Front *</span>
-                    <span className="text-[10px] text-slate-400 mt-1">Tap to snap photo</span>
+                    <span className="text-xs font-black text-white uppercase">2. Check Front</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5">Full check face</span>
                   </>
                 )}
               </div>
 
-              {/* Check Back Photo Card */}
+              {/* 3. Check Back (Endorsement) */}
               <div
-                onClick={() => triggerCameraCapture('back')}
-                className={`relative rounded-xl border-2 p-3 text-center transition-all cursor-pointer flex flex-col items-center justify-center min-h-[140px] overflow-hidden ${
+                onClick={() => triggerUpload('back')}
+                className={`relative rounded-xl border-2 p-3 text-center transition-all cursor-pointer flex flex-col items-center justify-center min-h-[135px] overflow-hidden ${
                   backImage
                     ? 'border-emerald-500/80 bg-emerald-950/20'
-                    : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
+                    : 'border-slate-700 bg-[#141A2D] hover:border-slate-500'
                 }`}
               >
                 {backImage ? (
                   <>
-                    <img src={backImage} alt="Check Back" className="w-full h-24 object-cover rounded-lg mb-1" />
-                    <span className="text-[11px] font-bold text-emerald-400 flex items-center space-x-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Back Captured</span>
+                    <img src={backImage} alt="Check Back" className="w-full h-20 object-cover rounded-lg mb-1" />
+                    <span className="text-[10px] font-bold text-emerald-400 flex items-center space-x-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Check Back OK</span>
                     </span>
-                    <span className="text-[10px] text-slate-400 underline mt-0.5">Tap to retake</span>
+                    <span className="text-[9px] text-slate-400 underline mt-0.5">Tap to replace</span>
                   </>
                 ) : (
                   <>
-                    <div className="w-10 h-10 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center mb-2">
-                      <Camera className="w-5 h-5" />
+                    <div className="w-9 h-9 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center mb-1.5">
+                      <FileCheck className="w-4 h-4" />
                     </div>
-                    <span className="text-xs font-bold text-slate-200">Click Check Back</span>
-                    <span className="text-[10px] text-slate-400 mt-1">Endorsement signature</span>
+                    <span className="text-xs font-black text-white uppercase">3. Check Back</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5">Signature endorsement</span>
                   </>
                 )}
               </div>
             </div>
 
-            {/* Quick Camera Buttons */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => triggerCameraCapture('front')}
-                className="py-2.5 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-center space-x-1.5 cursor-pointer"
-              >
-                <Camera className="w-4 h-4" />
-                <span>Snap Camera</span>
-              </button>
+            {/* OCR Processing Indicators */}
+            {isProcessingIdOcr && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/40 rounded-xl text-amber-300 text-xs flex items-center space-x-2 animate-pulse">
+                <Sparkles className="w-4 h-4 animate-spin" />
+                <span>Reading Driver License text via OCR... Auto-filling name, DOB & ID number</span>
+              </div>
+            )}
 
-              <button
-                type="button"
-                onClick={() => startLiveCamera('front')}
-                className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center justify-center space-x-1.5 cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4 text-amber-400" />
-                <span>Live Viewfinder</span>
-              </button>
-            </div>
+            {isProcessingCheckOcr && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs flex items-center space-x-2 animate-pulse">
+                <Sparkles className="w-4 h-4 animate-spin" />
+                <span>Extracting MICR routing, account, and check amount via OCR...</span>
+              </div>
+            )}
 
-            {/* Customer Details Form (Optional / Quick Entry) */}
-            <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-3.5 space-y-3">
-              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                Customer & Check Information
-              </span>
+            {/* OCR Success Badges */}
+            {idOcrResult && (
+              <div className="p-2.5 bg-emerald-950/40 border border-emerald-500/40 rounded-xl text-xs text-emerald-300 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <BadgeCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    Driver License OCR Confirmed: <strong>{idOcrResult.fullName}</strong> ({idOcrResult.calculatedAge} yrs, DOB: {idOcrResult.dateOfBirth})
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold bg-emerald-500/20 px-2 py-0.5 rounded-md font-mono">
+                  {idOcrResult.confidence.toFixed(1)}% Match
+                </span>
+              </div>
+            )}
 
+            {checkOcrResult && (
+              <div className="p-2.5 bg-sky-950/40 border border-sky-500/40 rounded-xl text-xs text-sky-300 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <BadgeCheck className="w-4 h-4 text-sky-400 shrink-0" />
+                  <span>
+                    Check Amount Extracted: <strong>${checkOcrResult.checkAmount.toFixed(2)}</strong> (Check #{checkOcrResult.checkNumber})
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold bg-sky-500/20 px-2 py-0.5 rounded-md font-mono">
+                  {checkOcrResult.confidence.toFixed(1)}% Match
+                </span>
+              </div>
+            )}
+
+            {/* Auto-filled Form Fields (Editable by user) */}
+            <div className="bg-[#121829] border border-slate-800 rounded-xl p-4 space-y-3.5">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="text-xs font-black text-white uppercase tracking-wider flex items-center space-x-1.5">
+                  <FileText className="w-3.5 h-3.5 text-[#C5A059]" />
+                  <span>Customer & Check Information</span>
+                </span>
+                <span className="text-[10px] text-slate-400">Auto-filled from images</span>
+              </div>
+
+              {/* Full Name */}
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Customer Full Name</label>
+                <label className="block text-[11px] text-slate-400 mb-1">
+                  Full Legal Name (as on Driver License)
+                </label>
                 <div className="relative">
                   <User className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-3" />
                   <input
                     type="text"
+                    required
                     value={customerName}
                     onChange={e => setCustomerName(e.target.value)}
-                    placeholder="e.g. Johnathan Carter"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
+                    placeholder="e.g. SARAH ELIZABETH JENKINS"
+                    className="w-full bg-[#0E121E] border border-slate-700 rounded-xl pl-8 pr-3 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-[#C5A059] font-medium"
                   />
                 </div>
               </div>
 
+              {/* Phone & Check Amount */}
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-[11px] text-slate-400 mb-1">Phone Number</label>
@@ -468,7 +476,7 @@ export const CheckUploadDirectView: React.FC<CheckUploadDirectViewProps> = ({
                       value={customerPhone}
                       onChange={e => setCustomerPhone(e.target.value)}
                       placeholder="(817) 555-0199"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400 font-mono"
+                      className="w-full bg-[#0E121E] border border-slate-700 rounded-xl pl-8 pr-3 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-[#C5A059] font-mono"
                     />
                   </div>
                 </div>
@@ -480,41 +488,104 @@ export const CheckUploadDirectView: React.FC<CheckUploadDirectViewProps> = ({
                     <input
                       type="number"
                       step="0.01"
+                      required
                       value={checkAmount}
                       onChange={e => setCheckAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400 font-mono font-bold text-amber-400"
+                      className="w-full bg-[#0E121E] border border-slate-700 rounded-xl pl-8 pr-3 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-[#C5A059] font-mono font-bold text-amber-400"
                     />
                   </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Check Classification</label>
-                <select
-                  value={checkType}
-                  onChange={e => setCheckType(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 cursor-pointer"
-                >
-                  <option value="payroll">Payroll Check (Standard 2.5%)</option>
-                  <option value="government">Government / Treasury Check (1.5%)</option>
-                  <option value="cashiers">Bank Cashier's Check (2.0%)</option>
-                  <option value="tax_refund">IRS / State Tax Refund Check (1.75%)</option>
-                  <option value="personal">Personal Check (5.0% - Subject to Approval)</option>
-                </select>
+              {/* ID Details Row */}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-1">ID Type</label>
+                  <select
+                    value={customerIdType}
+                    onChange={e => setCustomerIdType(e.target.value)}
+                    className="w-full bg-[#0E121E] border border-slate-700 rounded-xl px-2 py-2 text-xs text-white focus:outline-none focus:border-[#C5A059]"
+                  >
+                    <option value="Driver License">Driver License</option>
+                    <option value="State ID">State ID</option>
+                    <option value="Passport">Passport</option>
+                    <option value="Military ID">Military ID</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-1">ID Number</label>
+                  <input
+                    type="text"
+                    value={customerIdNumber}
+                    onChange={e => setCustomerIdNumber(e.target.value)}
+                    placeholder="TX-49281033"
+                    className="w-full bg-[#0E121E] border border-slate-700 rounded-xl px-2 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#C5A059]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-1">State / DOB</label>
+                  <input
+                    type="text"
+                    value={customerDob ? `${customerIdState} • ${customerDob}` : customerIdState}
+                    onChange={e => setCustomerIdState(e.target.value)}
+                    placeholder="TX"
+                    className="w-full bg-[#0E121E] border border-slate-700 rounded-xl px-2 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#C5A059]"
+                  />
+                </div>
               </div>
 
-              {/* ID Photo (Optional) */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => triggerCameraCapture('id')}
-                  className="w-full py-2 px-3 rounded-lg border border-dashed border-slate-700 hover:border-slate-500 text-[11px] font-semibold text-slate-300 flex items-center justify-between cursor-pointer"
-                >
-                  <span>{idImage ? 'ID Photo Attached (Tap to change)' : '+ Add Driver License / ID Photo (Optional)'}</span>
-                  {idImage && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
-                </button>
+              {/* Check Issuer & Type */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">Check Classification</label>
+                  <select
+                    value={checkType}
+                    onChange={e => setCheckType(e.target.value)}
+                    className="w-full bg-[#0E121E] border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#C5A059]"
+                  >
+                    <option value="payroll">Payroll Check</option>
+                    <option value="government">Government / Treasury Check</option>
+                    <option value="cashiers">Bank Cashier&apos;s Check</option>
+                    <option value="tax_refund">Tax Refund Check</option>
+                    <option value="personal">Personal Check</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">Check Number</label>
+                  <input
+                    type="text"
+                    value={checkNumber}
+                    onChange={e => setCheckNumber(e.target.value)}
+                    placeholder="e.g. 1084"
+                    className="w-full bg-[#0E121E] border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#C5A059]"
+                  />
+                </div>
               </div>
+
+              {/* Issuer Name */}
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Check Issuer / Company</label>
+                <div className="relative">
+                  <Building2 className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    value={issuerName}
+                    onChange={e => setIssuerName(e.target.value)}
+                    placeholder="e.g. Granbury Remodeling LLC"
+                    className="w-full bg-[#0E121E] border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-[#C5A059]"
+                  />
+                </div>
+              </div>
+
+              {/* Customer Address from OCR */}
+              {customerAddress && (
+                <div className="text-[11px] text-slate-400 flex items-center space-x-1.5 pt-1">
+                  <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <span className="truncate">Address on ID: {customerAddress}</span>
+                </div>
+              )}
             </div>
 
             {errorMessage && (
@@ -524,22 +595,22 @@ export const CheckUploadDirectView: React.FC<CheckUploadDirectViewProps> = ({
               </div>
             )}
 
-            {/* Submit Button */}
+            {/* Transmit Button (Does NOT open POS, transmits directly to register) */}
             <button
               type="submit"
-              disabled={isSubmitting || !frontImage}
-              className="w-full py-3.5 bg-[#C5A059] hover:bg-[#B38F46] disabled:opacity-50 disabled:cursor-not-allowed text-black font-black text-xs uppercase tracking-wider rounded-xl shadow-lg flex items-center justify-center space-x-2 cursor-pointer transition-all active:scale-98"
+              disabled={isSubmitting || !frontImage || !idImage}
+              className="w-full py-4 bg-[#C5A059] hover:bg-[#B38F46] disabled:opacity-50 disabled:cursor-not-allowed text-black font-black text-xs uppercase tracking-wider rounded-xl shadow-xl flex items-center justify-center space-x-2 cursor-pointer transition-all active:scale-98"
             >
               <Upload className="w-4 h-4" />
-              <span>{isSubmitting ? 'Uploading to Register...' : 'Upload Check to Register'}</span>
+              <span>{isSubmitting ? 'Transmitting to Cashier Terminal...' : 'Send Check & ID to Cashier'}</span>
             </button>
           </form>
         )}
       </main>
 
-      {/* Footer */}
+      {/* Footer without POS navigation */}
       <footer className="p-3 text-center border-t border-slate-800 text-[11px] text-slate-500 shrink-0">
-        377 Spirits Granbury • Direct Check Cashing Terminal Link
+        377 Spirits Granbury • Secure Customer Check & ID Intake Terminal
       </footer>
     </div>
   );

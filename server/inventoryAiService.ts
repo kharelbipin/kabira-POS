@@ -299,3 +299,40 @@ inventoryAiRouter.post('/inventory/ai-shelf-count/apply', (req: Request, res: Re
 inventoryAiRouter.get('/inventory/ai-shelf-count/sessions', (req: Request, res: Response) => {
   res.json({ sessions: aiShelfCountSessions });
 });
+
+// Live mobile shelf photo staging store
+const liveShelfUploads: Record<string, { id: string; url: string; label: string; timestamp: number }[]> = {};
+
+// POST /api/inventory/ai-shelf-count/sessions/:sessionId/photos - upload photos from smartphone camera
+inventoryAiRouter.post('/inventory/ai-shelf-count/sessions/:sessionId/photos', (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const { photos, photoUrl, label } = req.body;
+  if (!liveShelfUploads[sessionId]) {
+    liveShelfUploads[sessionId] = [];
+  }
+  if (Array.isArray(photos)) {
+    photos.forEach((p: any, idx: number) => {
+      liveShelfUploads[sessionId].push({
+        id: p.id || `photo-${Date.now()}-${idx}`,
+        url: p.url || p,
+        label: p.label || `Shot ${liveShelfUploads[sessionId].length + 1}`,
+        timestamp: Date.now(),
+      });
+    });
+  } else if (photoUrl) {
+    liveShelfUploads[sessionId].push({
+      id: `photo-${Date.now()}`,
+      url: photoUrl,
+      label: label || `Shot ${liveShelfUploads[sessionId].length + 1}`,
+      timestamp: Date.now(),
+    });
+  }
+  res.json({ success: true, count: liveShelfUploads[sessionId].length, photos: liveShelfUploads[sessionId] });
+});
+
+// GET /api/inventory/ai-shelf-count/sessions/:sessionId/photos - retrieve photos for session
+inventoryAiRouter.get('/inventory/ai-shelf-count/sessions/:sessionId/photos', (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const photos = liveShelfUploads[sessionId] || [];
+  res.json({ success: true, photos });
+});

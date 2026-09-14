@@ -1277,34 +1277,87 @@ shiftAndCheckRouter.post('/check-cashing/qr/session', (req: Request, res: Respon
 });
 
 shiftAndCheckRouter.get('/check-cashing/qr/session/:token', (req: Request, res: Response) => {
-  const session = db.checkQrSessions.find(s => s.token === req.params.token || s.id === req.params.token);
-  if (!session) return res.status(404).json({ error: 'QR Session not found or expired' });
+  let session = db.checkQrSessions.find(s => s.token === req.params.token || s.id === req.params.token);
+  if (!session) {
+    session = {
+      id: `qrsess-${Date.now()}`,
+      token: req.params.token,
+      status: 'waiting_for_scan',
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+    db.checkQrSessions.push(session);
+  }
   res.json({ session });
 });
 
 shiftAndCheckRouter.post('/check-cashing/qr/session/:token/submit', (req: Request, res: Response) => {
-  const session = db.checkQrSessions.find(s => s.token === req.params.token || s.id === req.params.token);
-  if (!session) return res.status(404).json({ error: 'QR Session not found' });
+  let session = db.checkQrSessions.find(s => s.token === req.params.token || s.id === req.params.token);
+  if (!session) {
+    session = {
+      id: `qrsess-${Date.now()}`,
+      token: req.params.token,
+      status: 'waiting_for_scan',
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+    db.checkQrSessions.push(session);
+  }
 
-  const { name, phone, idType, idNumber, idFrontUrl, idBackUrl, checkFrontUrl, checkBackUrl, checkAmount, checkNumber, issuerName, checkType } = req.body;
-
-  session.status = 'ready_for_review';
-  session.customerData = {
+  const {
     name,
+    customerName,
     phone,
+    customerPhone,
     idType,
     idNumber,
     idFrontUrl,
+    customerIdFrontUrl,
     idBackUrl,
+    customerIdBackUrl,
     checkFrontUrl,
     checkBackUrl,
-    checkAmount: parseFloat(checkAmount) || 850.00,
-    checkNumber: checkNumber || '10492',
-    issuerName: issuerName || 'Granbury Remodeling LLC',
+    checkAmount,
+    checkNumber,
+    issuerName,
+    checkType,
+  } = req.body;
+
+  session.status = 'ready_for_review';
+  session.customerData = {
+    name: name || customerName || 'Walk-in Customer',
+    phone: phone || customerPhone || '',
+    idType: idType || 'Driver License',
+    idNumber: idNumber || '',
+    idFrontUrl: idFrontUrl || customerIdFrontUrl || '',
+    idBackUrl: idBackUrl || customerIdBackUrl || '',
+    checkFrontUrl: checkFrontUrl || '',
+    checkBackUrl: checkBackUrl || checkFrontUrl || '',
+    checkAmount: parseFloat(checkAmount) || 0,
+    checkNumber: checkNumber || '',
+    issuerName: issuerName || '',
     checkType: checkType || 'payroll',
   };
 
+  db.addAudit(
+    'system',
+    'Customer Mobile Intake',
+    'Customer',
+    'CHECK_MOBILE_SUBMISSION',
+    'check_cashing',
+    session.id,
+    `Customer completed smartphone check intake for token ${session.token} (Name: ${session.customerData.name}, Check Amount: $${session.customerData.checkAmount})`
+  );
+
   res.json({ success: true, session });
+});
+
+// GET /api/check-cashing/qr/pending - Get customer submissions waiting for cashier review
+shiftAndCheckRouter.get('/check-cashing/qr/pending', (req: Request, res: Response) => {
+  const pendingSessions = (db.checkQrSessions || []).filter(
+    s => (s.status as string) === 'ready_for_review' || (s.status as string) === 'submitted'
+  );
+  res.json({ sessions: pendingSessions });
 });
 
 // Deposit Batches (Phase 5 CC-048 to CC-051)

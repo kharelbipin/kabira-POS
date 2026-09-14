@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import {
   User,
   Category,
@@ -241,7 +243,7 @@ class Database {
       barcode: "080244009235",
       categoryId: "cat-1",
       categoryName: "Whiskey & Bourbon",
-      price: 99.99,
+      price: 129.99,
       cost: 58.00,
       taxRate: 0.0825,
       size: "750 mL",
@@ -464,14 +466,14 @@ class Database {
     },
     {
       id: 'prod-15',
-      name: "Buffalo Trace Kentucky Straight Bourbon",
+      name: "Buffalo Trace",
       sku: "BT-KY-750",
       barcode: "080244009236",
       categoryId: "cat-1",
       categoryName: "Whiskey & Bourbon",
-      price: 34.99,
-      cost: 24.99,
-      costPrice: 24.99,
+      price: 32.99,
+      cost: 22.50,
+      costPrice: 22.50,
       taxRate: 0.0825,
       size: "750ml",
       stockQuantity: 18,
@@ -484,7 +486,7 @@ class Database {
     },
     {
       id: 'prod-16',
-      name: "Weller Antique 107 Wheated Bourbon",
+      name: "Weller Antique 107",
       sku: "WEL-ANT-750",
       barcode: "080244012075",
       categoryId: "cat-1",
@@ -494,10 +496,70 @@ class Database {
       costPrice: 41.25,
       taxRate: 0.0825,
       size: "750ml",
-      stockQuantity: 6,
+      stockQuantity: 8,
       lowStockThreshold: 4,
       imageUrl: "https://images.unsplash.com/photo-1569529465841-dfecdab7503b?w=500&auto=format&fit=crop&q=60",
       description: "Old Weller Antique 107 proof wheated bourbon with full-bodied sweet and spicy flavors.",
+      active: true,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    },
+    {
+      id: 'prod-17',
+      name: "Eagle Rare 10 Year",
+      sku: "ER-10Y-750",
+      barcode: "080244010101",
+      categoryId: "cat-1",
+      categoryName: "Whiskey & Bourbon",
+      price: 49.99,
+      cost: 32.00,
+      costPrice: 32.00,
+      taxRate: 0.0825,
+      size: "750ml",
+      stockQuantity: 10,
+      lowStockThreshold: 4,
+      imageUrl: "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=500&auto=format&fit=crop&q=60",
+      description: "Masterfully crafted and carefully aged for no less than ten years, with aromas of toffee, hints of orange peel, herbs, honey, and leather.",
+      active: true,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    },
+    {
+      id: 'prod-18',
+      name: "Penelope Bourbon",
+      sku: "PEN-BOU-750",
+      barcode: "080244010202",
+      categoryId: "cat-1",
+      categoryName: "Whiskey & Bourbon",
+      price: 64.99,
+      cost: 42.00,
+      costPrice: 42.00,
+      taxRate: 0.0825,
+      size: "750ml",
+      stockQuantity: 12,
+      lowStockThreshold: 5,
+      imageUrl: "https://images.unsplash.com/photo-1527281400683-1aae777175f8?w=500&auto=format&fit=crop&q=60",
+      description: "Four grain straight bourbon whiskey blended from three distinct mash bills, non-chill filtered with sweet toasted oak and dark fruit notes.",
+      active: true,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    },
+    {
+      id: 'prod-19',
+      name: "Baker's 13 Year",
+      sku: "BAK-13Y-750",
+      barcode: "080244010303",
+      categoryId: "cat-1",
+      categoryName: "Whiskey & Bourbon",
+      price: 149.99,
+      cost: 95.00,
+      costPrice: 95.00,
+      taxRate: 0.0825,
+      size: "750ml",
+      stockQuantity: 5,
+      lowStockThreshold: 3,
+      imageUrl: "https://images.unsplash.com/photo-1569529465841-dfecdab7503b?w=500&auto=format&fit=crop&q=60",
+      description: "Rare 13-year single barrel bourbon offering rich vanilla, toasted oak, dried fruit, and a long warming finish.",
       active: true,
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
@@ -2155,6 +2217,153 @@ class Database {
     };
     this.auditLogs.unshift(log);
     return log;
+  }
+
+  // --- DATABASE PERSISTENCE LAYER ---
+  private dbFilePath = path.join(process.cwd(), 'data', 'pos_database.json');
+  private saveTimeout: NodeJS.Timeout | null = null;
+  public lastSavedAt: string | null = null;
+
+  constructor() {
+    this.loadFromDisk();
+
+    // Ensure save on process termination
+    process.on('SIGINT', () => {
+      this.saveToDiskSync();
+    });
+    process.on('SIGTERM', () => {
+      this.saveToDiskSync();
+    });
+  }
+
+  private get persistedTableKeys() {
+    return [
+      'users',
+      'categories',
+      'brands',
+      'promotions',
+      'devices',
+      'products',
+      'customers',
+      'orders',
+      'heldOrders',
+      'inventoryAdjustments',
+      'auditLogs',
+      'loyaltyTransactions',
+      'settings',
+      'vendors',
+      'invoices',
+      'receivingTransactions',
+      'vendorProductMappings',
+      'barcodeReceivingSessions',
+      'shifts',
+      'bankAccounts',
+      'issuedChecks',
+      'checkFeeRules',
+      'checkIssuers',
+      'checkCashingTransactions',
+      'depositBatches',
+      'inventoryLedger',
+      'inventoryReservations',
+      'omnichannelCartTransfers',
+      'productBundles',
+      'productSubstitutionRules',
+      'digitalTwinLayout',
+    ] as const;
+  }
+
+  loadFromDisk() {
+    try {
+      if (fs.existsSync(this.dbFilePath)) {
+        const raw = fs.readFileSync(this.dbFilePath, 'utf-8');
+        const data = JSON.parse(raw);
+        for (const key of this.persistedTableKeys) {
+          if (data[key] !== undefined) {
+            (this as any)[key] = data[key];
+          }
+        }
+        this.lastSavedAt = data._metadata?.lastSavedAt || new Date().toISOString();
+        console.log(`[Database] Loaded persistent data from ${this.dbFilePath} (${this.products.length} products, ${this.orders.length} orders, ${this.customers.length} customers)`);
+      } else {
+        this.saveToDiskSync();
+        console.log(`[Database] Initialized new persistent database file at ${this.dbFilePath}`);
+      }
+    } catch (err) {
+      console.error('[Database] Failed to load from disk, using defaults:', err);
+    }
+  }
+
+  serialize() {
+    const data: Record<string, any> = {
+      _metadata: {
+        version: '1.0.0',
+        system: '377 Spirits POS Core DB',
+        lastSavedAt: new Date().toISOString(),
+      },
+    };
+    for (const key of this.persistedTableKeys) {
+      data[key] = (this as any)[key];
+    }
+    return data;
+  }
+
+  saveToDiskSync() {
+    try {
+      const dir = path.dirname(this.dbFilePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const data = this.serialize();
+      const tempPath = `${this.dbFilePath}.tmp`;
+      fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
+      fs.renameSync(tempPath, this.dbFilePath);
+      this.lastSavedAt = data._metadata.lastSavedAt;
+      return true;
+    } catch (err) {
+      console.error('[Database] Error saving database to disk:', err);
+      return false;
+    }
+  }
+
+  scheduleSave(delayMs = 250) {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+    this.saveTimeout = setTimeout(() => {
+      this.saveToDiskSync();
+      this.saveTimeout = null;
+    }, delayMs);
+  }
+
+  getStats() {
+    let sizeOnDisk = 0;
+    try {
+      if (fs.existsSync(this.dbFilePath)) {
+        sizeOnDisk = fs.statSync(this.dbFilePath).size;
+      }
+    } catch (_) {}
+
+    return {
+      status: 'healthy',
+      engine: 'JSON File-Backed Persistent Store',
+      dbFilePath: this.dbFilePath,
+      sizeBytes: sizeOnDisk,
+      sizeFormatted: `${(sizeOnDisk / 1024).toFixed(1)} KB`,
+      lastSavedAt: this.lastSavedAt,
+      counts: {
+        products: this.products.length,
+        categories: this.categories.length,
+        orders: this.orders.length,
+        customers: this.customers.length,
+        shifts: this.shifts.length,
+        checkTransactions: this.checkCashingTransactions.length,
+        inventoryAdjustments: this.inventoryAdjustments.length,
+        auditLogs: this.auditLogs.length,
+        vendors: this.vendors.length,
+        promotions: this.promotions.length,
+        devices: this.devices.length,
+      },
+    };
   }
 }
 

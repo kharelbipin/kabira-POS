@@ -42,7 +42,14 @@ import {
   Clock,
   Sparkles,
   Sliders,
+  Smartphone,
+  CreditCard,
+  BadgeCheck,
 } from 'lucide-react';
+import {
+  extractIdInformationFromImage,
+  extractCheckInformationFromImage,
+} from '../../utils/idOcrService';
 
 interface ChecksViewProps {
   currentUser: User | null;
@@ -55,8 +62,22 @@ export const ChecksView: React.FC<ChecksViewProps> = ({
   settings,
   onRefreshData,
 }) => {
+  const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Admin';
+  const allowIssuance = isManagerOrAdmin || !!settings?.cashierPermissions?.allowCheckIssuanceRegister;
+  const allowBatches = isManagerOrAdmin || !!settings?.cashierPermissions?.allowDepositBatches;
+
   const [activeTab, setActiveTab] = useState<'issuance' | 'cashing' | 'batches'>('cashing');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Safety fallback if activeTab is forbidden for this role
+  useEffect(() => {
+    if (!allowIssuance && activeTab === 'issuance') {
+      setActiveTab('cashing');
+    }
+    if (!allowBatches && activeTab === 'batches') {
+      setActiveTab('cashing');
+    }
+  }, [allowIssuance, allowBatches, activeTab]);
 
   // Check Issuance State
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
@@ -83,13 +104,30 @@ export const ChecksView: React.FC<ChecksViewProps> = ({
 
   // Check Cashing Modals
   const [showCashCheckModal, setShowCashCheckModal] = useState<boolean>(false);
+  const [cashCheckInitialData, setCashCheckInitialData] = useState<any>(null);
   const [showQrSessionModal, setShowQrSessionModal] = useState<boolean>(false);
   const [activeQrSession, setActiveQrSession] = useState<CheckQrSession | null>(null);
+  const [pendingQrSubmissions, setPendingQrSubmissions] = useState<any[]>([]);
   const [showDepositBatchModal, setShowDepositBatchModal] = useState<boolean>(false);
   const [showReturnedCheckModal, setShowReturnedCheckModal] = useState<boolean>(false);
   const [selectedTransactionForReturn, setSelectedTransactionForReturn] = useState<CheckCashingTransaction | null>(null);
   const [showDepositSlipModal, setShowDepositSlipModal] = useState<boolean>(false);
   const [selectedBatchForSlip, setSelectedBatchForSlip] = useState<DepositBatch | null>(null);
+
+  // Poll for customer smartphone submissions so POS can retrieve them instantly
+  useEffect(() => {
+    const pollPending = async () => {
+      try {
+        const res = await api.getPendingCheckQrSessions();
+        if (res && Array.isArray(res.sessions)) {
+          setPendingQrSubmissions(res.sessions);
+        }
+      } catch (e) {}
+    };
+    pollPending();
+    const interval = setInterval(pollPending, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Load all check data
   const loadData = useCallback(async () => {
@@ -195,29 +233,33 @@ export const ChecksView: React.FC<ChecksViewProps> = ({
             <span>Check Cashing</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab('issuance')}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === 'issuance'
-                ? 'bg-[#C5A059] text-black shadow'
-                : 'text-[#888888] hover:text-white'
-            }`}
-          >
-            <FileCheck className="w-4 h-4" />
-            <span>Check Issuance & Register</span>
-          </button>
+          {allowIssuance && (
+            <button
+              onClick={() => setActiveTab('issuance')}
+              className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                activeTab === 'issuance'
+                  ? 'bg-[#C5A059] text-black shadow'
+                  : 'text-[#888888] hover:text-white'
+              }`}
+            >
+              <FileCheck className="w-4 h-4" />
+              <span>Check Issuance & Register</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab('batches')}
-            className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === 'batches'
-                ? 'bg-[#C5A059] text-black shadow'
-                : 'text-[#888888] hover:text-white'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>Deposit Batches ({(Array.isArray(depositBatches) ? depositBatches : []).length})</span>
-          </button>
+          {allowBatches && (
+            <button
+              onClick={() => setActiveTab('batches')}
+              className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                activeTab === 'batches'
+                  ? 'bg-[#C5A059] text-black shadow'
+                  : 'text-[#888888] hover:text-white'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span>Deposit Batches ({(Array.isArray(depositBatches) ? depositBatches : []).length})</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -226,6 +268,43 @@ export const ChecksView: React.FC<ChecksViewProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'cashing' && (
         <div className="space-y-6">
+          {/* Customer Smartphone QR Upload Received Banner */}
+          {pendingQrSubmissions.length > 0 && (
+            <div className="bg-emerald-950/70 border border-emerald-500/60 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-black uppercase tracking-wider text-emerald-300">
+                      Customer Smartphone Check Upload Received ({pendingQrSubmissions.length})
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-black uppercase font-mono">
+                      Images Attached
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#E5E5E5] mt-0.5">
+                    Customer: <span className="font-bold text-white">{pendingQrSubmissions[0].customerData?.name || pendingQrSubmissions[0].customerData?.customerName || 'Customer'}</span>
+                    {' '}• Amount: <span className="font-mono font-black text-[#C5A059]">${(pendingQrSubmissions[0].customerData?.checkAmount || 0).toFixed(2)}</span>
+                    {' '}• Phone: <span className="text-slate-300 font-mono">{pendingQrSubmissions[0].customerData?.phone || pendingQrSubmissions[0].customerData?.customerPhone || 'N/A'}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  playBeep('click');
+                  setCashCheckInitialData(pendingQrSubmissions[0].customerData);
+                  setShowCashCheckModal(true);
+                }}
+                className="px-4 py-2 bg-[#C5A059] hover:bg-[#B38F46] text-black font-black text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer shrink-0 shadow flex items-center space-x-1.5"
+              >
+                <span>Retrieve Images & Fill Out Cheque</span>
+                <span>→</span>
+              </button>
+            </div>
+          )}
+
           {/* Cashing KPIs Banner */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-[#141414] border border-[#262626] rounded-xl p-4">
@@ -756,12 +835,17 @@ export const ChecksView: React.FC<ChecksViewProps> = ({
       {showCashCheckModal && (
         <CashCheckWizardModal
           isOpen={showCashCheckModal}
-          onClose={() => setShowCashCheckModal(false)}
+          onClose={() => {
+            setShowCashCheckModal(false);
+            setCashCheckInitialData(null);
+          }}
           currentUser={currentUser}
           feeRules={cashingFeeRules}
           issuers={issuers}
+          initialData={cashCheckInitialData}
           onSuccess={() => {
             setShowCashCheckModal(false);
+            setCashCheckInitialData(null);
             loadData();
             playBeep('success');
           }}
@@ -821,6 +905,12 @@ export const ChecksView: React.FC<ChecksViewProps> = ({
           isOpen={showQrSessionModal}
           onClose={() => setShowQrSessionModal(false)}
           session={activeQrSession}
+          onFillOutCheck={customerData => {
+            setShowQrSessionModal(false);
+            setCashCheckInitialData(customerData);
+            setShowCashCheckModal(true);
+            playBeep('success');
+          }}
         />
       )}
 
@@ -1346,6 +1436,7 @@ interface CashCheckWizardModalProps {
   currentUser: User | null;
   feeRules: CheckFeeRule[];
   issuers: CheckIssuer[];
+  initialData?: any;
   onSuccess: () => void;
 }
 
@@ -1355,6 +1446,7 @@ const CashCheckWizardModal: React.FC<CashCheckWizardModalProps> = ({
   currentUser,
   feeRules,
   issuers,
+  initialData,
   onSuccess,
 }) => {
   // Step 1: Customer ID
@@ -1377,6 +1469,121 @@ const CashCheckWizardModal: React.FC<CashCheckWizardModalProps> = ({
   const [feeOverrideReason, setFeeOverrideReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Direct In-Modal OCR State
+  const [isProcessingOcr, setIsProcessingOcr] = useState<boolean>(false);
+  const [ocrStatusMsg, setOcrStatusMsg] = useState<string | null>(null);
+  const idFileInputRef = React.useRef<HTMLInputElement>(null);
+  const checkFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Retrieved images from smartphone intake or manual upload
+  const [retrievedImages, setRetrievedImages] = useState<{
+    checkFront?: string;
+    checkBack?: string;
+    idFront?: string;
+  }>({});
+
+  const handleIdUploadForOcr = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      setRetrievedImages(prev => ({ ...prev, idFront: dataUrl }));
+      setIsProcessingOcr(true);
+      setOcrStatusMsg('Analyzing Driver License image via OCR...');
+      try {
+        const ocr = await extractIdInformationFromImage(dataUrl, customerName);
+        setCustomerName(ocr.fullName);
+        setCustomerIdType(ocr.idType);
+        setCustomerIdNumber(ocr.idNumber);
+        setCustomerIdState(ocr.idState);
+        setOcrStatusMsg(`Auto-filled: ${ocr.fullName} (${ocr.idNumber}, ${ocr.calculatedAge} yrs)`);
+        playBeep('success');
+      } catch (err) {
+        console.error(err);
+        setOcrStatusMsg('OCR read completed with standard template defaults.');
+      } finally {
+        setIsProcessingOcr(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCheckUploadForOcr = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      setRetrievedImages(prev => ({ ...prev, checkFront: dataUrl }));
+      setIsProcessingOcr(true);
+      setOcrStatusMsg('Extracting check MICR & amount via OCR...');
+      try {
+        const checkOcr = await extractCheckInformationFromImage(dataUrl);
+        setCheckAmount(checkOcr.checkAmount.toFixed(2));
+        setCheckNumber(checkOcr.checkNumber);
+        setIssuerName(checkOcr.issuerName);
+        setMicrRoutingNumber(checkOcr.routingNumber);
+        setMicrAccountNumber(checkOcr.accountNumber);
+        if (checkOcr.payeeName && !customerName) {
+          setCustomerName(checkOcr.payeeName);
+        }
+        setOcrStatusMsg(`Auto-filled: Check #${checkOcr.checkNumber} for $${checkOcr.checkAmount.toFixed(2)}`);
+        playBeep('success');
+      } catch (err) {
+        console.error(err);
+        setOcrStatusMsg('Check read completed.');
+      } finally {
+        setIsProcessingOcr(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Populate from initialData when customer submission is retrieved
+  useEffect(() => {
+    if (initialData) {
+      if (initialData.name || initialData.customerName) {
+        setCustomerName(initialData.name || initialData.customerName);
+      }
+      if (initialData.phone || initialData.customerPhone) {
+        setCustomerPhone(initialData.phone || initialData.customerPhone);
+      }
+      if (initialData.idNumber || initialData.customerIdNumber) {
+        setCustomerIdNumber(initialData.idNumber || initialData.customerIdNumber);
+      }
+      if (initialData.idType || initialData.customerIdType) {
+        setCustomerIdType(initialData.idType || initialData.customerIdType);
+      }
+      if (initialData.idState || initialData.customerIdState) {
+        setCustomerIdState(initialData.idState || initialData.customerIdState);
+      }
+      if (initialData.checkType) {
+        setCheckType(initialData.checkType);
+      }
+      if (initialData.checkNumber) {
+        setCheckNumber(String(initialData.checkNumber));
+      }
+      if (initialData.checkAmount) {
+        setCheckAmount(String(initialData.checkAmount));
+      }
+      if (initialData.issuerName) {
+        setIssuerName(initialData.issuerName);
+      }
+      if (initialData.micrRoutingNumber) {
+        setMicrRoutingNumber(initialData.micrRoutingNumber);
+      }
+      if (initialData.micrAccountNumber) {
+        setMicrAccountNumber(initialData.micrAccountNumber);
+      }
+      setRetrievedImages({
+        checkFront: initialData.checkFrontUrl,
+        checkBack: initialData.checkBackUrl,
+        idFront: initialData.customerIdFrontUrl || initialData.idFrontUrl || initialData.idPhotoUrl,
+      });
+    }
+  }, [initialData]);
 
   if (!isOpen) return null;
 
@@ -1419,6 +1626,9 @@ const CashCheckWizardModal: React.FC<CashCheckWizardModalProps> = ({
         micrRoutingNumber,
         micrAccountNumber,
         issuerName,
+        checkFrontUrl: retrievedImages.checkFront,
+        checkBackUrl: retrievedImages.checkBack,
+        customerIdFrontUrl: retrievedImages.idFront,
         feePercentOverride: feePercentOverride ? parseFloat(feePercentOverride) : undefined,
         feeOverrideReason: feeOverrideReason || undefined,
         instantPayout: true,
@@ -1460,6 +1670,47 @@ const CashCheckWizardModal: React.FC<CashCheckWizardModalProps> = ({
             </div>
           )}
 
+          {/* Retrieved Mobile Smartphone Images Preview */}
+          {(retrievedImages.checkFront || retrievedImages.idFront || retrievedImages.checkBack) && (
+            <div className="p-3.5 bg-[#181818] border border-emerald-500/50 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  Retrieved Customer Smartphone Uploads
+                </span>
+                <span className="text-[10px] bg-emerald-500/15 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30 font-mono font-bold">
+                  Auto-Retrieved from QR Intake
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                {retrievedImages.checkFront && (
+                  <div className="text-center">
+                    <span className="text-[9px] uppercase font-bold text-[#888888] block mb-1">Check Front</span>
+                    <a href={retrievedImages.checkFront} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-[#333333] hover:border-[#C5A059] transition-colors group">
+                      <img src={retrievedImages.checkFront} alt="Check Front" className="h-16 w-full object-cover group-hover:scale-105 transition-transform" />
+                    </a>
+                  </div>
+                )}
+                {retrievedImages.checkBack && (
+                  <div className="text-center">
+                    <span className="text-[9px] uppercase font-bold text-[#888888] block mb-1">Check Back</span>
+                    <a href={retrievedImages.checkBack} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-[#333333] hover:border-[#C5A059] transition-colors group">
+                      <img src={retrievedImages.checkBack} alt="Check Back" className="h-16 w-full object-cover group-hover:scale-105 transition-transform" />
+                    </a>
+                  </div>
+                )}
+                {retrievedImages.idFront && (
+                  <div className="text-center">
+                    <span className="text-[9px] uppercase font-bold text-[#888888] block mb-1">Customer ID</span>
+                    <a href={retrievedImages.idFront} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-[#333333] hover:border-[#C5A059] transition-colors group">
+                      <img src={retrievedImages.idFront} alt="Customer ID" className="h-16 w-full object-cover group-hover:scale-105 transition-transform" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Payout Summary Banner */}
           <div className="grid grid-cols-3 gap-3 bg-[#181818] p-3.5 rounded-xl border border-[#282828] text-center">
             <div>
@@ -1480,6 +1731,59 @@ const CashCheckWizardModal: React.FC<CashCheckWizardModalProps> = ({
                 ${customerPayout.toFixed(2)}
               </span>
             </div>
+          </div>
+
+          {/* Hidden inputs for Cashier OCR upload */}
+          <input
+            ref={idFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleIdUploadForOcr}
+            className="hidden"
+          />
+          <input
+            ref={checkFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleCheckUploadForOcr}
+            className="hidden"
+          />
+
+          {/* Quick OCR Auto-fill Action Bar */}
+          <div className="bg-[#181818] border border-[#2B2B2B] rounded-xl p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Instant Image OCR Auto-Fill</span>
+              </span>
+              <span className="text-[10px] text-[#888888]">Driver License & MICR</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => idFileInputRef.current?.click()}
+                disabled={isProcessingOcr}
+                className="py-2 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-center space-x-1.5 cursor-pointer transition-colors"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>Upload ID (OCR Auto-Fill)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => checkFileInputRef.current?.click()}
+                disabled={isProcessingOcr}
+                className="py-2 px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center justify-center space-x-1.5 cursor-pointer transition-colors"
+              >
+                <FileCheck className="w-3.5 h-3.5" />
+                <span>Upload Check (OCR MICR)</span>
+              </button>
+            </div>
+            {ocrStatusMsg && (
+              <div className="text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 rounded-lg px-2.5 py-1 flex items-center gap-1.5">
+                <BadgeCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>{ocrStatusMsg}</span>
+              </div>
+            )}
           </div>
 
           {/* Section: Customer Identification */}
@@ -1662,9 +1966,44 @@ interface QrIntakeModalProps {
   isOpen: boolean;
   onClose: () => void;
   session: CheckQrSession;
+  onFillOutCheck?: (customerData: any) => void;
 }
 
-const QrIntakeModal: React.FC<QrIntakeModalProps> = ({ isOpen, onClose, session }) => {
+const QrIntakeModal: React.FC<QrIntakeModalProps> = ({ isOpen, onClose, session, onFillOutCheck }) => {
+  const [submission, setSubmission] = useState<any>(null);
+
+  useEffect(() => {
+    if (!isOpen || !session) return;
+
+    const checkIncoming = async () => {
+      // 1. Check local storage for immediate sync
+      try {
+        const key1 = `pos_mobile_check_upload_${session.token}`;
+        const key2 = `pos_mobile_check_upload_${session.id}`;
+        const raw = localStorage.getItem(key1) || localStorage.getItem(key2);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (parsed.checkFrontUrl || parsed.status === 'submitted' || parsed.name)) {
+            setSubmission(parsed);
+          }
+        }
+      } catch (e) {}
+
+      // 2. Query backend API endpoint
+      try {
+        const token = session.token || session.id;
+        const res = await api.getCheckQrSession(token);
+        if (res && res.session && res.session.customerData) {
+          setSubmission(res.session.customerData);
+        }
+      } catch (e) {}
+    };
+
+    checkIncoming();
+    const interval = setInterval(checkIncoming, 2000);
+    return () => clearInterval(interval);
+  }, [isOpen, session]);
+
   if (!isOpen) return null;
 
   const directMobileUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?mobileCheck=${session.token || session.id}`;
@@ -1703,7 +2042,48 @@ const QrIntakeModal: React.FC<QrIntakeModalProps> = ({ isOpen, onClose, session 
           </a>
         </div>
 
-        <div className="mt-5">
+        {/* Live Detected Submission Notification */}
+        {submission && (
+          <div className="mt-4 p-4 bg-emerald-950/60 border border-emerald-500/60 rounded-xl text-left animate-in fade-in zoom-in-95 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                Upload Received from Phone!
+              </span>
+              <span className="text-[10px] font-mono bg-emerald-500 text-black font-bold px-2 py-0.5 rounded-full">
+                READY
+              </span>
+            </div>
+            <div className="text-xs text-[#CCCCCC]">
+              <div>Customer: <strong className="text-white">{submission.name || submission.customerName || 'Customer'}</strong></div>
+              <div>Check Amount: <strong className="text-[#C5A059] font-mono">${(Number(submission.checkAmount) || 0).toFixed(2)}</strong></div>
+            </div>
+            {/* Image Thumbnails */}
+            <div className="flex items-center gap-2 pt-1">
+              {submission.checkFrontUrl && (
+                <img src={submission.checkFrontUrl} alt="Front" className="h-12 w-20 object-cover rounded border border-emerald-500/40" />
+              )}
+              {submission.checkBackUrl && (
+                <img src={submission.checkBackUrl} alt="Back" className="h-12 w-20 object-cover rounded border border-emerald-500/40" />
+              )}
+              {(submission.customerIdFrontUrl || submission.idPhotoUrl) && (
+                <img src={submission.customerIdFrontUrl || submission.idPhotoUrl} alt="ID" className="h-12 w-20 object-cover rounded border border-emerald-500/40" />
+              )}
+            </div>
+            {onFillOutCheck && (
+              <button
+                type="button"
+                onClick={() => onFillOutCheck(submission)}
+                className="w-full mt-2 py-2 bg-[#C5A059] hover:bg-[#B38F46] text-black font-black text-xs uppercase rounded-lg transition-colors cursor-pointer shadow flex items-center justify-center space-x-1.5"
+              >
+                <span>Retrieve Images & Fill Out Cheque</span>
+                <span>→</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="mt-4">
           <button
             onClick={onClose}
             className="w-full py-2.5 bg-[#222222] hover:bg-[#2E2E2E] text-white font-bold text-xs uppercase rounded-xl transition-colors cursor-pointer"

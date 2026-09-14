@@ -38,6 +38,40 @@ import { paymentFallbackService } from './paymentFallbackService.js';
 
 export const apiRouter = express.Router();
 apiRouter.use(express.json());
+
+// Persistent Database Auto-Save Middleware
+// Automatically debounces writes to disk whenever data is created, modified, or deleted
+apiRouter.use((req: Request, res: Response, next: NextFunction) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    res.on('finish', () => {
+      if (res.statusCode >= 200 && res.statusCode < 400) {
+        db.scheduleSave();
+      }
+    });
+  }
+  next();
+});
+
+// Database Management Endpoints
+apiRouter.get('/database/status', (req: Request, res: Response) => {
+  res.json(db.getStats());
+});
+
+apiRouter.post('/database/save', (req: Request, res: Response) => {
+  const success = db.saveToDiskSync();
+  res.json({
+    success,
+    message: success ? 'Database successfully flushed to persistent disk' : 'Failed to write to disk',
+    stats: db.getStats(),
+  });
+});
+
+apiRouter.get('/database/export', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename=pos_database_backup_${Date.now()}.json`);
+  res.json(db.serialize());
+});
+
 apiRouter.use(shiftAndCheckRouter);
 apiRouter.use(barcodeReceivingRouter);
 apiRouter.use(onlineStoreRouter);
@@ -1534,12 +1568,19 @@ apiRouter.post('/inventory/receive', asyncHandler(async (req: Request, res: Resp
 // RP-01 to RP-05 & BE-11: Reports & Analytics API
 // ----------------------------------------------------
 apiRouter.get('/reports/sales', (req: Request, res: Response) => {
-  const { period } = req.query; // 'today', 'week', 'month', 'all'
+  const { period, startDate, endDate } = req.query; // 'today', 'week', 'month', 'custom', 'all'
 
   let filtered = db.orders.filter(o => o.status === 'completed');
 
   const now = new Date();
-  if (period === 'today') {
+  if (startDate && endDate) {
+    const startStr = typeof startDate === 'string' ? `${startDate.slice(0, 10)}T00:00:00.000Z` : '';
+    const endStr = typeof endDate === 'string' ? `${endDate.slice(0, 10)}T23:59:59.999Z` : '';
+    filtered = filtered.filter(o => o.createdAt >= startStr && o.createdAt <= endStr);
+  } else if (startDate) {
+    const startStr = typeof startDate === 'string' ? `${startDate.slice(0, 10)}T00:00:00.000Z` : '';
+    filtered = filtered.filter(o => o.createdAt >= startStr);
+  } else if (period === 'today') {
     const todayStr = now.toISOString().slice(0, 10);
     filtered = filtered.filter(o => o.createdAt.startsWith(todayStr));
   } else if (period === 'week') {
