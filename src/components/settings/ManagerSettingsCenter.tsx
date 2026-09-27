@@ -3,6 +3,7 @@ import { StoreSettings, User } from '../../types';
 import { api } from '../../utils/api';
 import { playBeep } from '../../utils/audio';
 import { PaymentAuditModal } from '../payment/PaymentAuditModal';
+import { WindowsPosManagerTab } from './WindowsPosManagerTab';
 import {
   Settings,
   Store,
@@ -113,15 +114,15 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
   // Form State initialized with store settings + full manager controls
   const [formData, setFormData] = useState({
     // General
-    storeName: settings?.storeName || '377 Spirits',
+    storeName: settings?.storeName || 'KABIRA POS',
     tagline: settings?.tagline || 'Fine Liquors, Craft Spirits, Wine & Beer',
     address: settings?.address || '4100 E Hwy 377',
     city: settings?.city || 'Granbury',
     state: settings?.state || 'TX',
     zip: settings?.zip || '76049',
     phone: settings?.phone || '(817) 555-0377',
-    email: settings?.email || 'manager@377spirits.com',
-    website: 'https://377spirits.com',
+    email: settings?.email || 'manager@kabirapos.com',
+    website: 'https://kabirapos.com',
     timezone: 'America/Chicago (CST)',
     currency: 'USD ($)',
 
@@ -137,8 +138,8 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
     autoOpenDrawerOnCash: true,
 
     // Printing & Receipts
-    receiptHeader: settings?.receiptHeader || '377 Spirits\nGranbury, TX 76049\n(817) 555-0377',
-    receiptFooter: settings?.receiptFooter || 'Thank you for choosing 377 Spirits!\nPlease enjoy responsibly.',
+    receiptHeader: settings?.receiptHeader || 'KABIRA POS\nGranbury, TX 76049\n(817) 555-0377',
+    receiptFooter: settings?.receiptFooter || 'Thank you for choosing KABIRA POS!\nPlease enjoy responsibly.',
     printMerchantCopyCard: true,
     printCustomerCopyCard: false,
     emailReceiptsEnabled: true,
@@ -1254,33 +1255,9 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
               </div>
             )}
 
-            {/* SECTION 12: DEVICES */}
+            {/* SECTION 12: DEVICES & WINDOWS POS WRAPPER (WV-072) */}
             {activeSection === 'devices' && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
-                  POS Hardware & Peripherals
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Primary Receipt Printer</label>
-                    <input
-                      type="text"
-                      value={formData.activePrinterModel}
-                      onChange={e => setFormData({ ...formData, activePrinterModel: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">Barcode Scanner Interface Mode</label>
-                    <input
-                      type="text"
-                      value={formData.barcodeScannerMode}
-                      onChange={e => setFormData({ ...formData, barcodeScannerMode: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
-                    />
-                  </div>
-                </div>
-              </div>
+              <WindowsPosManagerTab />
             )}
 
             {/* SECTION 13: NOTIFICATIONS */}

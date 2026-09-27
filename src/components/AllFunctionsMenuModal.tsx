@@ -27,7 +27,14 @@ import {
   ShoppingBag,
   Compass,
   ArrowRight,
+  Download,
+  Scale,
+  Utensils,
+  ChefHat,
+  Sliders,
 } from 'lucide-react';
+
+import { User, StoreSettings } from '../types';
 
 interface FunctionItem {
   id: string;
@@ -45,6 +52,8 @@ interface AllFunctionsMenuModalProps {
   onClose: () => void;
   onNavigateTab: (tab: string) => void;
   onOpenModal: (modalName: string) => void;
+  currentUser?: User | null;
+  settings?: StoreSettings | null;
 }
 
 export const AllFunctionsMenuModal: React.FC<AllFunctionsMenuModalProps> = ({
@@ -52,12 +61,37 @@ export const AllFunctionsMenuModal: React.FC<AllFunctionsMenuModalProps> = ({
   onClose,
   onNavigateTab,
   onOpenModal,
+  currentUser,
+  settings,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
+  const isAdmin = currentUser?.role === 'Admin';
+  const isManager = currentUser?.role === 'Manager';
+  const isCashier = currentUser?.role === 'Cashier';
+
+  // Role-based visibility for Scale/PLU, Tables, KDS, Designer:
+  // Admin-governed; hidden on Cashier and Manager side by default
+  const canShowScale = isAdmin ||
+    (isManager && !!settings?.adminAllowedPosButtons?.allowScaleForManager) ||
+    (isCashier && !!settings?.adminAllowedPosButtons?.allowScaleForCashier);
+
+  const canShowTables = isAdmin ||
+    (isManager && !!settings?.adminAllowedPosButtons?.allowTablesForManager) ||
+    (isCashier && !!settings?.adminAllowedPosButtons?.allowTablesForCashier);
+
+  const canShowKds = isAdmin ||
+    (isManager && !!settings?.adminAllowedPosButtons?.allowKdsForManager) ||
+    (isCashier && !!settings?.adminAllowedPosButtons?.allowKdsForCashier);
+
+  const canShowDesigner = isAdmin ||
+    (isManager && !!settings?.adminAllowedPosButtons?.allowDesignerForManager) ||
+    (isCashier && !!settings?.adminAllowedPosButtons?.allowDesignerForCashier);
+
   const allFunctions: FunctionItem[] = useMemo(
-    () => [
+    () => {
+      const items: FunctionItem[] = [
       // POS & Sales
       {
         id: 'pos-register',
@@ -129,7 +163,76 @@ export const AllFunctionsMenuModal: React.FC<AllFunctionsMenuModalProps> = ({
         icon: Smartphone,
         badge: 'Mobile Cart',
         action: () => {
-          window.open('?view=queue-buster', '_blank');
+          try {
+            window.location.search = '?view=queue-buster';
+          } catch {
+            // ignore
+          }
+          onClose();
+        },
+      },
+      ...(canShowScale ? [{
+        id: 'scale-plu-tool',
+        title: 'Produce Scale & PLU Quick Codes (Admin Controlled)',
+        category: 'pos' as const,
+        categoryLabel: 'POS & Register',
+        description: 'Weigh produce, fruit, deli, and meat with live scale simulation, tare subtraction, and 4-digit PLU codes.',
+        icon: Scale,
+        badge: 'Grocery & Deli',
+        action: () => {
+          onOpenModal('scale-plu');
+          onClose();
+        },
+      }] : []),
+      ...(canShowTables ? [{
+        id: 'restaurant-tables-map',
+        title: 'Restaurant Tables & Floor Map (Admin Controlled)',
+        category: 'pos' as const,
+        categoryLabel: 'POS & Register',
+        description: 'Interactive floor plan for dining rooms, patio, and bar seating with guest checks and table status.',
+        icon: Utensils,
+        badge: 'Restaurant',
+        action: () => {
+          onOpenModal('restaurant-tables');
+          onClose();
+        },
+      }] : []),
+      ...(canShowKds ? [{
+        id: 'kitchen-kds-screen',
+        title: 'Kitchen Display System (KDS) (Admin Controlled)',
+        category: 'pos' as const,
+        categoryLabel: 'POS & Register',
+        description: 'Live order routing display for kitchen prep cooks, runners, and expeditor line stations.',
+        icon: ChefHat,
+        badge: 'KDS',
+        action: () => {
+          onOpenModal('kitchen-kds');
+          onClose();
+        },
+      }] : []),
+      ...(canShowDesigner ? [{
+        id: 'pos-designer-tool',
+        title: 'POS Layout Designer & Industry Presets (Admin Controlled)',
+        category: 'hardware' as const,
+        categoryLabel: 'Hardware & System',
+        description: 'Configure layout, buttons, actions, and features for Liquor, Grocery, Smoke Shop, Restaurant, or Retail.',
+        icon: Sliders,
+        badge: 'Modular Setup',
+        action: () => {
+          onOpenModal('pos-designer');
+          onClose();
+        },
+      }] : []),
+      {
+        id: 'store-feature-management',
+        title: 'Store-Level POS Feature Management',
+        category: 'hardware',
+        categoryLabel: 'Hardware & System',
+        description: 'Enable or disable POS modules per store location with industry templates, audit trail, and backend security enforcement.',
+        icon: Sliders,
+        badge: 'Multi-Store Admin',
+        action: () => {
+          onOpenModal('store-features');
           onClose();
         },
       },
@@ -329,9 +432,24 @@ export const AllFunctionsMenuModal: React.FC<AllFunctionsMenuModalProps> = ({
           onClose();
         },
       },
-    ],
-    [onNavigateTab, onOpenModal, onClose]
-  );
+      {
+        id: 'pwa-install-app',
+        title: 'Install Progressive Web App (PWA)',
+        category: 'hardware',
+        categoryLabel: 'Hardware & Settings',
+        description: 'Install KABIRA POS directly onto Windows, macOS, iOS, or Android with offline caching and standalone register mode.',
+        icon: Download,
+        badge: 'Installable',
+        action: () => {
+          onNavigateTab('settings');
+          onClose();
+        },
+      },
+    ];
+    return items;
+  },
+  [onNavigateTab, onOpenModal, onClose, canShowScale, canShowTables, canShowKds, canShowDesigner]
+);
 
   const filteredFunctions = useMemo(() => {
     return allFunctions.filter(item => {
@@ -364,7 +482,7 @@ export const AllFunctionsMenuModal: React.FC<AllFunctionsMenuModalProps> = ({
                 All POS Functions & Directory
               </h2>
               <p className="text-xs text-slate-400">
-                Quickly locate and jump to any feature, tool, or screen in the 377 Spirits POS system.
+                Quickly locate and jump to any feature, tool, or screen in the KABIRA POS system.
               </p>
             </div>
           </div>
@@ -482,7 +600,7 @@ export const AllFunctionsMenuModal: React.FC<AllFunctionsMenuModalProps> = ({
         {/* Footer info */}
         <div className="bg-[#0B1020] border-t border-slate-800 px-6 py-3 flex items-center justify-between text-xs text-slate-400">
           <span>Tip: You can also access key functions directly from the top navigation bar.</span>
-          <span className="font-mono text-[11px] text-amber-400">377 Spirits System Directory</span>
+          <span className="font-mono text-[11px] text-amber-400">KABIRA POS System Directory</span>
         </div>
       </div>
     </div>

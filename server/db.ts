@@ -162,7 +162,7 @@ class Database {
       type: 'terminal',
       model: 'Elo Touch I-Series 22" 4K',
       connection: 'network',
-      status: 'connected',
+      status: 'offline',
       ipAddress: '192.168.1.101',
       lastActive: new Date().toISOString(),
     },
@@ -172,7 +172,7 @@ class Database {
       type: 'printer',
       model: 'Epson TM-T88VII High-Speed',
       connection: 'network',
-      status: 'connected',
+      status: 'offline',
       ipAddress: '192.168.1.120',
       paperWidth: '80mm',
       lastActive: new Date().toISOString(),
@@ -183,7 +183,7 @@ class Database {
       type: 'scanner',
       model: 'Zebra DS2208 2D Imager',
       connection: 'usb',
-      status: 'connected',
+      status: 'offline',
       lastActive: new Date().toISOString(),
     },
     {
@@ -192,12 +192,32 @@ class Database {
       type: 'terminal',
       model: 'Apple iPad Pro 11" M4',
       connection: 'bluetooth',
-      status: 'idle',
+      status: 'offline',
       lastActive: new Date(Date.now() - 3600000).toISOString(),
     },
   ];
 
   products: Product[] = [
+    {
+      id: 'prod-sample-012345678905',
+      name: "Garrison Brothers Small Batch Texas Bourbon",
+      sku: "GB-TX-750",
+      barcode: "012345678905",
+      categoryId: "cat-1",
+      categoryName: "Whiskey & Bourbon",
+      price: 89.99,
+      cost: 54.00,
+      taxRate: 0.0825,
+      size: "750 mL",
+      stockQuantity: 28,
+      lowStockThreshold: 4,
+      imageUrl: "https://images.unsplash.com/photo-1527281400683-1aae777175f8?w=500&auto=format&fit=crop&q=60",
+      description: "Handcrafted Texas straight bourbon whiskey from Hye, TX. 94 Proof, aged in custom white American oak.",
+      ageRestriction: 21,
+      active: true,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    },
     {
       id: 'prod-1',
       name: "Woodford Reserve Double Oaked",
@@ -975,11 +995,11 @@ class Database {
   ];
 
   settings: StoreSettings = {
-    storeName: '377 Spirits',
+    storeName: 'KABIRA POS',
     tagline: 'Fine Liquors, Craft Spirits, Wine & Beer',
     phone: '(817) 555-0377',
-    email: 'info@377spirits.com',
-    website: 'https://377spirits.com',
+    email: 'info@kabirapos.com',
+    website: 'https://kabirapos.com',
     logoUrl: 'https://images.unsplash.com/photo-1527281400683-1aae777175f8?w=100&auto=format&fit=crop&q=80',
     address: 'Granbury, TX 76049',
     city: 'Granbury',
@@ -1005,8 +1025,8 @@ class Database {
     paymentProvider: 'stripe_terminal',
     paymentTerminalIp: '192.168.1.150',
     paymentEnvironment: 'sandbox',
-    receiptHeader: 'Thank you for visiting 377 Spirits!',
-    receiptFooter: 'All sales final on allocated spirits. Returns within 14 days with unopened seal. Please drink responsibly.',
+    receiptHeader: 'Thank you for visiting KABIRA POS!',
+    receiptFooter: 'All sales final on allocated spirits. Returns within 14 days with unopened seal. Please enjoy responsibly.',
     scannerSound: true,
     // Customer Loyalty Program Settings
     loyaltyProgramEnabled: true,
@@ -2200,7 +2220,15 @@ class Database {
     targetId: string,
     details: string,
     beforeData?: any,
-    afterData?: any
+    afterData?: any,
+    extra?: {
+      oldValue?: string;
+      newValue?: string;
+      ipAddress?: string;
+      deviceId?: string;
+      terminalId?: string;
+      module?: string;
+    }
   ) {
     const log: AuditLog = {
       id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -2213,6 +2241,12 @@ class Database {
       details,
       beforeData,
       afterData,
+      oldValue: extra?.oldValue,
+      newValue: extra?.newValue,
+      ipAddress: extra?.ipAddress,
+      deviceId: extra?.deviceId,
+      terminalId: extra?.terminalId,
+      module: extra?.module,
       timestamp: new Date().toISOString(),
     };
     this.auditLogs.unshift(log);
@@ -2297,7 +2331,7 @@ class Database {
     const data: Record<string, any> = {
       _metadata: {
         version: '1.0.0',
-        system: '377 Spirits POS Core DB',
+        system: 'KABIRA POS Core DB',
         lastSavedAt: new Date().toISOString(),
       },
     };

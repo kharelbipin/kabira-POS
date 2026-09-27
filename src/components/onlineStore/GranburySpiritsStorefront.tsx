@@ -30,6 +30,7 @@ import {
 import { OnlineStoreConfig } from '../../types';
 import { api } from '../../utils/api';
 import { playBeep } from '../../utils/audio';
+import { KabiraEmblem } from '../common/KabiraLogo';
 
 interface GranburySpiritsStorefrontProps {
   config?: OnlineStoreConfig | null;
@@ -437,7 +438,7 @@ export const GranburySpiritsStorefront: React.FC<GranburySpiritsStorefrontProps>
         <div className="flex items-center flex-wrap gap-4 sm:gap-6 font-medium">
           <div className="flex items-center space-x-1.5 hover:text-white transition-colors cursor-pointer">
             <MapPin className="w-3.5 h-3.5 text-red-300 shrink-0" />
-            <span>377 E. Hwy 377, Granbury, TX</span>
+            <span>377 E. Hwy 377 • 377 SPIRITS</span>
           </div>
           <div className="flex items-center space-x-1.5 hover:text-white transition-colors cursor-pointer">
             <Phone className="w-3.5 h-3.5 text-red-300 shrink-0" />
@@ -468,7 +469,7 @@ export const GranburySpiritsStorefront: React.FC<GranburySpiritsStorefrontProps>
       <header className="bg-black border-b border-[#1C1C1C] sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 py-4">
           <div className="flex items-center justify-between gap-4">
-            {/* BRAND LOGO: 377 SPIRITS GRANBURY, TEXAS */}
+            {/* BRAND LOGO: KABIRA POS */}
             <div
               onClick={() => {
                 setActiveNav('Home');
@@ -477,25 +478,22 @@ export const GranburySpiritsStorefront: React.FC<GranburySpiritsStorefrontProps>
               }}
               className="flex items-center space-x-3 cursor-pointer select-none group"
             >
-              <div className="flex items-center space-x-2">
-                <span className="font-serif font-black text-3xl sm:text-4xl tracking-tighter text-white group-hover:text-amber-200 transition-colors">
-                  377
-                </span>
-                {/* Outline of Texas with star */}
-                <div className="w-8 h-8 relative flex items-center justify-center">
-                  <svg viewBox="0 0 100 100" className="w-7 h-7 fill-white/90 stroke-white">
-                    {/* Stylized Texas Shape Silhouette */}
-                    <path d="M15,20 L55,20 L58,40 L90,40 L88,60 L70,90 L40,85 L35,65 L15,55 Z" />
-                  </svg>
-                  <span className="absolute text-[8px] font-black text-black">★</span>
-                </div>
+              <div className="p-1 rounded-xl bg-[#0B132B] border border-sky-500/40 group-hover:border-sky-400/80 transition-colors">
+                <KabiraEmblem size={38} theme="dark" />
               </div>
-              <div className="border-l border-white/20 pl-3">
-                <div className="font-serif uppercase tracking-[0.25em] text-xs sm:text-sm font-bold text-white">
-                  SPIRITS
+              <div className="flex flex-col">
+                <div className="flex items-center space-x-2">
+                  <div className="flex items-baseline tracking-tight font-black text-2xl sm:text-3xl leading-none">
+                    <span className="text-white">Ka</span>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-sky-300 to-blue-500">Bi</span>
+                    <span className="text-white">Ra</span>
+                  </div>
+                  <span className="font-mono text-xs font-black tracking-widest px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-400/40 uppercase">
+                    POS
+                  </span>
                 </div>
-                <div className="text-[9px] uppercase tracking-widest text-[#888888] font-mono">
-                  Granbury, Texas
+                <div className="font-['Cinzel',serif] uppercase tracking-[0.22em] text-[11px] font-black text-amber-300 mt-0.5">
+                  377 SPIRITS
                 </div>
               </div>
             </div>
@@ -1039,17 +1037,28 @@ export const GranburySpiritsStorefront: React.FC<GranburySpiritsStorefrontProps>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 pb-12 border-b border-[#222222]">
             {/* Col 1: Brand */}
             <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <span className="font-serif font-black text-2xl text-white">377</span>
-                <span className="text-xs uppercase tracking-widest text-white font-serif font-bold border-l border-white/20 pl-2">
-                  SPIRITS
-                </span>
-              </div>
-              <div className="text-[10px] uppercase font-mono text-[#777777]">
-                Granbury, Texas
+              <div className="flex items-center space-x-3">
+                <div className="p-1 rounded-xl bg-[#0B132B] border border-sky-500/40">
+                  <KabiraEmblem size={34} theme="dark" />
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center space-x-1.5">
+                    <div className="flex items-baseline tracking-tight font-black text-xl leading-none">
+                      <span className="text-white">Ka</span>
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-sky-300 to-blue-500">Bi</span>
+                      <span className="text-white">Ra</span>
+                    </div>
+                    <span className="font-mono text-[10px] font-black tracking-widest px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-400/40 uppercase">
+                      POS
+                    </span>
+                  </div>
+                  <div className="text-[10px] uppercase font-['Cinzel',serif] tracking-[0.2em] text-amber-300 font-bold mt-0.5">
+                    377 SPIRITS
+                  </div>
+                </div>
               </div>
               <p className="text-xs text-[#888888] leading-relaxed">
-                Premium Spirits. Stronger Community.
+                Premium Spirits. Fine Reserve. Stronger Community.
               </p>
               <div className="flex items-center space-x-3 text-xs text-[#999999]">
                 <button onClick={() => setShowSocialModal(true)} className="hover:text-white transition-colors cursor-pointer">
@@ -1087,7 +1096,7 @@ export const GranburySpiritsStorefront: React.FC<GranburySpiritsStorefrontProps>
                 <li><button onClick={() => { setFulfillmentType('pickup'); setIsCartOpen(true); }} className="hover:text-white cursor-pointer">In-Store Pickup</button></li>
                 <li><button onClick={() => alert('Online refunds can be requested within 14 days in unopened original packaging with valid 21+ ID.')} className="hover:text-white cursor-pointer">Returns & Refunds</button></li>
                 <li><button onClick={() => setShowLoyaltyModal(true)} className="hover:text-white cursor-pointer">Loyalty Program</button></li>
-                <li><button onClick={() => alert('Granbury Store Hours: Mon-Sat 10AM-9PM. Sunday Closed per Texas Blue Laws.')} className="hover:text-white cursor-pointer">FAQ</button></li>
+                <li><button onClick={() => alert('377 Spirits Store Hours: Mon-Sat 10AM-9PM. Sunday Closed per Texas Blue Laws.')} className="hover:text-white cursor-pointer">FAQ</button></li>
                 <li><button onClick={() => setShowEventModal(true)} className="hover:text-white cursor-pointer">Contact Us</button></li>
               </ul>
             </div>
@@ -1099,9 +1108,9 @@ export const GranburySpiritsStorefront: React.FC<GranburySpiritsStorefrontProps>
                 <li><button onClick={() => setShowOurStoryModal(true)} className="hover:text-white cursor-pointer">Our Story</button></li>
                 <li><button onClick={() => setShowEventModal(true)} className="hover:text-white cursor-pointer">Events</button></li>
                 <li><button onClick={() => setShowOurStoryModal(true)} className="hover:text-white cursor-pointer">Blog</button></li>
-                <li><button onClick={() => alert('Careers at 377 Spirits: Apply in person at 377 E. Hwy 377, Granbury, TX.')} className="hover:text-white cursor-pointer">Careers</button></li>
+                <li><button onClick={() => alert('Careers at 377 Spirits: Apply in person at 377 E. Hwy 377.')} className="hover:text-white cursor-pointer">Careers</button></li>
                 <li><button onClick={() => setShowOurStoryModal(true)} className="hover:text-white cursor-pointer">Community</button></li>
-                <li><button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-white cursor-pointer">Granbury, TX</button></li>
+                <li><button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-white cursor-pointer">377 SPIRITS</button></li>
               </ul>
             </div>
 
@@ -1129,7 +1138,7 @@ export const GranburySpiritsStorefront: React.FC<GranburySpiritsStorefrontProps>
               </form>
               {newsletterSuccess && (
                 <div className="text-[11px] text-emerald-400">
-                  Thank you for subscribing to 377 Spirits Granbury news!
+                  Thank you for subscribing to KABIRA POS Granbury news!
                 </div>
               )}
             </div>
@@ -1137,7 +1146,7 @@ export const GranburySpiritsStorefront: React.FC<GranburySpiritsStorefrontProps>
 
           {/* Bottom Bar */}
           <div className="pt-6 flex flex-col sm:flex-row items-center justify-between text-[11px] text-[#666666] gap-2">
-            <div>© 2026 377 Spirits. All rights reserved.</div>
+            <div>© 2026 KABIRA POS. All rights reserved.</div>
             <div className="text-amber-500/80 font-medium">
               Drink Responsibly. Must be 21+ to purchase.
             </div>
@@ -1639,7 +1648,7 @@ export const GranburySpiritsStorefront: React.FC<GranburySpiritsStorefrontProps>
           <div className="bg-[#141414] border border-[#2D2D2D] rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#262626] pb-3">
               <h3 className="font-serif font-bold text-base text-white">
-                Sign In to 377 Spirits
+                Sign In to KABIRA VIP Rewards
               </h3>
               <button onClick={() => setShowSignInModal(false)} className="text-stone-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -1664,7 +1673,7 @@ export const GranburySpiritsStorefront: React.FC<GranburySpiritsStorefrontProps>
               </div>
               <button
                 onClick={() => {
-                  alert('Welcome back, Sarah! Logged in to 377 Spirits rewards.');
+                  alert('Welcome back, Sarah! Logged in to KABIRA VIP rewards.');
                   setShowSignInModal(false);
                 }}
                 className="w-full py-2.5 bg-[#B91C1C] hover:bg-[#991B1B] text-white font-bold rounded-xl"

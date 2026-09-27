@@ -1,8 +1,8 @@
 {
   "_metadata": {
     "version": "1.0.0",
-    "system": "377 Spirits POS Core DB",
-    "lastSavedAt": "2026-09-13T23:41:12.148Z"
+    "system": "KABIRA POS Core DB",
+    "lastSavedAt": "2026-09-26T20:32:24.439Z"
   },
   "users": [
     {
@@ -561,13 +561,13 @@
       "costPrice": 22.5,
       "taxRate": 0.0825,
       "size": "750ml",
-      "stockQuantity": 18,
+      "stockQuantity": 16,
       "lowStockThreshold": 6,
       "imageUrl": "https://images.unsplash.com/photo-1527281400683-1aae777175f8?w=500&auto=format&fit=crop&q=60",
       "description": "Signature Buffalo Trace Kentucky straight bourbon crafted with corn, rye, and malted barley.",
       "active": true,
       "createdAt": "2026-01-01T00:00:00Z",
-      "updatedAt": "2026-01-01T00:00:00Z"
+      "updatedAt": "2026-09-26T18:02:09.525Z"
     },
     {
       "id": "prod-16",
@@ -692,6 +692,109 @@
     }
   ],
   "orders": [
+    {
+      "id": "ord-1790445729525",
+      "orderNumber": "ORD-1004",
+      "cashierId": "usr-3",
+      "cashierName": "Elena Rostova (Cashier)",
+      "items": [
+        {
+          "product": {
+            "id": "prod-15",
+            "name": "Buffalo Trace",
+            "sku": "BT-KY-750",
+            "barcode": "080244009236",
+            "categoryId": "cat-1",
+            "categoryName": "Whiskey & Bourbon",
+            "price": 32.99,
+            "cost": 22.5,
+            "costPrice": 22.5,
+            "taxRate": 0.0825,
+            "size": "750ml",
+            "stockQuantity": 18,
+            "lowStockThreshold": 6,
+            "imageUrl": "https://images.unsplash.com/photo-1527281400683-1aae777175f8?w=500&auto=format&fit=crop&q=60",
+            "description": "Signature Buffalo Trace Kentucky straight bourbon crafted with corn, rye, and malted barley.",
+            "active": true,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-01-01T00:00:00Z"
+          },
+          "quantity": 1,
+          "unitPrice": 32.99,
+          "discountAmount": 0,
+          "taxAmount": 2.72,
+          "lineTotal": 35.71
+        }
+      ],
+      "subtotal": 32.99,
+      "discountTotal": 0,
+      "taxTotal": 2.72,
+      "grandTotal": 35.71,
+      "payment": {
+        "method": "cash",
+        "amount": 35.71,
+        "cashTendered": 35.71,
+        "changeDue": 0,
+        "cardLast4": "8392",
+        "cardBrand": "Visa",
+        "authCode": "AUTH-279571",
+        "splitDetails": {
+          "splitType": "multiple",
+          "payments": [
+            {
+              "id": "pay-1790445727343-cash-zjky",
+              "method": "cash",
+              "amount": 35.71,
+              "status": "completed",
+              "timestamp": "2026-09-26T18:02:07.343Z",
+              "cashierId": "usr-3",
+              "cashierName": "Elena Rostova (Cashier)",
+              "registerId": "reg-01",
+              "paymentReference": "Cash Tendered",
+              "cashTendered": 35.71,
+              "changeDue": 0
+            }
+          ],
+          "totalPaid": 35.71
+        },
+        "payments": [
+          {
+            "id": "pay-1790445727343-cash-zjky",
+            "method": "cash",
+            "amount": 35.71,
+            "status": "completed",
+            "timestamp": "2026-09-26T18:02:07.343Z",
+            "cashierId": "usr-3",
+            "cashierName": "Elena Rostova (Cashier)",
+            "registerId": "reg-01",
+            "paymentReference": "Cash Tendered",
+            "cashTendered": 35.71,
+            "changeDue": 0
+          }
+        ]
+      },
+      "payments": [
+        {
+          "id": "pay-1790445727343-cash-zjky",
+          "method": "cash",
+          "amount": 35.71,
+          "status": "completed",
+          "timestamp": "2026-09-26T18:02:07.343Z",
+          "cashierId": "usr-3",
+          "cashierName": "Elena Rostova (Cashier)",
+          "registerId": "reg-01",
+          "paymentReference": "Cash Tendered",
+          "cashTendered": 35.71,
+          "changeDue": 0
+        }
+      ],
+      "status": "completed",
+      "pointsEarned": 0,
+      "pointsRedeemed": 0,
+      "pointsDiscountAmount": 0,
+      "createdAt": "2026-09-26T18:02:09.525Z",
+      "updatedAt": "2026-09-26T18:02:09.525Z"
+    },
     {
       "id": "ord-1001",
       "orderNumber": "ORD-1001",
@@ -863,6 +966,20 @@
   "heldOrders": [],
   "inventoryAdjustments": [
     {
+      "id": "adj-1790445729525-prod-15",
+      "productId": "prod-15",
+      "productName": "Buffalo Trace",
+      "sku": "BT-KY-750",
+      "oldQuantity": 18,
+      "newQuantity": 17,
+      "changeAmount": -1,
+      "type": "sale",
+      "reason": "Sold on Order #ORD-1004",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "createdAt": "2026-09-26T18:02:09.525Z"
+    },
+    {
       "id": "adj-3",
       "productId": "prod-1",
       "productName": "Buffalo Trace Kentucky Straight Bourbon",
@@ -940,6 +1057,120 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "log-1790453977067-61",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "userRole": "Cashier",
+      "action": "BARCODE_SCAN",
+      "targetType": "product",
+      "targetId": "prod-1",
+      "details": "Scanned UPC \"080480015003\" via Physical USB Barcode Scanner (Zebra DS2208): Automatically added 1x \"Woodford Reserve Double Oaked\" ($59.99) to active cart (Total Qty: 1). Pipeline: Scanner → POS Bridge → Barcode/UPC → Product API → Inventory Database → Cart",
+      "ipAddress": "2600:1700:65b:e00f:e9f8:690a:35cb:29aa, 169.254.169.126",
+      "deviceId": "TERMINAL-01",
+      "terminalId": "POS-FRONT",
+      "module": "POS",
+      "timestamp": "2026-09-26T20:19:37.067Z"
+    },
+    {
+      "id": "log-1790445729525-107",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "userRole": "Cashier",
+      "action": "ORDER_CREATE",
+      "targetType": "order",
+      "targetId": "ord-1790445729525",
+      "details": "Completed Order ORD-1004 ($35.71) via cash",
+      "timestamp": "2026-09-26T18:02:09.525Z"
+    },
+    {
+      "id": "log-1789351414103-566",
+      "userId": "usr-1",
+      "userName": "Sarah Connor (Admin)",
+      "userRole": "Admin",
+      "action": "LOGIN",
+      "targetType": "user",
+      "targetId": "usr-1",
+      "details": "User logged in via PIN",
+      "timestamp": "2026-09-14T02:03:34.103Z"
+    },
+    {
+      "id": "log-1789351389616-251",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "userRole": "Cashier",
+      "action": "LOGIN",
+      "targetType": "user",
+      "targetId": "usr-3",
+      "details": "User logged in via PIN",
+      "timestamp": "2026-09-14T02:03:09.616Z"
+    },
+    {
+      "id": "log-1789351376981-519",
+      "userId": "usr-2",
+      "userName": "Marcus Rivera (Manager)",
+      "userRole": "Manager",
+      "action": "LOGIN",
+      "targetType": "user",
+      "targetId": "usr-2",
+      "details": "User logged in via PIN",
+      "timestamp": "2026-09-14T02:02:56.981Z"
+    },
+    {
+      "id": "log-1789351329187-39",
+      "userId": "usr-1",
+      "userName": "Sarah Connor (Admin)",
+      "userRole": "Admin",
+      "action": "LOGIN",
+      "targetType": "user",
+      "targetId": "usr-1",
+      "details": "User logged in via PIN",
+      "timestamp": "2026-09-14T02:02:09.187Z"
+    },
+    {
+      "id": "log-1789351156943-288",
+      "userId": "usr-1",
+      "userName": "Sarah Connor (Admin)",
+      "userRole": "Admin",
+      "action": "LOGIN",
+      "targetType": "user",
+      "targetId": "usr-1",
+      "details": "User logged in via PIN",
+      "timestamp": "2026-09-14T01:59:16.943Z"
+    },
+    {
+      "id": "log-1789349876598-406",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "userRole": "Cashier",
+      "action": "LOGIN",
+      "targetType": "user",
+      "targetId": "usr-3",
+      "details": "User logged in via PIN",
+      "timestamp": "2026-09-14T01:37:56.598Z"
+    },
+    {
+      "id": "log-1789349774064-190",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "userRole": "Cashier",
+      "action": "LOGIN",
+      "targetType": "user",
+      "targetId": "usr-3",
+      "details": "User logged in via PIN",
+      "timestamp": "2026-09-14T01:36:14.064Z"
+    },
+    {
+      "id": "log-1789349750378-712",
+      "userId": "usr-2",
+      "userName": "Marcus Rivera (Manager)",
+      "userRole": "Manager",
+      "action": "LOGIN",
+      "targetType": "user",
+      "targetId": "usr-2",
+      "details": "User logged in via PIN",
+      "timestamp": "2026-09-14T01:35:50.378Z"
+    },
     {
       "id": "log-1",
       "userId": "usr-1",
@@ -1053,11 +1284,11 @@
     }
   ],
   "settings": {
-    "storeName": "377 Spirits",
+    "storeName": "KABIRA POS",
     "tagline": "Fine Liquors, Craft Spirits, Wine & Beer",
     "phone": "(817) 555-0377",
-    "email": "info@377spirits.com",
-    "website": "https://377spirits.com",
+    "email": "info@kabirapos.com",
+    "website": "https://kabirapos.com",
     "logoUrl": "https://images.unsplash.com/photo-1527281400683-1aae777175f8?w=100&auto=format&fit=crop&q=80",
     "address": "Granbury, TX 76049",
     "city": "Granbury",
@@ -1083,8 +1314,8 @@
     "paymentProvider": "stripe_terminal",
     "paymentTerminalIp": "192.168.1.150",
     "paymentEnvironment": "sandbox",
-    "receiptHeader": "Thank you for visiting 377 Spirits!",
-    "receiptFooter": "All sales final on allocated spirits. Returns within 14 days with unopened seal. Please drink responsibly.",
+    "receiptHeader": "Thank you for visiting KABIRA POS!",
+    "receiptFooter": "All sales final on allocated spirits. Returns within 14 days with unopened seal. Please enjoy responsibly.",
     "scannerSound": true,
     "loyaltyProgramEnabled": true,
     "loyaltyPointsPerDollar": 1,
@@ -2154,6 +2385,21 @@
   ],
   "inventoryLedger": [
     {
+      "id": "led-1790445729525-485",
+      "productId": "prod-15",
+      "productName": "Buffalo Trace",
+      "sku": "BT-KY-750",
+      "timestamp": "2026-09-26T18:02:09.525Z",
+      "channel": "pos",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "quantityDelta": -1,
+      "balanceAfter": 16,
+      "reason": "pos_sale",
+      "referenceId": "ORD-1004",
+      "notes": "POS checkout sale on register"
+    },
+    {
       "id": "led-1",
       "productId": "prod-1",
       "productName": "Woodford Reserve Double Oaked",
@@ -2187,7 +2433,28 @@
     }
   ],
   "inventoryReservations": [],
-  "omnichannelCartTransfers": [],
+  "omnichannelCartTransfers": [
+    {
+      "cartId": "trans-1789349140807",
+      "transferCode": "CART-6758",
+      "qrData": "POS_CART:CART-6758:trans-1789349140807",
+      "createdAt": "2026-09-14T01:25:40.807Z",
+      "expiresAt": "2026-09-14T02:25:40.807Z",
+      "sourceChannel": "pos",
+      "destinationRegisterId": "mobile_queue",
+      "items": [
+        {
+          "productId": "prod-15",
+          "productName": "Buffalo Trace",
+          "sku": "BT-KY-750",
+          "quantity": 1,
+          "unitPrice": 32.99
+        }
+      ],
+      "subtotal": 32.99,
+      "claimed": false
+    }
+  ],
   "productBundles": [
     {
       "id": "bnd-1",

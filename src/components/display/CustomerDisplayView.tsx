@@ -1,18 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Wine,
   Sparkles,
   CheckCircle2,
   ShieldCheck,
-  HeartHandshake,
   Maximize2,
   Minimize2,
   QrCode,
   Smartphone,
   CreditCard,
   Lock,
+  Phone,
+  Gift,
+  Receipt,
+  Mail,
+  MessageSquare,
+  ThumbsUp,
+  RotateCcw,
+  HeartHandshake,
 } from 'lucide-react';
-import { CustomerDisplayState } from '../../types';
+import { CustomerDisplayState, CustomerReceiptPreference } from '../../types';
+import { KabiraEmblem } from '../common/KabiraLogo';
+import { IdentifyDisplaysOverlay } from './IdentifyDisplaysOverlay';
+import { webview2Bridge } from '../../services/webview2Bridge';
+import { playBeep } from '../../utils/audio';
 
 export const CustomerDisplayView: React.FC = () => {
   const [displayState, setDisplayState] = useState<CustomerDisplayState>(() => {
@@ -22,14 +32,14 @@ export const CustomerDisplayView: React.FC = () => {
     } catch (e) {}
     return {
       screenState: 'welcome',
-      storeName: '377 Spirits',
-      tagline: 'Fine Liquors, Craft Spirits, Wine & Beer • Granbury, TX',
+      storeName: 'KABIRA POS',
+      tagline: 'Fine Liquors, Craft Spirits, Wine & Beer • 377 SPIRITS',
       items: [],
       subtotal: 0,
       discountTotal: 0,
       taxTotal: 0,
       grandTotal: 0,
-      welcomeMessage: 'Welcome to 377 Spirits! Please present valid ID if purchasing alcohol.',
+      welcomeMessage: 'Welcome to KABIRA POS! Please present valid ID if purchasing alcohol.',
       promoBanner: 'Specials: Texas Whiskey & Garrison Brothers Bourbon 10% Off with Club Points!',
     };
   });
@@ -37,15 +47,24 @@ export const CustomerDisplayView: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [promoIndex, setPromoIndex] = useState(0);
 
+  // Customer Touchscreen Interactions (WV-049 - WV-053)
+  const [showLoyaltyKeypad, setShowLoyaltyKeypad] = useState<boolean>(false);
+  const [customerPhone, setCustomerPhone] = useState<string>('');
+  const [phoneSubmitted, setPhoneSubmitted] = useState<boolean>(false);
+  const [receiptSelected, setReceiptSelected] = useState<CustomerReceiptPreference | null>(null);
+  const [selectedTip, setSelectedTip] = useState<number | null>(null);
+
+  const autoReturnTimerRef = useRef<number | null>(null);
+
   const PROMO_SLIDES = [
     {
-      title: 'Join the 377 Spirits Club',
+      title: 'Join the KABIRA VIP Club',
       desc: 'Earn 1 point per $1 spent. Get $5 off every 100 points + Birthday Rewards!',
       badge: 'Free Membership',
     },
     {
       title: 'Texas Craft Bourbon & Spirits Spotlight',
-      desc: 'Featured: Garrison Brothers, Balcones Texas Single Malt, and Tito\'s Handmade Vodka',
+      desc: "Featured: Garrison Brothers, Balcones Texas Single Malt, and Tito's Handmade Vodka",
       badge: 'Texas Proud',
     },
     {
@@ -56,7 +75,7 @@ export const CustomerDisplayView: React.FC = () => {
   ];
 
   useEffect(() => {
-    // BroadcastChannel synchronization
+    // BroadcastChannel synchronization (WV-030)
     let channel: BroadcastChannel | null = null;
     try {
       if ('BroadcastChannel' in window) {
@@ -64,6 +83,7 @@ export const CustomerDisplayView: React.FC = () => {
         channel.onmessage = (event) => {
           if (event.data) {
             setDisplayState(event.data);
+            handleStateTransition(event.data);
           }
         };
       }
@@ -73,7 +93,9 @@ export const CustomerDisplayView: React.FC = () => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'pos_customer_display_state' && e.newValue) {
         try {
-          setDisplayState(JSON.parse(e.newValue));
+          const parsed = JSON.parse(e.newValue);
+          setDisplayState(parsed);
+          handleStateTransition(parsed);
         } catch (err) {}
       }
     };
@@ -89,8 +111,40 @@ export const CustomerDisplayView: React.FC = () => {
       channel?.close();
       window.removeEventListener('storage', handleStorage);
       clearInterval(promoTimer);
+      if (autoReturnTimerRef.current) clearTimeout(autoReturnTimerRef.current);
     };
   }, []);
+
+  // Return to welcome screen after configured timeout (WV-029)
+  const handleStateTransition = (newState: CustomerDisplayState) => {
+    if (autoReturnTimerRef.current) {
+      clearTimeout(autoReturnTimerRef.current);
+      autoReturnTimerRef.current = null;
+    }
+
+    if (newState.screenState === 'thank_you') {
+      // Auto-return to welcome after 8 seconds (or configured timeout)
+      const timeoutSec = webview2Bridge.getHostConfig().returnToWelcomeTimeoutSec || 8;
+      autoReturnTimerRef.current = window.setTimeout(() => {
+        setDisplayState(prev => ({
+          ...prev,
+          screenState: 'welcome',
+          items: [],
+          subtotal: 0,
+          discountTotal: 0,
+          taxTotal: 0,
+          grandTotal: 0,
+          tenderedAmount: undefined,
+          changeDue: undefined,
+        }));
+        setReceiptSelected(null);
+        setSelectedTip(null);
+        setShowLoyaltyKeypad(false);
+        setCustomerPhone('');
+        setPhoneSubmitted(false);
+      }, timeoutSec * 1000);
+    }
+  };
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -102,29 +156,90 @@ export const CustomerDisplayView: React.FC = () => {
     }
   };
 
+  // Focus protection: Stop events from stealing cashier focus on primary screen (WV-053)
+  const handleTouchContainerClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
+  // Customer Loyalty keypad numbers
+  const handleKeypadPress = (val: string) => {
+    playBeep('click');
+    if (customerPhone.length < 10) {
+      setCustomerPhone(prev => prev + val);
+    }
+  };
+
+  const handleKeypadBackspace = () => {
+    playBeep('click');
+    setCustomerPhone(prev => prev.slice(0, -1));
+  };
+
+  const handleKeypadSubmit = () => {
+    if (customerPhone.length >= 7) {
+      playBeep('success');
+      setPhoneSubmitted(true);
+      webview2Bridge.broadcastCustomerTouchAction({
+        type: 'LOYALTY_PHONE_ENTERED',
+        timestamp: new Date().toISOString(),
+        data: { phone: customerPhone },
+      });
+      setTimeout(() => setShowLoyaltyKeypad(false), 2000);
+    }
+  };
+
+  const handleReceiptSelection = (pref: CustomerReceiptPreference) => {
+    playBeep('click');
+    setReceiptSelected(pref);
+    webview2Bridge.broadcastCustomerTouchAction({
+      type: 'RECEIPT_PREFERENCE',
+      timestamp: new Date().toISOString(),
+      data: { preference: pref },
+    });
+  };
+
+  const handleTipSelection = (amount: number) => {
+    playBeep('click');
+    setSelectedTip(amount);
+    webview2Bridge.broadcastCustomerTouchAction({
+      type: 'TIP_SELECTED',
+      timestamp: new Date().toISOString(),
+      data: { tipAmount: amount },
+    });
+  };
+
   const hasItems = displayState.items && displayState.items.length > 0;
   const currentPromo = PROMO_SLIDES[promoIndex];
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#0A0D14] text-slate-100 flex flex-col font-sans select-none antialiased">
+    <div
+      id="customer-display-container"
+      onClick={handleTouchContainerClick}
+      className="h-screen w-screen overflow-hidden bg-[#0A0D14] text-slate-100 flex flex-col font-sans select-none antialiased relative"
+    >
+      {/* Identify Displays Overlay for Monitor 2 (WV-015) */}
+      <IdentifyDisplaysOverlay currentDisplayNumber={2} />
+
       {/* Top Store Banner */}
-      <header className="bg-[#0F172A] border-b border-slate-800 px-8 py-5 flex items-center justify-between shadow-xl">
+      <header className="bg-[#0F172A] border-b border-slate-800 px-8 py-4 flex items-center justify-between shadow-xl">
         <div className="flex items-center space-x-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#C5A059] to-[#9B7A38] p-0.5 flex items-center justify-center shadow-lg shadow-amber-900/30">
-            <div className="w-full h-full bg-[#0A0A0A] rounded-[14px] flex items-center justify-center">
-              <Wine className="w-7 h-7 text-[#F3C067]" />
-            </div>
+          <div className="p-1 rounded-2xl bg-[#0B132B] border border-sky-500/40 flex items-center justify-center shadow-lg shadow-sky-950/50">
+            <KabiraEmblem size={48} theme="dark" />
           </div>
           <div>
             <div className="flex items-center space-x-3">
-              <h1 className="text-2xl font-black tracking-wider text-white uppercase">
-                {displayState.storeName}
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                Granbury, TX • Reg #01
+              <div className="flex items-baseline tracking-tight font-black text-2xl leading-none">
+                <span className="text-white">Ka</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-sky-300 to-blue-500">Bi</span>
+                <span className="text-white">Ra</span>
+              </div>
+              <span className="font-mono text-xs font-black tracking-widest px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-400/40 uppercase shadow-xs">
+                POS
+              </span>
+              <span className="font-['Cinzel',serif] text-xs font-black tracking-widest text-[#C5A059] uppercase">
+                377 SPIRITS
               </span>
             </div>
-            <p className="text-xs text-slate-400 font-medium tracking-wide">
+            <p className="text-xs text-slate-400 font-medium tracking-wide mt-1">
               {displayState.tagline}
             </p>
           </div>
@@ -132,98 +247,235 @@ export const CustomerDisplayView: React.FC = () => {
 
         {/* Right Header Status & Fullscreen toggle */}
         <div className="flex items-center space-x-4">
+          {/* Customer Loyalty Button */}
+          {displayState.screenState !== 'thank_you' && (
+            <button
+              onClick={() => {
+                setShowLoyaltyKeypad(prev => !prev);
+                setPhoneSubmitted(false);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all cursor-pointer ${
+                showLoyaltyKeypad
+                  ? 'bg-[#C5A059] text-black border-[#C5A059]'
+                  : 'bg-slate-900 border-slate-800 text-amber-300 hover:bg-slate-800'
+              }`}
+            >
+              <Gift className="w-3.5 h-3.5" />
+              <span>{phoneSubmitted ? 'Points Linked!' : 'Enter Rewards Phone'}</span>
+            </button>
+          )}
+
           <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-emerald-400 font-bold">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Customer Display Synced</span>
+            <span>Display 2 Synced</span>
           </div>
+
           <button
             onClick={toggleFullscreen}
             title="Toggle Fullscreen for 2nd Monitor"
             className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
           >
-            {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
         </div>
       </header>
 
       {/* Main Body */}
-      <main className="flex-1 overflow-hidden p-8 flex gap-8">
-        {/* Left Column: Cart items, Welcome Hero, or Payment Mirror */}
-        <div className="flex-1 flex flex-col bg-[#0F172A]/90 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-          {displayState.screenState === 'customer_qr' ? (
-            /* PAY-004: Customer Phone QR Payment Display */
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
-              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mb-4">
-                <QrCode className="w-8 h-8" />
-              </div>
+      <main className="flex-1 overflow-hidden p-6 flex gap-6">
+        {/* Left Column: Cart items, Welcome Hero, Payment State, or Thank You */}
+        <div className="flex-1 flex flex-col bg-[#0F172A]/90 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative">
+          {/* Loyalty Phone Keypad Overlay (WV-050) */}
+          {showLoyaltyKeypad && (
+            <div className="absolute inset-0 z-30 bg-black/90 p-8 flex flex-col items-center justify-center animate-in fade-in">
+              <div className="w-full max-w-sm bg-[#121826] border border-slate-700 p-6 rounded-3xl shadow-2xl space-y-4">
+                <div className="text-center">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-2">
+                    <Phone className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Join / Lookup VIP Rewards</h3>
+                  <p className="text-xs text-slate-400">Enter your 10-digit mobile phone number</p>
+                </div>
 
-              <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30 mb-2">
-                Private Phone Payment
-              </span>
-              <h2 className="text-3xl font-black text-white uppercase tracking-wide mb-2">
-                Scan with Your Phone to Pay
-              </h2>
-              <p className="text-sm text-slate-300 max-w-md mb-6">
-                Scan the QR code below using your phone camera to securely complete payment using Apple Pay, Google Pay, or Card.
-              </p>
+                <div className="bg-black/60 border border-slate-700 rounded-2xl py-3 px-4 text-center">
+                  <span className="text-2xl font-mono font-bold tracking-widest text-amber-400">
+                    {customerPhone
+                      ? customerPhone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')
+                      : '(---) --- ----'}
+                  </span>
+                </div>
 
-              {/* QR Code Container */}
-              <div className="p-4 bg-white rounded-3xl shadow-2xl border-4 border-amber-400/50 mb-6 flex flex-col items-center">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-                    displayState.paymentQrUrl || window.location.origin + '/?view=pay-customer'
-                  )}`}
-                  alt="Payment QR"
-                  className="w-52 h-52 object-contain"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
+                {phoneSubmitted ? (
+                  <div className="p-3 bg-emerald-950/60 border border-emerald-600 rounded-xl text-center text-xs text-emerald-300 font-bold flex items-center justify-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Rewards phone linked to transaction!</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Clear', '0', '⌫'].map(btn => (
+                        <button
+                          key={btn}
+                          onClick={() => {
+                            if (btn === 'Clear') setCustomerPhone('');
+                            else if (btn === '⌫') handleKeypadBackspace();
+                            else handleKeypadPress(btn);
+                          }}
+                          className="h-12 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-white font-bold text-lg transition-colors cursor-pointer"
+                        >
+                          {btn}
+                        </button>
+                      ))}
+                    </div>
 
-              <div className="flex items-center space-x-6 text-xs text-slate-400">
-                <span className="flex items-center space-x-1.5">
-                  <Smartphone className="w-4 h-4 text-amber-400" />
-                  <span>No App Download Needed</span>
-                </span>
-                <span>•</span>
-                <span className="flex items-center space-x-1.5">
-                  <Lock className="w-4 h-4 text-emerald-400" />
-                  <span>PCI-DSS Encrypted</span>
-                </span>
-                <span>•</span>
-                <span className="font-bold text-amber-400">
-                  Fixed Amount: ${displayState.grandTotal.toFixed(2)}
-                </span>
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={() => setShowLoyaltyKeypad(false)}
+                        className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleKeypadSubmit}
+                        disabled={customerPhone.length < 7}
+                        className="flex-1 py-2.5 rounded-xl bg-[#C5A059] hover:bg-[#B38F46] disabled:opacity-50 text-black text-xs font-black uppercase tracking-wider"
+                      >
+                        Apply Phone
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          ) : displayState.screenState === 'customer_self_entry' ? (
-            /* PAY-003, PAY-005: Customer Self-Entry Card Screen */
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
-              <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4">
-                <CreditCard className="w-8 h-8" />
-              </div>
-              <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 mb-2">
-                Customer Private Self-Entry
-              </span>
-              <h2 className="text-2xl font-black text-white mb-2">
-                Please Enter Your Card Information Privately
-              </h2>
-              <p className="text-xs text-slate-400 max-w-md mb-6">
-                Your card information is encrypted directly with the payment provider. Employee cannot see or record your CVV or account number.
-              </p>
+          )}
 
-              <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 text-left space-y-3">
-                <div className="text-center py-4 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="text-xs text-slate-400 block uppercase font-semibold">Total Amount</span>
-                  <div className="text-3xl font-black font-mono text-amber-400">
-                    ${displayState.grandTotal.toFixed(2)}
-                  </div>
+          {/* SCREEN STATE: THANK YOU / TRANSACTION COMPLETE (WV-028) */}
+          {displayState.screenState === 'thank_you' ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden space-y-6">
+              <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400 flex items-center justify-center mx-auto shadow-2xl shadow-emerald-950">
+                <CheckCircle2 className="w-12 h-12" />
+              </div>
+
+              <div>
+                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-950 border border-emerald-700 text-emerald-300">
+                  Payment Approved
+                </span>
+                <h2 className="text-3xl font-extrabold text-white mt-3">
+                  Thank You for Shopping at 377 SPIRITS!
+                </h2>
+                <p className="text-sm text-slate-300 mt-1">
+                  We appreciate your business. Please choose your receipt preference below:
+                </p>
+              </div>
+
+              {/* Digital Receipt Selection (WV-050) */}
+              <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Select Receipt Delivery
                 </div>
-                <div className="text-center text-xs text-slate-400 pt-2">
-                  Follow the on-screen keypad or prompt on the terminal to authorize.
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <button
+                    onClick={() => handleReceiptSelection('printed')}
+                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                      receiptSelected === 'printed'
+                        ? 'bg-amber-500/20 border-amber-400 text-amber-300'
+                        : 'bg-slate-800 border-slate-700 hover:bg-slate-750 text-slate-200'
+                    }`}
+                  >
+                    <Receipt className="w-5 h-5 mx-auto mb-1 text-slate-300" />
+                    <span className="text-xs font-bold block">Paper</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleReceiptSelection('sms')}
+                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                      receiptSelected === 'sms'
+                        ? 'bg-amber-500/20 border-amber-400 text-amber-300'
+                        : 'bg-slate-800 border-slate-700 hover:bg-slate-750 text-slate-200'
+                    }`}
+                  >
+                    <MessageSquare className="w-5 h-5 mx-auto mb-1 text-slate-300" />
+                    <span className="text-xs font-bold block">Text SMS</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleReceiptSelection('email')}
+                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                      receiptSelected === 'email'
+                        ? 'bg-amber-500/20 border-amber-400 text-amber-300'
+                        : 'bg-slate-800 border-slate-700 hover:bg-slate-750 text-slate-200'
+                    }`}
+                  >
+                    <Mail className="w-5 h-5 mx-auto mb-1 text-slate-300" />
+                    <span className="text-xs font-bold block">Email</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleReceiptSelection('none')}
+                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                      receiptSelected === 'none'
+                        ? 'bg-amber-500/20 border-amber-400 text-amber-300'
+                        : 'bg-slate-800 border-slate-700 hover:bg-slate-750 text-slate-200'
+                    }`}
+                  >
+                    <ThumbsUp className="w-5 h-5 mx-auto mb-1 text-slate-300" />
+                    <span className="text-xs font-bold block">No Receipt</span>
+                  </button>
                 </div>
+              </div>
+
+              <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1.5">
+                <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                <span>Screen will reset to welcome in a few moments...</span>
+              </div>
+            </div>
+          ) : displayState.screenState === 'payment_processing' ? (
+            /* SCREEN STATE: PAYMENT PROCESSING (WV-026) */
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden space-y-6">
+              <div className="w-20 h-20 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto animate-pulse">
+                <CreditCard className="w-10 h-10" />
+              </div>
+
+              <div>
+                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-950 border border-amber-700 text-amber-300">
+                  Payment Processing
+                </span>
+                <h2 className="text-3xl font-extrabold text-white mt-3">
+                  Please Insert, Tap, or Swipe Your Card
+                </h2>
+                <p className="text-sm text-slate-300 mt-1">
+                  Follow the prompt on the payment terminal to complete your transaction.
+                </p>
+              </div>
+
+              {/* Optional Tip Quick Pills (WV-050) */}
+              <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                  Add Cashier Tip (Optional)
+                </span>
+                <div className="grid grid-cols-4 gap-2">
+                  {[1, 2, 3, 5].map(amt => (
+                    <button
+                      key={amt}
+                      onClick={() => handleTipSelection(amt)}
+                      className={`py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                        selectedTip === amt
+                          ? 'bg-[#C5A059] text-black border-[#C5A059]'
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      ${amt}.00
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <Lock className="w-4 h-4 text-emerald-400" />
+                <span>PCI-PTS 5.x End-to-End Encrypted Terminal</span>
               </div>
             </div>
           ) : hasItems ? (
+            /* SCREEN STATE: ACTIVE CART (WV-019 to WV-025) */
             <>
               {/* Header */}
               <div className="bg-slate-900/90 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
@@ -237,7 +489,7 @@ export const CustomerDisplayView: React.FC = () => {
                 )}
               </div>
 
-              {/* Items List */}
+              {/* Items List (WV-023: Product name, size, quantity, unit price, discounts, line total) */}
               <div className="flex-1 overflow-y-auto divide-y divide-slate-800/80 p-4">
                 {displayState.items.map((item, idx) => (
                   <div
@@ -268,22 +520,32 @@ export const CustomerDisplayView: React.FC = () => {
               </div>
             </>
           ) : (
-            /* Welcome / Empty Cart Presentation */
-            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center relative overflow-hidden">
+            /* SCREEN STATE: WELCOME / IDLE DISPLAY */
+            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center relative overflow-hidden">
               <div className="absolute inset-0 bg-radial from-amber-500/5 to-transparent pointer-events-none" />
 
-              <div className="w-24 h-24 rounded-3xl bg-amber-500/10 border border-amber-400/30 text-[#F3C067] flex items-center justify-center mb-6 shadow-2xl">
-                <Sparkles className="w-12 h-12" />
+              <div className="p-3 rounded-3xl bg-[#0B132B] border border-sky-500/40 flex items-center justify-center mb-6 shadow-2xl shadow-sky-950/60">
+                <KabiraEmblem size={72} theme="dark" />
               </div>
 
-              <h2 className="text-3xl font-black text-white uppercase tracking-wider mb-2">
-                Welcome to 377 Spirits
-              </h2>
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <div className="flex items-baseline tracking-tight font-black text-4xl">
+                  <span className="text-white">Ka</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-sky-300 to-blue-500">Bi</span>
+                  <span className="text-white">Ra</span>
+                </div>
+                <span className="font-mono text-sm font-black tracking-widest px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-400/40 uppercase shadow-xs">
+                  POS
+                </span>
+              </div>
+              <div className="font-['Cinzel',serif] text-sm font-black tracking-[0.22em] text-[#C5A059] uppercase mb-3">
+                377 SPIRITS
+              </div>
               <p className="text-base text-slate-400 max-w-lg mb-8 leading-relaxed">
                 {displayState.welcomeMessage}
               </p>
 
-              {/* Animated Promo Slide */}
+              {/* Animated Promo Slide (WV-025) */}
               <div className="w-full max-w-lg bg-slate-900/90 border border-slate-800 rounded-2xl p-6 text-left relative shadow-xl">
                 <div className="flex items-center justify-between mb-2">
                   <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
@@ -298,7 +560,7 @@ export const CustomerDisplayView: React.FC = () => {
           )}
         </div>
 
-        {/* Right Column: Running Order Totals & Texas Legal Notices */}
+        {/* Right Column: Running Order Totals & Texas Legal Notices (WV-024) */}
         <div className="w-96 flex flex-col justify-between space-y-6">
           {/* Totals Panel */}
           <div className="bg-[#0F172A] border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">

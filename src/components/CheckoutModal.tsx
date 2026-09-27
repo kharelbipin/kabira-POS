@@ -1,31 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { PaymentMethod, CartItem, Customer, User, StoreSettings, CashTenderEntry, CardFallbackMethod } from '../types';
+import {
+  PaymentMethod,
+  CartItem,
+  Customer,
+  User,
+  StoreSettings,
+  PaymentRecord,
+} from '../types';
 import { playBeep } from '../utils/audio';
+import { posBridge } from '../services/posBridge';
 import { CardPaymentFallbackManager } from './payment/CardPaymentFallbackManager';
 import {
   Banknote,
   CreditCard,
   Smartphone,
-  Split,
   ShieldCheck,
   ShieldAlert,
-  ArrowRight,
-  Wifi,
   CheckCircle2,
   X,
   AlertCircle,
-  RotateCcw,
-  Sparkles,
+  AlertTriangle,
   Award,
-  Gift,
-  Coins,
-  Star,
   Check,
-  Plus,
   Trash2,
-  ListOrdered,
-  CheckCheck,
-  Layers,
+  Clock,
+  Wifi,
+  ChevronDown,
+  Gift,
+  FileText,
+  UserCheck,
+  RefreshCw,
 } from 'lucide-react';
 
 interface CheckoutModalProps {
@@ -57,19 +61,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   settings,
   onCompleteOrder,
 }) => {
-  const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [cardBrand, setCardBrand] = useState<'Visa' | 'Mastercard' | 'Amex'>('Visa');
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
+  // ----------------------------------------------------
   // Loyalty Program Redemption State
+  // ----------------------------------------------------
   const loyaltyEnabled = settings?.loyaltyProgramEnabled !== false;
   const earnRate = settings?.loyaltyPointsPerDollar ?? 1;
   const redemptionRate = settings?.loyaltyPointsPerDollarDiscount ?? 20; // 20 pts = $1
   const minPointsToRedeem = settings?.loyaltyMinPointsToRedeem ?? 50;
   const maxDiscountPercent = settings?.loyaltyMaxDiscountPercent ?? 50;
 
-  // Max allowed dollar discount based on policy (e.g. 50% of subtotal)
   const maxAllowedDiscountDollars = Math.min(grandTotal, (subtotal * maxDiscountPercent) / 100);
   const customerPoints = customer?.loyaltyPoints ?? 0;
   const maxPointsCustomerCanRedeem = Math.min(
@@ -81,7 +81,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [applyLoyaltyPoints, setApplyLoyaltyPoints] = useState<boolean>(false);
   const [pointsToRedeem, setPointsToRedeem] = useState<number>(0);
 
-  // Initialize points to redeem when toggle is activated
   const handleToggleLoyalty = (checked: boolean) => {
     playBeep('click');
     setApplyLoyaltyPoints(checked);
@@ -97,32 +96,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const safeGrandTotal = Number(grandTotal) || 0;
   const effectiveGrandTotal = Math.max(0, Math.round((safeGrandTotal - pointsDiscount) * 100) / 100);
 
-  // Payment cash tender & Multi-Cash Tender Entries
-  const [cashEntries, setCashEntries] = useState<CashTenderEntry[]>([]);
-  const [cashTendered, setCashTendered] = useState<string>((effectiveGrandTotal || 0).toFixed(2));
-  const [customCashInput, setCustomCashInput] = useState<string>('');
-
-  // Split payment state (Two Cards or Cash + Card)
-  const [splitType, setSplitType] = useState<'two_cards' | 'cash_card'>('two_cards');
-  const [card1Amount, setCard1Amount] = useState<string>(((effectiveGrandTotal || 0) / 2).toFixed(2));
-  const [card2Amount, setCard2Amount] = useState<string>((effectiveGrandTotal - ((effectiveGrandTotal || 0) / 2)).toFixed(2));
-  const [card1Brand, setCard1Brand] = useState<'Visa' | 'Mastercard' | 'Amex'>('Visa');
-  const [card2Brand, setCard2Brand] = useState<'Visa' | 'Mastercard' | 'Amex'>('Mastercard');
-  const [card1Approved, setCard1Approved] = useState<boolean>(false);
-  const [card2Approved, setCard2Approved] = useState<boolean>(false);
-  const [splitCash, setSplitCash] = useState<string>(((effectiveGrandTotal || 0) / 2).toFixed(2));
-
-  // Sync cash tender and split defaults when effectiveGrandTotal updates
-  useEffect(() => {
-    setCashTendered((effectiveGrandTotal || 0).toFixed(2));
-    const half = Math.round((effectiveGrandTotal / 2) * 100) / 100;
-    const rem = Math.max(0, Math.round((effectiveGrandTotal - half) * 100) / 100);
-    setCard1Amount(half.toFixed(2));
-    setCard2Amount(rem.toFixed(2));
-    setSplitCash(half.toFixed(2));
-  }, [effectiveGrandTotal]);
-
-  // Manager Approval State
+  // ----------------------------------------------------
+  // Manager Approval State (Discounts exceeding threshold)
+  // ----------------------------------------------------
   const discountThreshold = settings?.requireManagerDiscountAbove ?? 20;
   const isHighDiscount = discountPercent > discountThreshold;
   const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Admin';
@@ -130,69 +106,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [managerPin, setManagerPin] = useState<string>('');
   const [managerApproved, setManagerApproved] = useState<boolean>(false);
   const [managerApprovalError, setManagerApprovalError] = useState<string | null>(null);
-
-  if (!isOpen) return null;
-
-  // Tendered calculations supporting both cumulative multi-entries and single entry
-  const totalCashFromEntries = cashEntries.reduce((sum, e) => sum + e.amount, 0);
-  const tenderedAmount = cashEntries.length > 0
-    ? totalCashFromEntries
-    : (parseFloat(cashTendered) || 0);
-
-  const changeDue = Math.max(0, Math.round((tenderedAmount - effectiveGrandTotal) * 100) / 100);
-  const cashRemainingDue = Math.max(0, Math.round((effectiveGrandTotal - tenderedAmount) * 100) / 100);
-  const isCashInsufficient = tenderedAmount < (effectiveGrandTotal - 0.005);
-
-  // Split payment logic
-  const splitCashAmount = parseFloat(splitCash) || 0;
-  const splitCardAmount = Math.max(0, effectiveGrandTotal - splitCashAmount);
-
-  // Two Cards split calculations
-  const numCard1 = parseFloat(card1Amount) || 0;
-  const numCard2 = parseFloat(card2Amount) || 0;
-  const totalTwoCards = Math.round((numCard1 + numCard2) * 100) / 100;
-  const cardsRemainingDue = Math.max(0, Math.round((effectiveGrandTotal - totalTwoCards) * 100) / 100);
-  const isTwoCardsBalanced = Math.abs(totalTwoCards - effectiveGrandTotal) <= 0.01;
-
-  const handleSplit5050 = () => {
-    playBeep('click');
-    const half = Math.round((effectiveGrandTotal / 2) * 100) / 100;
-    const rem = Math.max(0, Math.round((effectiveGrandTotal - half) * 100) / 100);
-    setCard1Amount(half.toFixed(2));
-    setCard2Amount(rem.toFixed(2));
-  };
-
-  const handleCard1Change = (val: string) => {
-    setCard1Amount(val);
-    const n = parseFloat(val) || 0;
-    const rem = Math.max(0, Math.round((effectiveGrandTotal - n) * 100) / 100);
-    setCard2Amount(rem.toFixed(2));
-  };
-
-  // Add a cash tender entry (supports customer giving multiple bills / payments)
-  const handleAddCashEntry = (amount: number) => {
-    if (amount <= 0) return;
-    playBeep('click');
-    const rounded = Math.round(amount * 100) / 100;
-    const newEntry: CashTenderEntry = {
-      id: `cash-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      amount: rounded,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    };
-    setCashEntries(prev => [...prev, newEntry]);
-    setCustomCashInput('');
-  };
-
-  const handleRemoveCashEntry = (id: string) => {
-    playBeep('click');
-    setCashEntries(prev => prev.filter(e => e.id !== id));
-  };
-
-  const handleClearCashEntries = () => {
-    playBeep('click');
-    setCashEntries([]);
-    setCashTendered('');
-  };
 
   const handleVerifyManagerPin = () => {
     if (managerPin === '5555' || managerPin === '9999') {
@@ -205,143 +118,442 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   };
 
-  const handleFastCash = (amount: number) => {
-    // Adds directly to entries list if entries exist, or sets single tender
-    if (cashEntries.length > 0) {
-      handleAddCashEntry(amount);
-    } else {
-      playBeep('click');
-      setCashTendered(amount.toFixed(2));
+  // ----------------------------------------------------
+  // Core Multi-Payment / Partial Tender Engine State
+  // ----------------------------------------------------
+  const [recordedPayments, setRecordedPayments] = useState<PaymentRecord[]>([]);
+  const [tenderInput, setTenderInput] = useState<string>('');
+  const [tenderInputError, setTenderInputError] = useState<string | null>(null);
+  const [changeDueCustomer, setChangeDueCustomer] = useState<number>(0);
+
+  // Card Terminal Flow (With 30-Second Timeout & Auto-Refresh)
+  const [activeCardCharge, setActiveCardCharge] = useState<number | null>(null);
+  const [cardBrand, setCardBrand] = useState<'Visa' | 'Mastercard' | 'Amex' | 'Discover' | 'Apple Pay' | 'Google Pay'>('Visa');
+  const [terminalStatus, setTerminalStatus] = useState<'idle' | 'waiting' | 'approved' | 'declined' | 'cancelled' | 'timeout'>('idle');
+  const [terminalErrorMsg, setTerminalErrorMsg] = useState<string | null>(null);
+  const [cardTimerSeconds, setCardTimerSeconds] = useState<number>(30);
+  const [cardTimeoutNotification, setCardTimeoutNotification] = useState<string | null>(null);
+
+  // Other Payment Methods Menu
+  const [showOtherMenu, setShowOtherMenu] = useState<boolean>(false);
+  const [otherMethodType, setOtherMethodType] = useState<'gift_card' | 'cheque' | 'store_credit' | 'fallback' | null>(null);
+  const [otherReference, setOtherReference] = useState<string>('');
+
+  // General Status & Warnings
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [generalError, setGeneralError] = useState<string | null>(null);
+  const [showCancelWarning, setShowCancelWarning] = useState<boolean>(false);
+  const [showNumpad, setShowNumpad] = useState<boolean>(false);
+
+  // ----------------------------------------------------
+  // Dynamic Core Calculations
+  // Total Paid = Sum of all successful payments
+  // Remaining Balance = Order Total - Total Paid
+  // ----------------------------------------------------
+  const successfulPayments = recordedPayments.filter(p => p.status === 'completed' || p.status === 'approved');
+  const totalAmountPaid = Math.round(successfulPayments.reduce((sum, p) => sum + p.amount, 0) * 100) / 100;
+  const remainingBalance = Math.max(0, Math.round((effectiveGrandTotal - totalAmountPaid) * 100) / 100);
+  const isPartiallyPaid = totalAmountPaid > 0 && remainingBalance > 0.005;
+  const isFullyPaid = remainingBalance <= 0.005 && effectiveGrandTotal > 0;
+
+  // Reset or initialize when modal opens/closes
+  useEffect(() => {
+    if (!isOpen) {
+      setRecordedPayments([]);
+      setTenderInput('');
+      setTenderInputError(null);
+      setChangeDueCustomer(0);
+      setActiveCardCharge(null);
+      setTerminalStatus('idle');
+      setTerminalErrorMsg(null);
+      setCardTimerSeconds(30);
+      setCardTimeoutNotification(null);
+      setShowOtherMenu(false);
+      setOtherMethodType(null);
+      setShowCancelWarning(false);
+      setManagerApproved(false);
+      setManagerPin('');
+      setApplyLoyaltyPoints(false);
+      setPointsToRedeem(0);
     }
+  }, [isOpen]);
+
+  const handleCardTimeout = () => {
+    playBeep('error');
+    const timedOutAmt = activeCardCharge;
+    setActiveCardCharge(null);
+    setTerminalStatus('idle');
+    setIsProcessing(false);
+    setTenderInput('');
+    setCardTimeoutNotification(
+      `Card Terminal Timed Out (30s): System did not receive payment from the counter PIN pad ($${(timedOutAmt || 0).toFixed(2)}). Screen automatically refreshed and unlocked. Cashier can retry Card or tender Cash.`
+    );
   };
 
-  const handleExactCash = () => {
+  const handleCancelCardTerminal = () => {
     playBeep('click');
-    if (cashEntries.length > 0) {
-      if (cashRemainingDue > 0) {
-        handleAddCashEntry(cashRemainingDue);
-      }
-    } else {
-      setCashTendered(effectiveGrandTotal.toFixed(2));
-    }
+    setActiveCardCharge(null);
+    setTerminalStatus('idle');
+    setIsProcessing(false);
+    setTerminalErrorMsg(null);
+    setCardTimeoutNotification(null);
   };
 
-  const handleNumpad = (char: string) => {
-    playBeep('click');
-    if (char === 'C') {
-      setCashTendered('');
-    } else if (char === '.') {
-      if (!cashTendered.includes('.')) {
-        setCashTendered(cashTendered + '.');
-      }
+  // ----------------------------------------------------
+  // 30-Second Card Terminal Watchdog & Auto-Refresh
+  // If terminal does not get payment within 30 seconds, automatically cancel and refresh the screen!
+  // Unconditionally called at top level to strictly adhere to React Rules of Hooks
+  // ----------------------------------------------------
+  useEffect(() => {
+    let timer: any = null;
+    if (isOpen && activeCardCharge !== null && terminalStatus === 'waiting') {
+      setCardTimerSeconds(30);
+      timer = setInterval(() => {
+        setCardTimerSeconds(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            handleCardTimeout();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     } else {
-      if (cashTendered.includes('.') && cashTendered.split('.')[1].length >= 2) return;
-      setCashTendered(cashTendered === '0' ? char : cashTendered + char);
+      setCardTimerSeconds(30);
     }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isOpen, activeCardCharge, terminalStatus]);
+
+  // Helper to determine active amount: if input is entered, use that amount; if empty, use remaining balance
+  const getActiveAmount = (): number => {
+    const parsed = parseFloat(tenderInput);
+    if (!isNaN(parsed) && parsed > 0) {
+      return Math.round(parsed * 100) / 100;
+    }
+    return remainingBalance;
   };
 
-  const handleProcessPayment = async () => {
+  // ----------------------------------------------------
+  // Cash Tender Handler (Multiple Partial or Exact/Excess Cash)
+  // ----------------------------------------------------
+  const handlePayCash = (overrideAmount?: number) => {
     if (needsManagerApproval && !managerApproved) {
-      setError('Manager authorization is required for high discount before checkout.');
+      setTenderInputError('Manager authorization required before collecting payment.');
       return;
     }
 
-    if (method === 'cash' && isCashInsufficient) {
+    const amt = overrideAmount !== undefined ? overrideAmount : getActiveAmount();
+    if (isNaN(amt) || amt <= 0) {
       playBeep('error');
-      setError(`Insufficient cash received: Tendered $${tenderedAmount.toFixed(2)} is less than total $${effectiveGrandTotal.toFixed(2)}`);
+      setTenderInputError('Please enter a valid cash amount greater than $0.00');
       return;
     }
 
-    if (method === 'split' && splitType === 'two_cards' && !isTwoCardsBalanced) {
+    setTenderInputError(null);
+    setGeneralError(null);
+
+    // If customer hands more cash than remaining, calculate change due
+    let actualPaymentAmount = amt;
+    let changeFromThisPayment = 0;
+    if (amt > (remainingBalance + 0.005)) {
+      actualPaymentAmount = remainingBalance;
+      changeFromThisPayment = Math.round((amt - remainingBalance) * 100) / 100;
+    }
+
+    // Hardware cash drawer kick
+    posBridge.kickCashDrawer({
+      type: 'sale_cash',
+      reason: `Cash tender payment: $${actualPaymentAmount.toFixed(2)}`,
+      amount: actualPaymentAmount,
+      user: currentUser || undefined,
+    }).catch(() => {});
+
+    const newPaymentRecord: PaymentRecord = {
+      id: `pay-${Date.now()}-cash-${Math.random().toString(36).substr(2, 4)}`,
+      method: 'cash',
+      amount: actualPaymentAmount,
+      status: 'completed',
+      timestamp: new Date().toISOString(),
+      cashierId: currentUser?.id || 'usr-1',
+      cashierName: currentUser?.name || 'Cashier',
+      registerId: 'reg-01',
+      paymentReference: changeFromThisPayment > 0
+        ? `Tendered $${amt.toFixed(2)} • Change Due: $${changeFromThisPayment.toFixed(2)}`
+        : 'Cash Tendered',
+      cashTendered: amt,
+      changeDue: changeFromThisPayment,
+    };
+
+    playBeep('success');
+    setRecordedPayments(prev => [...prev, newPaymentRecord]);
+    setTenderInput('');
+    if (changeFromThisPayment > 0) {
+      setChangeDueCustomer(prev => prev + changeFromThisPayment);
+    }
+  };
+
+  // ----------------------------------------------------
+  // Card Tender Handler
+  // If cashier entered an amount, charge that amount.
+  // If no amount entered, charge the full remaining balance.
+  // ----------------------------------------------------
+  const handleInitiateCardPayment = (overrideAmount?: number) => {
+    if (needsManagerApproval && !managerApproved) {
+      setTenderInputError('Manager authorization required before collecting payment.');
+      return;
+    }
+
+    const amt = overrideAmount !== undefined ? overrideAmount : getActiveAmount();
+    if (isNaN(amt) || amt <= 0) {
       playBeep('error');
-      setError(`Card 1 ($${numCard1.toFixed(2)}) + Card 2 ($${numCard2.toFixed(2)}) must equal order total $${effectiveGrandTotal.toFixed(2)}`);
+      setTenderInputError('Please enter a valid card amount greater than $0.00');
       return;
     }
 
-    setError(null);
+    if (amt > (remainingBalance + 0.005)) {
+      playBeep('error');
+      setTenderInputError(`Card amount ($${amt.toFixed(2)}) cannot exceed remaining balance of $${remainingBalance.toFixed(2)}`);
+      return;
+    }
+
+    setTenderInputError(null);
+    setGeneralError(null);
+    setCardTimeoutNotification(null);
+    setActiveCardCharge(amt);
+    setTerminalStatus('waiting');
+    setTerminalErrorMsg(null);
+    setCardTimerSeconds(30);
+  };
+
+  // Process Card Terminal Outcomes (Simulate Approved, Declined, Cancelled, Timeout)
+  const handleTerminalOutcome = async (outcome: 'approved' | 'declined' | 'cancelled' | 'timeout') => {
+    if (!activeCardCharge || activeCardCharge <= 0) return;
+
     setIsProcessing(true);
+    setTerminalStatus('waiting');
+    setTerminalErrorMsg(null);
+
+    // Realistic terminal PIN pad simulation latency
+    await new Promise(r => setTimeout(r, 600));
+
+    if (outcome === 'approved') {
+      playBeep('success');
+      setTerminalStatus('approved');
+
+      const cardRecord: PaymentRecord = {
+        id: `pay-${Date.now()}-card-${Math.random().toString(36).substr(2, 4)}`,
+        method: 'card',
+        amount: activeCardCharge,
+        status: 'approved',
+        timestamp: new Date().toISOString(),
+        cashierId: currentUser?.id || 'usr-1',
+        cashierName: currentUser?.name || 'Cashier',
+        registerId: 'reg-01',
+        cardBrand,
+        cardLast4: Math.floor(1000 + Math.random() * 9000).toString(),
+        authCode: `AUTH-${Math.floor(100000 + Math.random() * 900000)}`,
+        paymentReference: `${cardBrand} PIN Pad Approved`,
+      };
+
+      setRecordedPayments(prev => [...prev, cardRecord]);
+      setActiveCardCharge(null);
+      setTenderInput('');
+      setIsProcessing(false);
+      setCardTimeoutNotification(null);
+    } else if (outcome === 'declined') {
+      playBeep('error');
+      setIsProcessing(false);
+      setTerminalStatus('declined');
+      setTerminalErrorMsg(
+        `Card Terminal: DECLINED (Code 51: Insufficient funds). Previous payments ($${totalAmountPaid.toFixed(2)}) remain safely recorded. Remaining balance is $${remainingBalance.toFixed(2)}.`
+      );
+    } else if (outcome === 'cancelled') {
+      playBeep('click');
+      setIsProcessing(false);
+      setTerminalStatus('cancelled');
+      setTerminalErrorMsg(
+        `Customer Cancelled: Transaction was cancelled at the PIN pad. Previously collected payments ($${totalAmountPaid.toFixed(2)}) remain preserved.`
+      );
+    } else if (outcome === 'timeout') {
+      playBeep('error');
+      setIsProcessing(false);
+      setTerminalStatus('timeout');
+      setTerminalErrorMsg(
+        `Device Timeout: Terminal response timed out. Previously collected payments ($${totalAmountPaid.toFixed(2)}) remain preserved.`
+      );
+    }
+  };
+
+  // ----------------------------------------------------
+  // Other Payment Method Handler (Gift Card, Cheque, Store Credit, Fallback)
+  // ----------------------------------------------------
+  const handlePayOther = (methodType: 'gift_card' | 'cheque' | 'store_credit') => {
+    const amt = getActiveAmount();
+    if (isNaN(amt) || amt <= 0) {
+      setTenderInputError('Please enter a valid amount');
+      return;
+    }
+    if (amt > (remainingBalance + 0.005)) {
+      setTenderInputError(`Amount cannot exceed remaining balance of $${remainingBalance.toFixed(2)}`);
+      return;
+    }
+
+    playBeep('success');
+    const newRecord: PaymentRecord = {
+      id: `pay-${Date.now()}-${methodType}-${Math.random().toString(36).substr(2, 4)}`,
+      method: methodType === 'gift_card' ? 'cash' : 'card', // mapped to supported enum
+      amount: amt,
+      status: 'completed',
+      timestamp: new Date().toISOString(),
+      cashierId: currentUser?.id || 'usr-1',
+      cashierName: currentUser?.name || 'Cashier',
+      registerId: 'reg-01',
+      paymentReference: `${methodType.toUpperCase()} ${otherReference ? `(#${otherReference})` : ''}`,
+      authCode: `OTH-${Math.floor(10000 + Math.random() * 90000)}`,
+    };
+
+    setRecordedPayments(prev => [...prev, newRecord]);
+    setTenderInput('');
+    setShowOtherMenu(false);
+    setOtherMethodType(null);
+    setOtherReference('');
+  };
+
+  // ----------------------------------------------------
+  // Void an individual payment (if cashier mistakenly entered it)
+  // ----------------------------------------------------
+  const handleVoidPayment = (paymentId: string) => {
+    const target = recordedPayments.find(p => p.id === paymentId);
+    if (!target) return;
+
+    playBeep('click');
+    if (target.method === 'cash') {
+      // Return cash from drawer
+      posBridge.kickCashDrawer({
+        type: 'sale_cash',
+        reason: `Void cash partial tender: $${target.amount.toFixed(2)}`,
+        amount: target.amount,
+        user: currentUser || undefined,
+      }).catch(() => {});
+    }
+
+    setRecordedPayments(prev => prev.filter(p => p.id !== paymentId));
+  };
+
+  // ----------------------------------------------------
+  // Final Sale Completion Handler
+  // Triggered when remainingBalance is 0 and cashier finalizes sale
+  // ----------------------------------------------------
+  const handleFinalizeSale = async () => {
+    if (remainingBalance > 0.005) {
+      playBeep('error');
+      setGeneralError(`Cannot complete sale: Remaining balance of $${remainingBalance.toFixed(2)} must be paid.`);
+      return;
+    }
+
+    setIsProcessing(true);
+    setGeneralError(null);
 
     try {
-      let paymentData: any = {
-        method,
+      const lastCard = [...successfulPayments].reverse().find(p => p.method === 'card');
+      const totalCashTendered = successfulPayments.filter(p => p.method === 'cash').reduce((sum, p) => sum + p.amount, 0);
+
+      const paymentPayload: any = {
+        method: recordedPayments.length === 1 ? recordedPayments[0].method : 'split',
         amount: effectiveGrandTotal,
+        cashTendered: totalCashTendered + changeDueCustomer,
+        changeDue: changeDueCustomer,
+        cardBrand: lastCard?.cardBrand || 'Visa',
+        cardLast4: lastCard?.cardLast4 || '8392',
+        authCode: lastCard?.authCode || `AUTH-${Math.floor(100000 + Math.random() * 900000)}`,
+        payments: successfulPayments,
+        splitDetails: {
+          splitType: 'multiple',
+          payments: successfulPayments,
+          totalPaid: totalAmountPaid,
+        },
         pointsRedeemed: applyLoyaltyPoints ? pointsToRedeem : 0,
         pointsDiscountAmount: pointsDiscount,
       };
 
-      if (method === 'cash') {
-        paymentData.cashTendered = tenderedAmount;
-        paymentData.changeDue = changeDue;
-        paymentData.cashEntries = cashEntries.length > 0 ? cashEntries : undefined;
-      } else if (method === 'card') {
-        await new Promise(r => setTimeout(r, 600));
-        paymentData.cardBrand = cardBrand;
-        paymentData.cardLast4 = Math.floor(1000 + Math.random() * 9000).toString();
-        paymentData.authCode = `APX-${Math.floor(10000 + Math.random() * 90000)}`;
-        paymentData.fallbackMethod = 'card_terminal';
-        paymentData.processorTxId = `ch_term_${Date.now()}`;
-      } else if (method === 'contactless') {
-        await new Promise(r => setTimeout(r, 600));
-        paymentData.cardBrand = 'Apple Pay / Google Wallet';
-        paymentData.authCode = `NFC-${Math.floor(10000 + Math.random() * 90000)}`;
-      } else if (method === 'split') {
-        await new Promise(r => setTimeout(r, 600));
-        if (splitType === 'two_cards') {
-          paymentData.splitDetails = {
-            splitType: 'two_cards',
-            card1Amount: numCard1,
-            card1Brand,
-            card1Last4: Math.floor(1000 + Math.random() * 9000).toString(),
-            card1Auth: `APX1-${Math.floor(10000 + Math.random() * 90000)}`,
-            card2Amount: numCard2,
-            card2Brand,
-            card2Last4: Math.floor(1000 + Math.random() * 9000).toString(),
-            card2Auth: `APX2-${Math.floor(10000 + Math.random() * 90000)}`,
-          };
-          paymentData.cardBrand = `${card1Brand} & ${card2Brand}`;
-          paymentData.authCode = `SPL2-${Math.floor(10000 + Math.random() * 90000)}`;
-        } else {
-          paymentData.splitDetails = {
-            splitType: 'cash_card',
-            cashAmount: splitCashAmount,
-            cardAmount: splitCardAmount,
-            cardBrand,
-            cardLast4: Math.floor(1000 + Math.random() * 9000).toString(),
-            authCode: `SPL-${Math.floor(10000 + Math.random() * 90000)}`,
-          };
-          paymentData.cardBrand = cardBrand;
-          paymentData.cardLast4 = '9182';
-          paymentData.authCode = `SPL-${Math.floor(10000 + Math.random() * 90000)}`;
-        }
-      }
-
-      await onCompleteOrder(paymentData);
+      await onCompleteOrder(paymentPayload);
       playBeep('success');
     } catch (err: any) {
       playBeep('error');
-      setError(err.message || 'Payment processing failed');
+      setGeneralError(err.message || 'Payment completion failed');
       setIsProcessing(false);
     }
   };
 
-  // Points earned on the remaining balance
-  const pointsEarnedOnThisOrder = loyaltyEnabled && effectiveGrandTotal > 0 ? Math.floor(effectiveGrandTotal * earnRate) : 0;
-  const expectedEndingBalance = customerPoints - (applyLoyaltyPoints ? pointsToRedeem : 0) + pointsEarnedOnThisOrder;
+  // ----------------------------------------------------
+  // Cancel / Close Protection
+  // If partial payment collected, warn before abandoning
+  // ----------------------------------------------------
+  const handleRequestClose = () => {
+    if (totalAmountPaid > 0) {
+      playBeep('error');
+      setShowCancelWarning(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleVoidAllAndCancel = () => {
+    playBeep('click');
+    const cashTotal = successfulPayments.filter(p => p.method === 'cash').reduce((s, p) => s + p.amount, 0);
+    if (cashTotal > 0) {
+      posBridge.kickCashDrawer({
+        type: 'sale_cash',
+        reason: `Reversal of partial cash payments ($${cashTotal.toFixed(2)}) on cancelled transaction`,
+        amount: cashTotal,
+        user: currentUser || undefined,
+      }).catch(() => {});
+    }
+
+    setRecordedPayments([]);
+    setShowCancelWarning(false);
+    onClose();
+  };
+
+  // Touch Numpad input handler
+  const handleNumpadPress = (val: string) => {
+    playBeep('click');
+    if (val === 'C') {
+      setTenderInput('');
+    } else if (val === 'DEL') {
+      setTenderInput(prev => (prev.length > 1 ? prev.slice(0, -1) : ''));
+    } else if (val === '.') {
+      if (!tenderInput.includes('.')) {
+        setTenderInput(tenderInput ? tenderInput + '.' : '0.');
+      }
+    } else {
+      if (tenderInput.includes('.') && tenderInput.split('.')[1].length >= 2) return;
+      setTenderInput(tenderInput === '0' ? val : tenderInput + val);
+    }
+  };
+
+  const activeAmountForButtons = getActiveAmount();
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xs p-4 select-none">
-      <div className="bg-[#0F0F0F] border border-[#262626] rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden text-[#E5E5E5] animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[92vh]">
-        {/* Header */}
-        <div className="bg-[#0A0A0A] px-6 py-4 border-b border-[#262626] flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xs p-3 sm:p-4 select-none">
+      <div className="bg-[#0F0F0F] border border-[#262626] rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden text-[#E5E5E5] flex flex-col max-h-[94vh]">
+        {/* Modal Header */}
+        <div className="bg-[#0A0A0A] px-5 py-3.5 border-b border-[#262626] flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-xl font-bold font-serif italic text-[#F5F5F5]">Complete Payment & Checkout</h2>
+            <h2 className="text-lg sm:text-xl font-bold font-serif italic text-[#F5F5F5]">
+              Payment &amp; Checkout
+            </h2>
             <p className="text-xs text-[#737373] mt-0.5">
               {customer ? `Attached Customer: ${customer.name} (${customer.loyaltyPoints} pts)` : 'Walk-in Customer'}
             </p>
           </div>
           <button
             id="checkout-close-btn"
-            onClick={onClose}
+            onClick={handleRequestClose}
             disabled={isProcessing}
             className="p-1.5 rounded-lg text-[#737373] hover:text-white hover:bg-[#1A1A1A] transition-colors cursor-pointer"
           >
@@ -349,16 +561,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           </button>
         </div>
 
-        {/* Manager Approval Banner if Needed (CA-04) */}
+        {/* Manager Approval Banner if Needed */}
         {needsManagerApproval && !managerApproved && (
-          <div className="bg-[#1C1405] border-b border-[#C5A059]/40 p-4 text-[#F5E6CC]">
-            <div className="flex items-center space-x-2 mb-2 font-semibold text-sm">
+          <div className="bg-[#1C1405] border-b border-[#C5A059]/40 px-5 py-3 text-[#F5E6CC] shrink-0">
+            <div className="flex items-center space-x-2 mb-1.5 font-semibold text-xs sm:text-sm">
               <ShieldCheck className="w-4 h-4 text-[#C5A059]" />
               <span>Manager Override Required (Discount {discountPercent}% &gt; {discountThreshold}%)</span>
             </div>
-            <p className="text-xs text-[#C5A059]/90 mb-3">
-              Store policy requires a manager or admin to approve discounts exceeding {discountThreshold}%.
-            </p>
             <div className="flex items-center space-x-2">
               <input
                 id="manager-override-pin"
@@ -367,15 +576,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 value={managerPin}
                 onChange={e => setManagerPin(e.target.value)}
                 placeholder="Manager PIN (5555)"
-                className="w-36 bg-[#0A0A0A] border border-[#C5A059]/50 rounded-lg px-3 py-1.5 text-sm text-[#E5E5E5] placeholder:text-[#666666] focus:outline-hidden"
+                className="w-36 bg-[#0A0A0A] border border-[#C5A059]/50 rounded-lg px-3 py-1 text-xs text-[#E5E5E5] placeholder:text-[#666666] focus:outline-hidden"
               />
               <button
                 id="manager-approve-btn"
                 type="button"
                 onClick={handleVerifyManagerPin}
-                className="px-3.5 py-1.5 rounded-lg bg-[#C5A059] hover:bg-[#D4B06A] text-black text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                className="px-3 py-1 rounded-lg bg-[#C5A059] hover:bg-[#D4B06A] text-black text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
               >
-                Approve Discount
+                Approve
               </button>
               {managerApprovalError && (
                 <span className="text-xs text-red-400 font-medium">{managerApprovalError}</span>
@@ -384,895 +593,615 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           </div>
         )}
 
-        <div className="p-6 overflow-y-auto space-y-6 flex-1">
-          {error && (
-            <div className="p-3 rounded-lg bg-red-950/40 border border-red-800 text-red-300 text-xs flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-              <span>{error}</span>
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+          {/* Card Terminal 30-Second Timeout Notification Banner */}
+          {cardTimeoutNotification && (
+            <div className="bg-amber-950/40 border-2 border-amber-500/60 rounded-xl p-3.5 flex items-start justify-between text-xs text-amber-100 animate-in fade-in">
+              <div className="flex items-start space-x-2.5">
+                <Clock className="w-5 h-5 text-amber-400 mt-0.5 shrink-0 animate-pulse" />
+                <div className="space-y-0.5">
+                  <span className="font-black uppercase tracking-wider text-amber-300 block text-xs">
+                    Card Terminal Timed Out (30s) — System Refreshed
+                  </span>
+                  <p className="text-zinc-200 text-xs leading-relaxed">{cardTimeoutNotification}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCardTimeoutNotification(null)}
+                className="ml-3 px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold uppercase tracking-wider cursor-pointer"
+              >
+                Dismiss
+              </button>
             </div>
           )}
 
-          {/* Amount Due Box */}
-          <div className="bg-[#141414] p-4 rounded-xl border border-[#262626] flex items-center justify-between">
-            <div>
-              <div className="text-xs text-[#737373] font-medium uppercase tracking-wider">Amount Due</div>
-              <div className="text-3xl font-bold text-[#C5A059] font-mono tracking-tight mt-0.5">
+          {generalError && (
+            <div className="p-3 rounded-lg bg-red-950/50 border border-red-800 text-red-300 text-xs flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>{generalError}</span>
+            </div>
+          )}
+
+          {/* ========================================================
+              CORE METRIC BANNER:
+              TOTAL: $100.00 | PAID: $40.00 | REMAINING: $60.00
+              ======================================================== */}
+          <div className="grid grid-cols-3 gap-2.5 sm:gap-3 bg-[#141414] p-3.5 sm:p-4 rounded-xl border border-[#262626]">
+            {/* TOTAL */}
+            <div className="space-y-0.5">
+              <div className="text-[10px] sm:text-xs text-[#888888] uppercase tracking-wider font-semibold">
+                Total
+              </div>
+              <div className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight">
                 ${(effectiveGrandTotal || 0).toFixed(2)}
               </div>
-              {applyLoyaltyPoints && pointsDiscount > 0 && (
-                <div className="text-xs text-emerald-400 font-mono mt-0.5 flex items-center space-x-1">
-                  <span>Orig: ${(grandTotal || 0).toFixed(2)}</span>
-                  <span>•</span>
-                  <span>Loyalty Disc: -${(pointsDiscount || 0).toFixed(2)}</span>
-                </div>
-              )}
+              <div className="text-[10px] text-[#737373] hidden sm:block">
+                Subtotal: ${(subtotal || 0).toFixed(2)} • Tax: ${(taxTotal || 0).toFixed(2)}
+              </div>
             </div>
-            <div className="text-right text-xs text-[#888888] space-y-0.5 font-mono">
-              <div>Subtotal: ${(subtotal || 0).toFixed(2)}</div>
-              {discountTotal > 0 && <div className="text-green-400">Item Disc: -${(discountTotal || 0).toFixed(2)}</div>}
-              {applyLoyaltyPoints && pointsDiscount > 0 && (
-                <div className="text-emerald-400">Points Disc: -${(pointsDiscount || 0).toFixed(2)}</div>
-              )}
-              <div>Tax: ${(taxTotal || 0).toFixed(2)}</div>
+
+            {/* PAID */}
+            <div className="space-y-0.5 border-x border-[#262626] px-2.5 sm:px-3">
+              <div className="text-[10px] sm:text-xs text-emerald-400 uppercase tracking-wider font-semibold">
+                Paid
+              </div>
+              <div className="text-xl sm:text-2xl font-black font-mono text-emerald-400 tracking-tight">
+                ${totalAmountPaid.toFixed(2)}
+              </div>
+              <div className="text-[10px] text-[#737373]">
+                {successfulPayments.length} {successfulPayments.length === 1 ? 'tender' : 'tenders'}
+              </div>
+            </div>
+
+            {/* REMAINING */}
+            <div className="space-y-0.5 pl-1">
+              <div className={`text-[10px] sm:text-xs uppercase tracking-wider font-semibold ${
+                remainingBalance <= 0.005 ? 'text-emerald-400' : 'text-[#C5A059]'
+              }`}>
+                Remaining
+              </div>
+              <div className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${
+                remainingBalance <= 0.005 ? 'text-emerald-400' : 'text-[#C5A059]'
+              }`}>
+                ${remainingBalance.toFixed(2)}
+              </div>
+              <div className="text-[10px]">
+                {remainingBalance <= 0.005 ? (
+                  <span className="text-emerald-400 font-bold flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Paid in Full
+                  </span>
+                ) : isPartiallyPaid ? (
+                  <span className="text-amber-400 font-bold">Open / Partial</span>
+                ) : (
+                  <span className="text-[#888888]">Due now</span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Customer Loyalty Points Balance & Redemption Section */}
-          {loyaltyEnabled && (
-            <div className="bg-[#14120C] border border-[#C5A059]/30 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-[#C5A059]/20 border border-[#C5A059]/40 flex items-center justify-center text-[#C5A059]">
-                    <Award className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-wider text-[#F5F5F5] flex items-center space-x-2">
-                      <span>Customer Loyalty Rewards</span>
-                      {customer?.loyaltyTier && (
-                        <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-[#C5A059]/20 text-[#C5A059] border border-[#C5A059]/30">
-                          {customer.loyaltyTier}
-                        </span>
+          {/* Customer Loyalty Rewards (If customer attached and rewards enabled) */}
+          {loyaltyEnabled && customer && canCustomerRedeem && (
+            <div className="bg-[#14120C] border border-[#C5A059]/30 rounded-xl p-3 flex items-center justify-between text-xs">
+              <div className="flex items-center space-x-2">
+                <Award className="w-4 h-4 text-[#C5A059]" />
+                <div>
+                  <span className="font-bold text-white">Redeem Points: </span>
+                  <span className="text-[#C5A059]">
+                    {customer.name} has {customer.loyaltyPoints} pts (Worth ${(maxPointsCustomerCanRedeem / redemptionRate).toFixed(2)})
+                  </span>
+                </div>
+              </div>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={applyLoyaltyPoints}
+                  onChange={e => handleToggleLoyalty(e.target.checked)}
+                  className="rounded border-[#332A15] text-[#C5A059] focus:ring-[#C5A059]"
+                />
+                <span className="text-[11px] font-bold text-white uppercase">Apply Discount</span>
+              </label>
+            </div>
+          )}
+
+          {/* ========================================================
+              PAYMENTS ALREADY COLLECTED (LEDGER)
+              Cash — $20.00 ✓
+              Cash — $20.00 ✓
+              Card — $30.00 ✓
+              ======================================================== */}
+          {recordedPayments.length > 0 && (
+            <div className="bg-[#121212] border border-[#242424] rounded-xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-[#222222] pb-2">
+                <div className="flex items-center space-x-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Payments Collected on this Order ({recordedPayments.length})</span>
+                </div>
+                <span className="text-emerald-400 font-mono">Total Paid: ${totalAmountPaid.toFixed(2)}</span>
+              </div>
+
+              <div className="space-y-1.5">
+                {recordedPayments.map((p, idx) => (
+                  <div
+                    key={p.id || idx}
+                    className="flex items-center justify-between bg-[#181818] border border-[#2A2A2A] rounded-lg px-3 py-2 text-xs"
+                  >
+                    <div className="flex items-center space-x-2.5">
+                      <span className="w-5 h-5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex items-center justify-center text-[10px] font-bold">
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <div className="font-bold text-white flex items-center gap-1.5">
+                          {p.method === 'cash' ? (
+                            <Banknote className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <CreditCard className="w-3.5 h-3.5 text-[#C5A059]" />
+                          )}
+                          <span className="capitalize">
+                            {p.method === 'cash'
+                              ? 'Cash'
+                              : `${p.cardBrand || 'Card'} (****${p.cardLast4 || '8392'})`}
+                          </span>
+                          <span className="text-zinc-400 font-normal">—</span>
+                          <span className="font-mono text-emerald-400 font-bold">${p.amount.toFixed(2)}</span>
+                          <span className="text-emerald-400 font-bold text-sm">✓</span>
+                        </div>
+                        <div className="text-[10px] text-zinc-500 flex items-center space-x-2 mt-0.5">
+                          <span>{new Date(p.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>•</span>
+                          <span>Cashier: {p.cashierName || 'Staff'}</span>
+                          {p.authCode && (
+                            <>
+                              <span>•</span>
+                              <span className="font-mono text-[9px] text-zinc-400">Auth: {p.authCode}</span>
+                            </>
+                          )}
+                          {p.changeDue !== undefined && p.changeDue > 0 && (
+                            <>
+                              <span>•</span>
+                              <span className="text-[#C5A059]">Change Given: ${p.changeDue.toFixed(2)}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 uppercase">
+                        {p.status}
+                      </span>
+                      {remainingBalance > 0.005 && (
+                        <button
+                          type="button"
+                          onClick={() => handleVoidPayment(p.id)}
+                          title="Void this payment"
+                          className="p-1 rounded text-zinc-500 hover:text-red-400 hover:bg-red-950/30 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
-                    {customer ? (
-                      <p className="text-xs text-[#C5A059] font-medium">
-                        {customer.name} has <span className="font-bold font-mono">{(customer.loyaltyPoints || 0).toLocaleString()}</span> points
-                        <span className="text-[#888888] text-[11px] ml-1.5">
-                          (Worth ~${(((customer.loyaltyPoints || 0) / redemptionRate) || 0).toFixed(2)} off)
-                        </span>
-                      </p>
-                    ) : (
-                      <p className="text-xs text-[#888888]">No customer attached to this sale</p>
-                    )}
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Change Due Banner if customer gave excess cash */}
+          {changeDueCustomer > 0 && (
+            <div className="bg-emerald-950/30 border border-emerald-800/60 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Banknote className="w-5 h-5 text-emerald-400" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                  Change Due Customer:
+                </span>
+              </div>
+              <span className="text-2xl font-black font-mono text-emerald-400">
+                ${changeDueCustomer.toFixed(2)}
+              </span>
+            </div>
+          )}
+
+          {/* ========================================================
+              PAYMENT INPUT & TENDER ACTION SECTION
+              Visible while remainingBalance > 0
+              Amount: [________]
+              CASH | CARD | OTHER PAYMENT
+              ======================================================== */}
+          {remainingBalance > 0.005 ? (
+            <div className="bg-[#141414] border border-[#262626] rounded-xl p-4 space-y-3.5">
+              {/* Amount Input */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label htmlFor="tender-amount-input" className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
+                    <span>Amount to Pay</span>
+                    <span className="text-[11px] font-normal text-zinc-500">
+                      (Leave blank to pay full remaining ${remainingBalance.toFixed(2)})
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowNumpad(!showNumpad)}
+                    className="text-[11px] text-[#C5A059] hover:underline cursor-pointer"
+                  >
+                    {showNumpad ? 'Hide Numpad' : 'Touch Keypad'}
+                  </button>
                 </div>
 
-                {customer && (
-                  <div className="text-right text-[11px] text-[#888888] hidden sm:block">
-                    <div>Rate: {redemptionRate} pts = $1.00</div>
-                    <div>Min to redeem: {minPointsToRedeem} pts</div>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 text-xl font-bold font-mono text-[#C5A059]">$</span>
+                  <input
+                    id="tender-amount-input"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder={remainingBalance.toFixed(2)}
+                    value={tenderInput}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (/^\d*\.?\d{0,2}$/.test(val) || val === '') {
+                        setTenderInput(val);
+                        setTenderInputError(null);
+                      }
+                    }}
+                    className="w-full bg-[#0A0A0A] border-2 border-[#333333] focus:border-[#C5A059] rounded-xl pl-8 pr-4 py-2.5 text-xl text-white font-mono font-bold outline-none transition-colors"
+                  />
+                  {tenderInput && (
+                    <button
+                      type="button"
+                      onClick={() => setTenderInput('')}
+                      className="absolute right-3 top-3 text-xs text-zinc-500 hover:text-white uppercase font-bold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {tenderInputError && (
+                  <div className="mt-1.5 text-xs text-red-400 font-medium flex items-center space-x-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{tenderInputError}</span>
                   </div>
                 )}
               </div>
 
-              {/* Customer with points: Redemption Controls */}
-              {customer ? (
-                <div>
-                  {!canCustomerRedeem ? (
-                    <div className="p-2.5 rounded-lg bg-[#1A1812] border border-[#332A15] text-[#A3A3A3] text-xs flex items-center justify-between">
-                      <span>
-                        {customerPoints < minPointsToRedeem
-                          ? `Requires at least ${minPointsToRedeem} points to redeem discounts (Customer has ${customerPoints} pts).`
-                          : `Maximum discount policy reached for this cart.`}
-                      </span>
-                      <span className="text-[#C5A059] font-semibold text-[11px] ml-2 shrink-0">
-                        Earns +{pointsEarnedOnThisOrder} pts on this sale
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 pt-1">
-                      {/* Checkbox Toggle */}
-                      <label
-                        htmlFor="redeem-loyalty-toggle"
-                        className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${
-                          applyLoyaltyPoints
-                            ? 'bg-[#1F1B10] border-[#C5A059] text-white shadow-xs'
-                            : 'bg-[#14120C] border-[#2E2818] text-[#A3A3A3] hover:border-[#C5A059]/50'
-                        }`}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <input
-                            type="checkbox"
-                            id="redeem-loyalty-toggle"
-                            checked={applyLoyaltyPoints}
-                            onChange={e => handleToggleLoyalty(e.target.checked)}
-                            className="w-4 h-4 rounded border-[#C5A059] text-[#C5A059] focus:ring-0 bg-[#0A0A0A] cursor-pointer"
-                          />
-                          <div>
-                            <div className="text-xs font-bold text-[#E5E5E5] flex items-center space-x-1.5">
-                              <Coins className="w-3.5 h-3.5 text-[#C5A059]" />
-                              <span>Apply Points Discount to this Purchase</span>
-                            </div>
-                            <div className="text-[11px] text-[#737373]">
-                              Up to {maxPointsCustomerCanRedeem} pts can be applied (max ${(((maxPointsCustomerCanRedeem / redemptionRate) || 0)).toFixed(2)} off)
-                            </div>
-                          </div>
-                        </div>
+              {/* Quick Amount Buttons */}
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => { playBeep('click'); setTenderInput(remainingBalance.toFixed(2)); }}
+                  className="px-2.5 py-1 rounded-lg bg-[#202020] hover:bg-[#282828] text-xs font-mono font-bold text-[#C5A059] border border-[#333333] hover:border-[#C5A059] cursor-pointer transition-colors"
+                >
+                  Full (${remainingBalance.toFixed(2)})
+                </button>
 
-                        {applyLoyaltyPoints && (
-                          <div className="text-right">
-                            <span className="text-xs font-bold font-mono text-emerald-400">
-                              -${(pointsDiscount || 0).toFixed(2)}
-                            </span>
-                            <div className="text-[10px] text-[#C5A059]">({pointsToRedeem} pts)</div>
-                          </div>
-                        )}
-                      </label>
-
-                      {/* Active Redemption Adjustment Slider and Quick Buttons */}
-                      {applyLoyaltyPoints && (
-                        <div className="p-3 rounded-lg bg-[#0F0E0A] border border-[#2E2818] space-y-3 animate-in fade-in duration-150">
-                          {/* Quick preset buttons */}
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-[#A3A3A3]">Quick Select:</span>
-                            <div className="flex space-x-1.5">
-                              <button
-                                type="button"
-                                onClick={() => { playBeep('click'); setPointsToRedeem(minPointsToRedeem); }}
-                                className={`px-2 py-1 rounded text-[11px] font-bold border transition-colors cursor-pointer ${
-                                  pointsToRedeem === minPointsToRedeem
-                                    ? 'bg-[#C5A059] text-black border-[#C5A059]'
-                                    : 'bg-[#1A1A1A] text-[#888888] border-[#262626] hover:text-white'
-                                }`}
-                              >
-                                Min ({minPointsToRedeem} pts)
-                              </button>
-
-                              {maxPointsCustomerCanRedeem > minPointsToRedeem * 2 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    playBeep('click');
-                                    const half = Math.floor(maxPointsCustomerCanRedeem / 2);
-                                    setPointsToRedeem(Math.max(minPointsToRedeem, half));
-                                  }}
-                                  className="px-2 py-1 rounded text-[11px] font-bold border bg-[#1A1A1A] text-[#888888] border-[#262626] hover:text-white transition-colors cursor-pointer"
-                                >
-                                  Half (~${((((maxPointsCustomerCanRedeem / 2) / redemptionRate) || 0)).toFixed(2)})
-                                </button>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={() => { playBeep('click'); setPointsToRedeem(maxPointsCustomerCanRedeem); }}
-                                className={`px-2 py-1 rounded text-[11px] font-bold border transition-colors cursor-pointer ${
-                                  pointsToRedeem === maxPointsCustomerCanRedeem
-                                    ? 'bg-[#C5A059] text-black border-[#C5A059]'
-                                    : 'bg-[#1A1A1A] text-[#888888] border-[#262626] hover:text-white'
-                                }`}
-                              >
-                                Max ({maxPointsCustomerCanRedeem} pts)
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Slider & Input */}
-                          <div className="flex items-center space-x-3">
-                            <input
-                              type="range"
-                              min={minPointsToRedeem}
-                              max={maxPointsCustomerCanRedeem}
-                              step={5}
-                              value={pointsToRedeem}
-                              onChange={e => setPointsToRedeem(Number(e.target.value))}
-                              className="flex-1 accent-[#C5A059] cursor-pointer"
-                            />
-                            <div className="flex items-center space-x-1.5 shrink-0">
-                              <input
-                                type="number"
-                                min={minPointsToRedeem}
-                                max={maxPointsCustomerCanRedeem}
-                                step={5}
-                                value={pointsToRedeem}
-                                onChange={e => {
-                                  const val = parseInt(e.target.value) || 0;
-                                  setPointsToRedeem(Math.max(minPointsToRedeem, Math.min(maxPointsCustomerCanRedeem, val)));
-                                }}
-                                className="w-20 bg-[#141414] border border-[#2E2818] focus:border-[#C5A059] rounded px-2 py-1 text-xs font-mono text-center text-[#E5E5E5] focus:outline-hidden"
-                              />
-                              <span className="text-xs text-[#737373]">pts</span>
-                            </div>
-                          </div>
-
-                          {/* Forecast summary */}
-                          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#262215] text-[11px]">
-                            <div className="bg-[#14120B] p-2 rounded border border-[#262215]">
-                              <div className="text-[#737373]">Redemption Value</div>
-                              <div className="font-bold text-emerald-400 font-mono">-${(pointsDiscount || 0).toFixed(2)}</div>
-                            </div>
-                            <div className="bg-[#14120B] p-2 rounded border border-[#262215]">
-                              <div className="text-[#737373]">Points Earned</div>
-                              <div className="font-bold text-[#C5A059] font-mono">+{pointsEarnedOnThisOrder} pts</div>
-                            </div>
-                            <div className="bg-[#14120B] p-2 rounded border border-[#262215]">
-                              <div className="text-[#737373]">Ending Balance</div>
-                              <div className="font-bold text-white font-mono">{expectedEndingBalance} pts</div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-xs text-[#888888] bg-[#12100A] p-2.5 rounded-lg border border-[#262215] flex items-center justify-between">
-                  <span>Attach a customer at the register to redeem rewards and earn points for this order.</span>
-                  <span className="text-[#C5A059] font-medium text-[11px] ml-2 shrink-0">
-                    Earns {earnRate} pt / $1
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Payment Method Selector (CA-06) */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-widest text-[#A3A3A3] mb-2.5">
-              Select Payment Method
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-              <button
-                type="button"
-                id="pay-method-cash"
-                onClick={() => { setMethod('cash'); setError(null); }}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer ${
-                  method === 'cash'
-                    ? 'bg-[#C5A059]/15 border-[#C5A059] text-[#C5A059] shadow-sm'
-                    : 'bg-[#141414] border-[#262626] text-[#A3A3A3] hover:bg-[#1A1A1A] hover:text-[#E5E5E5]'
-                }`}
-              >
-                <Banknote className="w-6 h-6 mb-1 text-[#C5A059]" />
-                <span className="text-xs font-bold uppercase tracking-wider">Cash</span>
-              </button>
-
-              <button
-                type="button"
-                id="pay-method-card"
-                onClick={() => { setMethod('card'); setError(null); }}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer ${
-                  method === 'card'
-                    ? 'bg-[#C5A059]/15 border-[#C5A059] text-[#C5A059] shadow-sm'
-                    : 'bg-[#141414] border-[#262626] text-[#A3A3A3] hover:bg-[#1A1A1A] hover:text-[#E5E5E5]'
-                }`}
-              >
-                <CreditCard className="w-6 h-6 mb-1 text-[#C5A059]" />
-                <span className="text-xs font-bold uppercase tracking-wider">Terminal Card</span>
-              </button>
-
-              <button
-                type="button"
-                id="pay-method-contactless"
-                onClick={() => { setMethod('contactless'); setError(null); }}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer ${
-                  method === 'contactless'
-                    ? 'bg-[#C5A059]/15 border-[#C5A059] text-[#C5A059] shadow-sm'
-                    : 'bg-[#141414] border-[#262626] text-[#A3A3A3] hover:bg-[#1A1A1A] hover:text-[#E5E5E5]'
-                }`}
-              >
-                <Smartphone className="w-6 h-6 mb-1 text-[#C5A059]" />
-                <span className="text-xs font-bold uppercase tracking-wider">Apple / Google</span>
-              </button>
-
-              <button
-                type="button"
-                id="pay-method-split"
-                onClick={() => { setMethod('split'); setError(null); }}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer ${
-                  method === 'split'
-                    ? 'bg-[#C5A059]/15 border-[#C5A059] text-[#C5A059] shadow-sm'
-                    : 'bg-[#141414] border-[#262626] text-[#A3A3A3] hover:bg-[#1A1A1A] hover:text-[#E5E5E5]'
-                }`}
-              >
-                <Split className="w-6 h-6 mb-1 text-[#C5A059]" />
-                <span className="text-xs font-bold uppercase tracking-wider">Split Payment</span>
-              </button>
-
-              <button
-                type="button"
-                id="pay-method-fallback"
-                onClick={() => { setMethod('fallback'); setError(null); }}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer ${
-                  method === 'fallback'
-                    ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-sm'
-                    : 'bg-[#141414] border-[#262626] text-[#A3A3A3] hover:bg-[#1A1A1A] hover:text-[#E5E5E5]'
-                }`}
-              >
-                <ShieldAlert className="w-6 h-6 mb-1 text-amber-400" />
-                <span className="text-xs font-bold uppercase tracking-wider">Fallback Menu</span>
-                <span className="text-[10px] text-[#737373] mt-0.5">QR / Phone / Keyed</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Payment Method Content Area */}
-          {method === 'cash' && (
-            <div className="space-y-4 bg-[#141414] p-4 rounded-xl border border-[#262626]">
-              {/* Cash Summary Banner */}
-              <div className="flex items-center justify-between bg-[#0A0A0A] p-3 rounded-lg border border-[#222222]">
-                <div>
-                  <div className="text-xs text-[#737373]">Total Cash Received</div>
-                  <div className="text-2xl font-black font-mono text-[#E5E5E5] flex items-center space-x-2">
-                    <span>${(tenderedAmount || 0).toFixed(2)}</span>
-                    {cashEntries.length > 0 && (
-                      <span className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-[#C5A059]/20 text-[#C5A059] border border-[#C5A059]/40">
-                        {cashEntries.length} {cashEntries.length === 1 ? 'installment' : 'installments'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right">
-                  {isCashInsufficient ? (
-                    <div>
-                      <div className="text-xs text-amber-400 font-bold uppercase tracking-wider">Still Due / Remaining</div>
-                      <div className="text-xl font-bold font-mono text-amber-400">
-                        ${cashRemainingDue.toFixed(2)}
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="text-xs text-[#737373]">Change Due</div>
-                      <div className="text-2xl font-black font-mono text-[#C5A059]">
-                        ${(changeDue || 0).toFixed(2)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Multi-Cash Tender Entry Form */}
-              <div className="bg-[#181818] p-3 rounded-lg border border-[#2A2A2A] space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                    <ListOrdered className="w-3.5 h-3.5 text-[#C5A059]" />
-                    <span>Enter Cash Tender Amount</span>
-                  </label>
-                  {cashEntries.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleClearCashEntries}
-                      className="text-[11px] text-red-400 hover:text-red-300 font-bold underline cursor-pointer"
-                    >
-                      Reset All Entries
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-2.5 text-xs text-[#737373] font-bold">$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g. 20.00"
-                      value={customCashInput}
-                      onChange={e => setCustomCashInput(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          const val = parseFloat(customCashInput);
-                          if (val > 0) handleAddCashEntry(val);
-                        }
-                      }}
-                      className="w-full bg-[#0A0A0A] border border-[#333333] rounded-lg pl-7 pr-3 py-2 text-sm text-white font-mono font-bold focus:border-[#C5A059] outline-none"
-                    />
-                  </div>
+                {remainingBalance > 10 && (
                   <button
                     type="button"
                     onClick={() => {
-                      const val = parseFloat(customCashInput);
-                      if (val > 0) handleAddCashEntry(val);
+                      playBeep('click');
+                      const half = Math.round((remainingBalance / 2) * 100) / 100;
+                      setTenderInput(half.toFixed(2));
                     }}
-                    disabled={!customCashInput || parseFloat(customCashInput) <= 0}
-                    className="px-4 py-2 bg-[#C5A059] hover:bg-[#B38F46] disabled:opacity-30 disabled:cursor-not-allowed text-black text-xs font-black uppercase tracking-wider rounded-lg transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                    className="px-2.5 py-1 rounded-lg bg-[#202020] hover:bg-[#282828] text-xs font-mono font-bold text-zinc-300 border border-[#333333] cursor-pointer transition-colors"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Add Cash</span>
+                    Half (${(Math.round((remainingBalance / 2) * 100) / 100).toFixed(2)})
                   </button>
-                </div>
+                )}
 
-                {/* Fast Bill Buttons (Adds directly as cash installment) */}
-                <div className="grid grid-cols-5 gap-1.5 pt-1">
+                {[10, 20, 50, 100].map(amt => (
                   <button
+                    key={amt}
                     type="button"
-                    onClick={handleExactCash}
-                    className="py-1.5 px-1 text-center rounded-lg bg-[#222222] hover:bg-[#2C2C2C] border border-[#333333] hover:border-[#C5A059] text-[11px] font-bold text-[#C5A059] cursor-pointer"
+                    onClick={() => { playBeep('click'); setTenderInput(amt.toFixed(2)); }}
+                    className="px-2.5 py-1 rounded-lg bg-[#202020] hover:bg-[#282828] text-xs font-mono font-bold text-zinc-300 border border-[#333333] cursor-pointer transition-colors"
                   >
-                    Exact (${(cashRemainingDue > 0 ? cashRemainingDue : effectiveGrandTotal).toFixed(2)})
+                    ${amt}
                   </button>
-                  {[10, 20, 50, 100].map(amt => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() => handleFastCash(amt)}
-                      className="py-1.5 rounded-lg bg-[#222222] hover:bg-[#2C2C2C] border border-[#333333] text-[11px] font-bold text-[#E5E5E5] hover:border-[#C5A059] cursor-pointer"
-                    >
-                      + ${amt} Bill
-                    </button>
-                  ))}
-                </div>
+                ))}
               </div>
 
-              {/* Cash Entries Log Table (Shows all entered amounts) */}
-              {cashEntries.length > 0 && (
-                <div className="bg-[#0D0D0D] border border-[#262626] rounded-lg overflow-hidden">
-                  <div className="bg-[#141414] px-3 py-1.5 border-b border-[#222222] flex items-center justify-between text-[11px] font-bold text-[#AAAAAA] uppercase tracking-wider">
-                    <span>Cash Tender Entries Log ({cashEntries.length})</span>
-                    <span className="text-[#C5A059]">Total: ${totalCashFromEntries.toFixed(2)}</span>
-                  </div>
-                  <div className="max-h-32 overflow-y-auto divide-y divide-[#1F1F1F]">
-                    {cashEntries.map((entry, idx) => (
-                      <div key={entry.id} className="px-3 py-1.5 flex items-center justify-between text-xs hover:bg-[#161616]">
-                        <div className="flex items-center space-x-2">
-                          <span className="w-5 h-5 rounded-full bg-[#222222] text-[#999999] text-[10px] font-bold flex items-center justify-center">
-                            #{idx + 1}
-                          </span>
-                          <span className="font-mono font-bold text-white text-sm">+ ${entry.amount.toFixed(2)}</span>
-                          <span className="text-[10px] text-[#666666]">{entry.time}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveCashEntry(entry.id)}
-                          className="text-red-400 hover:text-red-300 p-1 hover:bg-red-950/40 rounded transition-colors cursor-pointer"
-                          title="Delete entry"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+              {/* Touch Numpad (Collapsible) */}
+              {showNumpad && (
+                <div className="bg-[#0C0C0C] p-2.5 rounded-xl border border-[#222222] max-w-[260px] mx-auto">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => handleNumpadPress(d)}
+                        className="h-9 rounded-lg bg-[#1E1E1E] hover:bg-[#2A2A2A] text-white font-bold text-base border border-[#333333] cursor-pointer"
+                      >
+                        {d}
+                      </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => handleNumpadPress('.')}
+                      className="h-9 rounded-lg bg-[#1E1E1E] hover:bg-[#2A2A2A] text-white font-bold text-base border border-[#333333] cursor-pointer"
+                    >
+                      .
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleNumpadPress('0')}
+                      className="h-9 rounded-lg bg-[#1E1E1E] hover:bg-[#2A2A2A] text-white font-bold text-base border border-[#333333] cursor-pointer"
+                    >
+                      0
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleNumpadPress('DEL')}
+                      className="h-9 rounded-lg bg-[#1E1E1E] hover:bg-[#2A2A2A] text-amber-400 font-bold text-xs uppercase border border-[#333333] cursor-pointer"
+                    >
+                      DEL
+                    </button>
                   </div>
                 </div>
               )}
 
-              {/* Touch Numpad for Single or Custom Tender */}
-              {cashEntries.length === 0 && (
-                <div className="grid grid-cols-3 gap-1.5 max-w-[240px] mx-auto pt-1">
-                  {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(n => (
+              {/* ========================================================
+                  PRIMARY TENDER BUTTONS:
+                  CASH | CARD | OTHER PAYMENT
+                  ======================================================== */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                {/* CASH BUTTON */}
+                <button
+                  type="button"
+                  id="tender-btn-cash"
+                  onClick={() => handlePayCash()}
+                  disabled={isProcessing}
+                  className="py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-bold uppercase tracking-wider flex flex-col items-center justify-center cursor-pointer shadow-md transition-all disabled:opacity-50"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <Banknote className="w-5 h-5" />
+                    <span className="text-sm font-black">CASH</span>
+                  </div>
+                  <span className="text-[11px] font-mono opacity-90 mt-0.5">
+                    Pay ${activeAmountForButtons.toFixed(2)}
+                  </span>
+                </button>
+
+                {/* CARD BUTTON */}
+                <button
+                  type="button"
+                  id="tender-btn-card"
+                  onClick={() => handleInitiateCardPayment()}
+                  disabled={isProcessing}
+                  className="py-3 px-3 rounded-xl bg-gradient-to-r from-[#C5A059] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#C5A059] active:scale-98 text-black font-bold uppercase tracking-wider flex flex-col items-center justify-center cursor-pointer shadow-md transition-all disabled:opacity-50"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <CreditCard className="w-5 h-5" />
+                    <span className="text-sm font-black">CARD</span>
+                  </div>
+                  <span className="text-[11px] font-mono opacity-90 mt-0.5">
+                    Charge ${activeAmountForButtons.toFixed(2)}
+                  </span>
+                </button>
+
+                {/* OTHER PAYMENT BUTTON */}
+                <button
+                  type="button"
+                  id="tender-btn-other"
+                  onClick={() => setShowOtherMenu(!showOtherMenu)}
+                  disabled={isProcessing}
+                  className="py-3 px-3 rounded-xl bg-[#202020] hover:bg-[#282828] active:scale-98 text-zinc-200 border border-[#333333] hover:border-[#555555] font-bold uppercase tracking-wider flex flex-col items-center justify-center cursor-pointer transition-all disabled:opacity-50"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <Gift className="w-4 h-4 text-[#C5A059]" />
+                    <span className="text-xs font-black">OTHER</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                  </div>
+                  <span className="text-[10px] text-zinc-400 mt-0.5">
+                    Gift / Check / Credit
+                  </span>
+                </button>
+              </div>
+
+              {/* Other Payment Dropdown / Menu */}
+              {showOtherMenu && (
+                <div className="p-3 bg-[#0C0C0C] border border-[#2B2B2B] rounded-xl space-y-2.5 animate-in fade-in duration-100">
+                  <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Select Alternative Tender Method for ${activeAmountForButtons.toFixed(2)}:
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
                     <button
-                      key={n}
                       type="button"
-                      onClick={() => handleNumpad(n)}
-                      className="h-9 rounded-lg bg-[#1A1A1A] hover:bg-[#262626] active:bg-[#C5A059] active:text-black text-[#E5E5E5] font-bold text-sm border border-[#262626] cursor-pointer"
+                      onClick={() => handlePayOther('gift_card')}
+                      className="py-2 px-2 rounded-lg bg-[#181818] hover:bg-[#242424] border border-[#333333] text-xs font-bold text-white flex items-center justify-center space-x-1 cursor-pointer"
                     >
-                      {n}
+                      <Gift className="w-3.5 h-3.5 text-[#C5A059]" />
+                      <span>Gift Card</span>
                     </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => handleNumpad('.')}
-                    className="h-9 rounded-lg bg-[#1A1A1A] hover:bg-[#262626] text-[#E5E5E5] font-bold text-sm border border-[#262626] cursor-pointer"
-                  >
-                    .
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleNumpad('0')}
-                    className="h-9 rounded-lg bg-[#1A1A1A] hover:bg-[#262626] active:bg-[#C5A059] active:text-black text-[#E5E5E5] font-bold text-sm border border-[#262626] cursor-pointer"
-                  >
-                    0
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleNumpad('C')}
-                    className="h-9 rounded-lg bg-[#141414] hover:bg-[#262626] text-[#737373] hover:text-white text-xs font-semibold uppercase border border-[#262626] cursor-pointer"
-                  >
-                    CLR
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePayOther('cheque')}
+                      className="py-2 px-2 rounded-lg bg-[#181818] hover:bg-[#242424] border border-[#333333] text-xs font-bold text-white flex items-center justify-center space-x-1 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-[#C5A059]" />
+                      <span>Check</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePayOther('store_credit')}
+                      className="py-2 px-2 rounded-lg bg-[#181818] hover:bg-[#242424] border border-[#333333] text-xs font-bold text-white flex items-center justify-center space-x-1 cursor-pointer"
+                    >
+                      <UserCheck className="w-3.5 h-3.5 text-[#C5A059]" />
+                      <span>Store Credit</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
-          )}
-
-          {method === 'card' && (
-            <div className="bg-[#141414] p-5 rounded-2xl border border-[#262626] space-y-4">
-              <div className="flex items-center justify-between border-b border-[#222222] pb-3">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                  <span className="text-xs font-bold text-white uppercase tracking-wider">
-                    Counter PIN Pad Terminal Online
-                  </span>
-                </div>
-                <span className="text-[11px] font-mono text-[#888888]">
-                  IP: {settings?.terminalIp || '192.168.1.180:8080'}
-                </span>
+          ) : (
+            /* ========================================================
+               TRANSACTION PAID IN FULL CELEBRATION BANNER
+               When remainingBalance <= 0
+               ======================================================== */
+            <div className="bg-emerald-950/40 border border-emerald-700/60 rounded-xl p-4 text-center space-y-2">
+              <div className="flex items-center justify-center space-x-2 text-emerald-400 font-bold text-sm uppercase">
+                <CheckCircle2 className="w-5 h-5" />
+                <span>Order Paid in Full (${(effectiveGrandTotal || 0).toFixed(2)})</span>
               </div>
-
-              <div className="p-4 bg-[#191919] rounded-xl border border-[#2A2A2A] text-center space-y-2">
-                <div className="w-12 h-12 rounded-full bg-[#C5A059]/15 text-[#C5A059] mx-auto flex items-center justify-center">
-                  <CreditCard className="w-6 h-6" />
-                </div>
-                <h4 className="font-serif italic font-bold text-base text-white">
-                  Insert, Tap, or Swipe on Counter Terminal
-                </h4>
-                <p className="text-xs text-[#888888] max-w-sm mx-auto">
-                  Customer is prompted on customer-facing Verifone/Pax device for EMV Chip or PIN verification.
-                </p>
-
-                {/* Card Brand Selector */}
-                <div className="flex items-center justify-center space-x-2 pt-2">
-                  {(['Visa', 'Mastercard', 'Amex'] as const).map(brand => (
-                    <button
-                      key={brand}
-                      type="button"
-                      onClick={() => setCardBrand(brand)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                        cardBrand === brand
-                          ? 'bg-[#C5A059] text-black shadow-xs'
-                          : 'bg-[#222222] text-[#888888] hover:text-white'
-                      }`}
-                    >
-                      {brand}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                id="btn-process-terminal-card"
-                disabled={isProcessing}
-                onClick={async () => {
-                  try {
-                    setIsProcessing(true);
-                    await onCompleteOrder({
-                      method: 'card',
-                      amount: effectiveGrandTotal,
-                      pointsRedeemed: applyLoyaltyPoints ? pointsToRedeem : 0,
-                      pointsDiscountAmount: pointsDiscount,
-                      cardBrand,
-                      cardLast4: Math.floor(1000 + Math.random() * 9000).toString(),
-                      authCode: `AUTH-${Math.floor(100000 + Math.random() * 900000)}`,
-                      fallbackMethod: 'card_terminal',
-                    });
-                    playBeep('success');
-                  } catch (err: any) {
-                    playBeep('error');
-                    setError(err.message || 'Terminal charge failed');
-                    setIsProcessing(false);
-                  }
-                }}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#C5A059] to-[#D4AF37] hover:from-[#D4AF37] hover:to-[#C5A059] text-black font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center space-x-2 transition-all cursor-pointer"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>
-                  {isProcessing ? 'Waiting for PIN Pad Approval...' : `Process Terminal Card ($${effectiveGrandTotal.toFixed(2)})`}
-                </span>
-              </button>
-
-              {/* Notice & switch to Fallback Menu */}
-              <div className="p-3 rounded-xl bg-[#1A1A1A] border border-[#2B2B2B] flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span className="text-xs text-[#AAAAAA]">
-                    Terminal frozen, offline, or customer wants QR / Phone checkout?
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    playBeep('click');
-                    setMethod('fallback');
-                  }}
-                  className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-bold text-[11px] uppercase tracking-wider transition-colors cursor-pointer shrink-0 ml-2"
-                >
-                  Switch to Fallback Menu →
-                </button>
-              </div>
-            </div>
-          )}
-
-          {method === 'fallback' && (
-            <div className="bg-[#141414] p-4 sm:p-5 rounded-2xl border border-amber-500/30">
-              <div className="flex items-center justify-between mb-3 border-b border-[#262626] pb-2.5">
-                <div className="flex items-center space-x-2">
-                  <ShieldAlert className="w-4 h-4 text-amber-400" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-white">
-                    Emergency Payment Fallback Center
-                  </h4>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setMethod('card')}
-                  className="text-[11px] text-[#888888] hover:text-[#C5A059] transition-colors cursor-pointer"
-                >
-                  ← Back to Terminal
-                </button>
-              </div>
-
-              <CardPaymentFallbackManager
-                amountDue={effectiveGrandTotal}
-                orderNumber={`ORD-${Date.now().toString().slice(-5)}`}
-                settings={settings}
-                currentUser={currentUser}
-                onPaymentSuccess={async details => {
-                  try {
-                    setIsProcessing(true);
-                    const paymentData: any = {
-                      method: 'card',
-                      amount: effectiveGrandTotal,
-                      pointsRedeemed: applyLoyaltyPoints ? pointsToRedeem : 0,
-                      pointsDiscountAmount: pointsDiscount,
-                      cardBrand: details.cardBrand,
-                      cardLast4: details.cardLast4,
-                      authCode: details.authCode,
-                      fallbackMethod: details.fallbackMethod,
-                      processorTxId: details.processorTxId,
-                      paymentSessionId: details.paymentSessionId,
-                    };
-                    await onCompleteOrder(paymentData);
-                    playBeep('success');
-                  } catch (err: any) {
-                    playBeep('error');
-                    setError(err.message || 'Payment processing failed');
-                    setIsProcessing(false);
-                  }
-                }}
-              />
-            </div>
-          )}
-
-          {method === 'contactless' && (
-            <div className="bg-[#141414] p-5 rounded-xl border border-[#262626] text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-[#C5A059]/15 text-[#C5A059] mx-auto flex items-center justify-center animate-pulse">
-                <Smartphone className="w-6 h-6" />
-              </div>
-              <h4 className="font-serif italic font-bold text-base text-[#F5F5F5]">Hold Phone Near Reader</h4>
-              <p className="text-xs text-[#737373] max-w-sm mx-auto">
-                Ready for Apple Pay, Google Wallet, or Samsung Pay. NFC reader is actively listening.
+              <p className="text-xs text-zinc-300">
+                All payments have been successfully recorded. Ready to complete transaction and print receipt.
               </p>
             </div>
           )}
 
-          {method === 'split' && (
-            <div className="bg-[#141414] p-4 rounded-xl border border-[#262626] space-y-4">
-              {/* Split Mode Switcher */}
-              <div className="flex items-center justify-between border-b border-[#262626] pb-3">
-                <div className="flex items-center space-x-2">
-                  <Split className="w-4 h-4 text-[#C5A059]" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-white">
-                    Choose Split Mode
+          {/* ========================================================
+              CARD TERMINAL ACTIVE PROMPT / MODAL OVERLAY
+              When Card button is pressed for a specific amount
+              ======================================================== */}
+          {activeCardCharge !== null && (
+            <div className="bg-[#121212] border-2 border-[#C5A059]/60 rounded-xl p-4 space-y-3.5 shadow-2xl animate-in zoom-in-95">
+              <div className="flex items-center justify-between border-b border-[#262626] pb-2.5">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-white block">
+                      Counter PIN Pad Terminal Active
+                    </span>
+                    <span className="text-[11px] text-zinc-400">
+                      Waiting for customer card tap, chip insert, or swipe
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-zinc-400 uppercase block">Sending to Terminal</span>
+                  <span className="text-xl font-black font-mono text-[#C5A059]">
+                    ${activeCardCharge.toFixed(2)}
                   </span>
                 </div>
-                <div className="flex space-x-1.5">
+              </div>
+
+              {/* 30-Second Countdown & Progress Bar */}
+              <div className="bg-[#1A1A1A] p-3 rounded-lg border border-[#2D2D2D] space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-1.5 text-zinc-300 font-medium">
+                    <Clock className={`w-4 h-4 ${cardTimerSeconds <= 10 ? 'text-red-400 animate-bounce' : 'text-amber-400'}`} />
+                    <span>Auto-refresh if not received:</span>
+                  </div>
+                  <span className={`font-mono font-black text-sm ${cardTimerSeconds <= 10 ? 'text-red-400 animate-pulse' : 'text-[#C5A059]'}`}>
+                    {cardTimerSeconds} seconds left
+                  </span>
+                </div>
+                <div className="w-full bg-[#0D0D0D] h-2 rounded-full overflow-hidden border border-[#333333]">
+                  <div
+                    className={`h-full transition-all duration-1000 ${
+                      cardTimerSeconds <= 10
+                        ? 'bg-red-500'
+                        : 'bg-gradient-to-r from-amber-400 to-[#C5A059]'
+                    }`}
+                    style={{ width: `${(cardTimerSeconds / 30) * 100}%` }}
+                  />
+                </div>
+                <div className="text-[10px] text-zinc-500 flex justify-between">
+                  <span>If terminal fails or jams, screen resets automatically at 0s</span>
+                  <span className="text-zinc-400">Previous payments safe</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <span>Select Card Brand / Method:</span>
+                <div className="flex space-x-1">
+                  {(['Visa', 'Mastercard', 'Amex', 'Discover', 'Apple Pay'] as const).map(b => (
+                    <button
+                      key={b}
+                      type="button"
+                      onClick={() => setCardBrand(b as any)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                        cardBrand === b
+                          ? 'bg-[#C5A059] text-black border-[#C5A059]'
+                          : 'bg-[#1C1C1C] text-zinc-400 border-[#2D2D2D] hover:text-white'
+                      }`}
+                    >
+                      {b}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {terminalErrorMsg && (
+                <div className="p-3 rounded-lg bg-red-950/60 border border-red-800/70 text-red-200 text-xs flex items-start space-x-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                  <span className="leading-snug">{terminalErrorMsg}</span>
+                </div>
+              )}
+
+              {/* Terminal Simulation Actions */}
+              <div className="space-y-2">
+                <div className="text-[10px] font-bold text-zinc-500 uppercase flex items-center justify-between">
+                  <span>Terminal Response Simulator:</span>
+                  <span className="text-zinc-600">Simulate hardware callback</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setSplitType('two_cards')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                      splitType === 'two_cards'
-                        ? 'bg-[#C5A059] text-black shadow-xs'
-                        : 'bg-[#1F1F1F] text-[#888888] hover:text-white'
-                    }`}
+                    disabled={isProcessing}
+                    onClick={() => handleTerminalOutcome('approved')}
+                    className="py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-bold text-xs uppercase flex items-center justify-center space-x-1.5 cursor-pointer shadow disabled:opacity-50"
                   >
-                    Split In Two Cards
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Simulate: APPROVED (${activeCardCharge.toFixed(2)})</span>
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => setSplitType('cash_card')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                      splitType === 'cash_card'
-                        ? 'bg-[#C5A059] text-black shadow-xs'
-                        : 'bg-[#1F1F1F] text-[#888888] hover:text-white'
-                    }`}
+                    disabled={isProcessing}
+                    onClick={() => handleTerminalOutcome('declined')}
+                    className="py-2.5 px-3 rounded-lg bg-red-950/80 hover:bg-red-900 active:scale-98 text-red-200 border border-red-800/60 font-bold text-xs uppercase flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50"
                   >
-                    Cash + Card
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                    <span>Simulate: DECLINED (Code 51)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={() => handleTerminalOutcome('cancelled')}
+                    className="py-1.5 px-2 rounded-lg bg-[#222222] hover:bg-[#2C2C2C] text-zinc-300 font-bold text-[10px] uppercase flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>Simulate: Customer Cancel</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={() => handleTerminalOutcome('timeout')}
+                    className="py-1.5 px-2 rounded-lg bg-[#222222] hover:bg-[#2C2C2C] text-zinc-300 font-bold text-[10px] uppercase flex items-center justify-center space-x-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <Clock className="w-3 h-3" />
+                    <span>Simulate: Timeout</span>
                   </button>
                 </div>
               </div>
 
-              {/* Mode A: Split Between Two Cards */}
-              {splitType === 'two_cards' && (
-                <div className="space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#999999]">
-                      Total Order: <strong className="text-white">${effectiveGrandTotal.toFixed(2)}</strong>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleSplit5050}
-                      className="px-2.5 py-1 rounded bg-[#222222] hover:bg-[#2C2C2C] border border-[#3A3A3A] hover:border-[#C5A059] text-[11px] font-bold text-[#C5A059] uppercase transition-colors cursor-pointer"
-                    >
-                      Split 50 / 50 (${(effectiveGrandTotal / 2).toFixed(2)} each)
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {/* Card 1 Block */}
-                    <div className="bg-[#181818] border border-[#2B2B2B] rounded-xl p-3.5 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white uppercase flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5 text-[#C5A059]" />
-                          <span>Card 1 Charge</span>
-                        </span>
-                        {card1Approved ? (
-                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-800/50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <Check className="w-2.5 h-2.5" /> Approved
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-[#777777]">Terminal Ready</span>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-[#888888] uppercase block mb-1">Card 1 Amount ($)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={card1Amount}
-                          onChange={e => handleCard1Change(e.target.value)}
-                          className="w-full bg-[#0E0E0E] border border-[#333333] rounded-lg px-3 py-2 text-sm text-white font-mono font-bold focus:border-[#C5A059] outline-none"
-                        />
-                      </div>
-
-                      <div className="flex items-center space-x-1.5">
-                        {(['Visa', 'Mastercard', 'Amex'] as const).map(b => (
-                          <button
-                            key={b}
-                            type="button"
-                            onClick={() => setCard1Brand(b)}
-                            className={`flex-1 py-1 rounded text-[10px] font-bold uppercase tracking-wider border cursor-pointer ${
-                              card1Brand === b
-                                ? 'bg-[#C5A059] text-black border-[#C5A059]'
-                                : 'bg-[#101010] text-[#777777] border-[#262626]'
-                            }`}
-                          >
-                            {b}
-                          </button>
-                        ))}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          playBeep('success');
-                          setCard1Approved(true);
-                        }}
-                        className={`w-full py-1.5 rounded-lg text-xs font-bold uppercase transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                          card1Approved
-                            ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50'
-                            : 'bg-[#222222] hover:bg-[#2C2C2C] text-white border border-[#3A3A3A]'
-                        }`}
-                      >
-                        {card1Approved ? <CheckCheck className="w-3.5 h-3.5" /> : <CreditCard className="w-3.5 h-3.5 text-[#C5A059]" />}
-                        <span>{card1Approved ? 'Card 1 Swiped / Captured' : `Tap / Swipe Card 1 ($${numCard1.toFixed(2)})`}</span>
-                      </button>
-                    </div>
-
-                    {/* Card 2 Block */}
-                    <div className="bg-[#181818] border border-[#2B2B2B] rounded-xl p-3.5 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white uppercase flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5 text-[#C5A059]" />
-                          <span>Card 2 Charge</span>
-                        </span>
-                        {card2Approved ? (
-                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-800/50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <Check className="w-2.5 h-2.5" /> Approved
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-[#777777]">Terminal Ready</span>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] text-[#888888] uppercase block mb-1">Card 2 Amount ($)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={card2Amount}
-                          onChange={e => setCard2Amount(e.target.value)}
-                          className="w-full bg-[#0E0E0E] border border-[#333333] rounded-lg px-3 py-2 text-sm text-white font-mono font-bold focus:border-[#C5A059] outline-none"
-                        />
-                      </div>
-
-                      <div className="flex items-center space-x-1.5">
-                        {(['Visa', 'Mastercard', 'Amex'] as const).map(b => (
-                          <button
-                            key={b}
-                            type="button"
-                            onClick={() => setCard2Brand(b)}
-                            className={`flex-1 py-1 rounded text-[10px] font-bold uppercase tracking-wider border cursor-pointer ${
-                              card2Brand === b
-                                ? 'bg-[#C5A059] text-black border-[#C5A059]'
-                                : 'bg-[#101010] text-[#777777] border-[#262626]'
-                            }`}
-                          >
-                            {b}
-                          </button>
-                        ))}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          playBeep('success');
-                          setCard2Approved(true);
-                        }}
-                        className={`w-full py-1.5 rounded-lg text-xs font-bold uppercase transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                          card2Approved
-                            ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50'
-                            : 'bg-[#222222] hover:bg-[#2C2C2C] text-white border border-[#3A3A3A]'
-                        }`}
-                      >
-                        {card2Approved ? <CheckCheck className="w-3.5 h-3.5" /> : <CreditCard className="w-3.5 h-3.5 text-[#C5A059]" />}
-                        <span>{card2Approved ? 'Card 2 Swiped / Captured' : `Tap / Swipe Card 2 ($${numCard2.toFixed(2)})`}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Card Balance Verification Banner */}
-                  <div className={`p-2.5 rounded-lg border text-xs flex items-center justify-between ${
-                    isTwoCardsBalanced
-                      ? 'bg-emerald-950/30 border-emerald-800/40 text-emerald-300'
-                      : 'bg-amber-950/30 border-amber-800/40 text-amber-300'
-                  }`}>
-                    <div className="flex items-center space-x-2">
-                      {isTwoCardsBalanced ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-amber-400" />}
-                      <span>
-                        Combined Total: <strong>${totalTwoCards.toFixed(2)}</strong> of ${effectiveGrandTotal.toFixed(2)}
-                      </span>
-                    </div>
-                    {!isTwoCardsBalanced && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const rem = Math.max(0, effectiveGrandTotal - numCard1);
-                          setCard2Amount(rem.toFixed(2));
-                        }}
-                        className="text-[11px] font-bold underline text-amber-200 hover:text-white cursor-pointer"
-                      >
-                        Fix Balance to Card 2 (${(effectiveGrandTotal - numCard1).toFixed(2)})
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Mode B: Split Cash + Card */}
-              {splitType === 'cash_card' && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs text-[#737373] mb-1">Cash Portion ($)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={splitCash}
-                        onChange={e => setSplitCash(e.target.value)}
-                        className="w-full bg-[#0A0A0A] border border-[#262626] rounded-lg px-3 py-2 text-sm text-[#E5E5E5] font-mono focus:border-[#C5A059] focus:outline-hidden"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-[#737373] mb-1">Card Balance ($)</label>
-                      <div className="bg-[#0A0A0A] border border-[#262626] rounded-lg px-3 py-2 text-sm text-[#C5A059] font-mono font-bold">
-                        ${(splitCardAmount || 0).toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-[#737373]">
-                    Cash collected first, remainder will prompt on customer card terminal.
-                  </p>
-                </div>
-              )}
+              {/* Instant Cancel & Screen Refresh Button */}
+              <div className="flex items-center justify-between pt-2 border-t border-[#262626]">
+                <span className="text-[11px] text-zinc-500">
+                  Terminal not responding? Click to instantly reset.
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCancelCardTerminal}
+                  className="px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-red-300 hover:text-white text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 cursor-pointer transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Cancel & Refresh Screen Now</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
 
         {/* Action Footer */}
-        <div className="bg-[#0A0A0A] px-6 py-4 border-t border-[#262626] flex items-center justify-between">
+        <div className="bg-[#0A0A0A] px-5 py-3.5 border-t border-[#262626] flex items-center justify-between shrink-0">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleRequestClose}
             disabled={isProcessing}
-            className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-[#737373] hover:text-white rounded-lg hover:bg-[#1A1A1A] transition-colors cursor-pointer"
+            className="px-3.5 py-2 text-xs font-semibold uppercase tracking-wider text-[#737373] hover:text-white rounded-lg hover:bg-[#1A1A1A] transition-colors cursor-pointer"
           >
             Cancel / Back to Cart
           </button>
@@ -1280,17 +1209,70 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           <button
             type="button"
             id="checkout-complete-btn"
-            onClick={handleProcessPayment}
-            disabled={isProcessing || (needsManagerApproval && !managerApproved)}
-            className="px-6 py-3 rounded-lg bg-[#C5A059] hover:bg-[#D4B06A] active:scale-98 text-black font-bold uppercase tracking-widest text-sm shadow-lg flex items-center space-x-2 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+            onClick={handleFinalizeSale}
+            disabled={isProcessing || remainingBalance > 0.005 || (needsManagerApproval && !managerApproved)}
+            className="px-6 py-2.5 rounded-xl bg-[#C5A059] hover:bg-[#D4B06A] active:scale-98 text-black font-bold uppercase tracking-wider text-xs sm:text-sm shadow-lg flex items-center space-x-2 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <CheckCircle2 className="w-4 h-4 text-black" />
             <span>
-              {isProcessing ? 'Processing...' : `Charge & Complete ($${(effectiveGrandTotal || 0).toFixed(2)})`}
+              {isProcessing
+                ? 'Processing...'
+                : remainingBalance > 0.005
+                ? `Remaining Due: $${remainingBalance.toFixed(2)}`
+                : `Complete Sale & Print Receipt ($${(effectiveGrandTotal || 0).toFixed(2)})`}
             </span>
           </button>
         </div>
       </div>
+
+      {/* Cancel Transaction Warning Modal for Partially Paid Transactions */}
+      {showCancelWarning && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/90 p-4">
+          <div className="bg-[#121212] border border-amber-600/70 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center space-x-3 text-amber-400">
+              <AlertTriangle className="w-7 h-7 shrink-0" />
+              <div>
+                <h3 className="text-lg font-bold text-white">Partial Payment in Progress</h3>
+                <p className="text-[11px] text-zinc-400">Cannot silently abandon collected funds</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-zinc-300 leading-relaxed">
+              This transaction already contains a partial payment of{' '}
+              <strong className="text-emerald-400">${totalAmountPaid.toFixed(2)}</strong>.
+              The payment must be voided/refunded before the sale can be cancelled.
+            </p>
+
+            <div className="bg-[#1A1A1A] border border-[#2D2D2D] rounded-xl p-3 text-xs space-y-1.5">
+              <div className="text-zinc-400 uppercase font-bold text-[10px]">Captured Payments to Reverse:</div>
+              {recordedPayments.map((p, idx) => (
+                <div key={p.id || idx} className="flex justify-between font-mono text-xs">
+                  <span className="text-white uppercase">{p.method} Tender:</span>
+                  <span className="text-emerald-400 font-bold">${p.amount.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleVoidAllAndCancel}
+                className="w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-500 active:scale-98 text-white font-bold text-xs uppercase cursor-pointer shadow transition-all"
+              >
+                Void / Reverse Cash (${totalAmountPaid.toFixed(2)}) &amp; Cancel Sale
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowCancelWarning(false)}
+                className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 active:scale-98 text-zinc-200 font-bold text-xs uppercase cursor-pointer transition-all"
+              >
+                Keep Sale Open &amp; Return to Checkout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -209,10 +209,33 @@ export const CartPanel: React.FC<CartPanelProps> = ({
                   <h4 className="text-xs font-bold text-slate-900 truncate leading-tight">
                     {item.product.name}
                   </h4>
-                  <div className="flex items-center space-x-1.5 text-[11px] text-slate-500 mt-0.5 font-medium">
+                  <div className="flex items-center space-x-1.5 text-[11px] text-slate-500 mt-0.5 font-medium flex-wrap">
                     <span>${(item.unitPrice ?? 0).toFixed(2)}</span>
                     <span>•</span>
                     <span>{item.product.size}</span>
+                    {item.product.barcode && (
+                      <>
+                        <span>•</span>
+                        <span className="font-mono text-[10px] text-slate-500">UPC: {item.product.barcode}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-1.5 text-[10px] mt-1 font-mono">
+                    <span
+                      title="Real-time inventory availability for this register"
+                      className={`px-1.5 py-0.5 rounded font-bold ${
+                        item.product.stockQuantity - item.quantity <= 5
+                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                          : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      }`}
+                    >
+                      Stock Avail: {Math.max(0, item.product.stockQuantity - item.quantity)} (Total: {item.product.stockQuantity})
+                    </span>
+                    {(item.product.ageRestriction ?? 0) > 0 && (
+                      <span className="bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-black text-[9px]">
+                        {item.product.ageRestriction}+ AGE VERIFIED
+                      </span>
+                    )}
                   </div>
                   {(item.discountAmount ?? 0) > 0 && (
                     <div className="text-[10px] text-emerald-600 font-bold mt-0.5 flex items-center space-x-1">

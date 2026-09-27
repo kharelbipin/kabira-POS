@@ -2,6 +2,7 @@
 
 @theme {
   --font-serif: 'Cormorant Garamond', Georgia, Cambria, 'Times New Roman', serif;
+  --font-brand: 'Cinzel', Georgia, Cambria, serif;
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --color-gold: #C5A059;
   --color-gold-hover: #D4B06A;

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { PaymentSession } from '../../types';
+import { KabiraEmblem } from '../common/KabiraLogo';
 
 interface CustomerMobilePayViewProps {
   token: string;
@@ -306,12 +307,23 @@ export const CustomerMobilePayView: React.FC<CustomerMobilePayViewProps> = ({ to
       {/* Top Header */}
       <header className="bg-[#0F172A] border-b border-slate-800 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[#F3C067] flex items-center justify-center font-black">
-            <Wine className="w-5 h-5" />
+          <div className="p-1 rounded-xl bg-[#0B132B] border border-sky-500/30 flex items-center justify-center">
+            <KabiraEmblem size={30} theme="dark" />
           </div>
           <div>
-            <h1 className="text-sm font-black text-white tracking-wide uppercase">377 Spirits</h1>
-            <span className="text-[10px] text-slate-400">Granbury, Texas • Granbury Square</span>
+            <div className="flex items-center space-x-1.5">
+              <div className="flex items-baseline tracking-tight font-black text-sm">
+                <span className="text-white">Ka</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-sky-300 to-blue-500">Bi</span>
+                <span className="text-white">Ra</span>
+              </div>
+              <span className="font-mono text-[9px] font-black tracking-widest px-1 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-400/40 uppercase">
+                POS
+              </span>
+            </div>
+            <span className="text-[10px] font-['Cinzel',serif] tracking-wider text-amber-300 font-bold uppercase">
+              377 SPIRITS
+            </span>
           </div>
         </div>
 

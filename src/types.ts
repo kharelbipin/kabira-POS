@@ -283,6 +283,26 @@ export interface SplitPaymentDetails {
   fallbackMethod2?: CardFallbackMethod;
 }
 
+export interface PaymentRecord {
+  id: string;
+  orderId?: string;
+  method: PaymentMethod;
+  amount: number;
+  status: 'completed' | 'approved' | 'declined' | 'cancelled' | 'error' | 'timeout' | 'voided' | 'refunded';
+  timestamp: string;
+  cashierId: string;
+  cashierName: string;
+  registerId: string;
+  paymentReference?: string;
+  cardBrand?: string;
+  cardLast4?: string;
+  authCode?: string;
+  declineReason?: string;
+  notes?: string;
+  cashTendered?: number;
+  changeDue?: number;
+}
+
 export interface PaymentDetails {
   method: PaymentMethod;
   amount: number;
@@ -297,9 +317,12 @@ export interface PaymentDetails {
   fallbackReason?: string;
   paymentSessionId?: string;
   splitDetails?: SplitPaymentDetails;
+  payments?: PaymentRecord[];
+  remainingBalance?: number;
+  totalPaid?: number;
 }
 
-export type OrderStatus = 'completed' | 'voided' | 'refunded';
+export type OrderStatus = 'completed' | 'voided' | 'refunded' | 'open' | 'partially_paid';
 
 export interface Order {
   id: string;
@@ -315,6 +338,7 @@ export interface Order {
   taxTotal: number;
   grandTotal: number;
   payment: PaymentDetails;
+  payments?: PaymentRecord[];
   status: OrderStatus;
   pointsEarned?: number;
   pointsRedeemed?: number;
@@ -366,12 +390,18 @@ export interface AuditLog {
   userId: string;
   userName: string;
   userRole: UserRole;
-  action: string; // e.g. "PRODUCT_CREATE", "ORDER_VOID", "USER_DEACTIVATE"
-  targetType: 'product' | 'order' | 'user' | 'inventory' | 'customer' | 'settings';
+  action: string; // e.g. "USER_LOGIN", "ORDER_CREATED", "BARCODE_SCAN", "DRAWER_OPEN", etc.
+  targetType: 'product' | 'order' | 'user' | 'inventory' | 'customer' | 'settings' | 'shift' | 'auth' | 'system' | string;
   targetId: string;
   details: string;
   beforeData?: any;
   afterData?: any;
+  oldValue?: string;
+  newValue?: string;
+  ipAddress?: string;
+  deviceId?: string;
+  terminalId?: string;
+  module?: string;
   timestamp: string;
 }
 
@@ -430,6 +460,27 @@ export interface StoreSettings {
   autoUpdateProductCost?: boolean; // When true, automatically update master cost on confirmation; when false, require manager approval
   targetProfitMarginPercent?: number; // Target markup margin (e.g. 35%) for recommended selling price
   defaultReceivingLocation?: string; // Default stockroom location (e.g. "Main Liquor Storage", "Front Sales Floor")
+  // Admin Pos Button Visibility & Delegation
+  adminAllowedPosButtons?: {
+    allowScaleForCashier?: boolean;
+    allowScaleForManager?: boolean;
+    allowTablesForCashier?: boolean;
+    allowTablesForManager?: boolean;
+    allowKdsForCashier?: boolean;
+    allowKdsForManager?: boolean;
+    allowDesignerForCashier?: boolean;
+    allowDesignerForManager?: boolean;
+  };
+  // Direct Receipt Printing Configuration (No Windows Print Dialog)
+  directReceiptPrinting?: {
+    enabled?: boolean;
+    autoPrintOnSale?: boolean;
+    primaryPrinterName?: string;
+    fallbackPrinterName?: string;
+    printCustomerCopy?: boolean;
+    printMerchantCopy?: boolean;
+    cutPaperAfterPrint?: boolean;
+  };
   // Cashier Access & RBAC Controls
   cashierPermissions?: {
     allowInventory?: boolean;
@@ -1285,6 +1336,17 @@ export interface PosBridgeDeviceInfo {
   details?: string;
 }
 
+export interface PosBridgeBarcodeScanEvent {
+  barcode: string;
+  source: string;
+  timestamp: string;
+  pipeline: string;
+  found: boolean;
+  product?: Product & { effectivePrice?: number; discounts?: any[] };
+  inventoryAvailable?: number;
+  message?: string;
+}
+
 export interface PosBridgeConfig {
   // Bridge metadata (PB-001 - PB-003)
   bridgeStatus: PosBridgeStatus;
@@ -1550,3 +1612,341 @@ export interface DigitalTwinShelfPosition {
   maxCapacity: number;
   currentCount: number;
 }
+
+// ----------------------------------------------------
+// WEBVIEW2 WINDOWS POS & HARDWARE BRIDGE TYPES (EPIC WV-001 - WV-082)
+// ----------------------------------------------------
+
+export type HardwareCommandType =
+  | 'PRINT_RECEIPT'
+  | 'OPEN_DRAWER'
+  | 'GET_SCALE_WEIGHT'
+  | 'CHECK_PRINTER'
+  | 'START_PAYMENT'
+  | 'IDENTIFY_DISPLAY'
+  | 'RESTART_CUSTOMER_DISPLAY'
+  | 'GET_DISPLAYS'
+  | 'SET_DISPLAYS'
+  | 'GET_VERSION'
+  | 'CHECK_HEALTH'
+  | 'CHECK_UPDATES'
+  | 'TEST_CUSTOMER_DISPLAY'
+  | 'SET_KIOSK_MODE';
+
+export interface WindowsDisplayInfo {
+  id: string;
+  deviceNumber: number;
+  deviceName: string;
+  friendlyName: string;
+  isPrimary: boolean;
+  resolution: { width: number; height: number };
+  bounds: { x: number; y: number; width: number; height: number };
+  scaleFactor: number;
+  assignedRole: 'cashier' | 'customer' | 'unassigned';
+  connected: boolean;
+}
+
+export interface WindowsWebView2HostConfig {
+  isWebView2Runtime: boolean;
+  runtimeVersion: string;
+  wrapperVersion: string;
+  bridgeVersion: string;
+  webPosVersion: string;
+  registerId: string;
+  deviceId: string;
+  storeId: string;
+  businessName: string;
+  cashierDisplayNumber: number;
+  customerDisplayNumber: number;
+  customerDisplayEnabled: boolean;
+  customerDisplayUrl: string;
+  customerDisplayFullscreen: boolean;
+  returnToWelcomeTimeoutSec: number;
+  kioskModeEnabled: boolean;
+  preventNavigationAway: boolean;
+  autoLaunchOnWindowsStartup: boolean;
+  bridgeEndpoint: string;
+  hardwareAllowlist: HardwareCommandType[];
+  trustedOrigins: string[];
+  lastHealthCheck?: StartupHealthCheckResult;
+}
+
+export interface StartupHealthCheckResult {
+  timestamp: string;
+  allOk: boolean;
+  checks: {
+    internet: { status: 'ok' | 'warning' | 'error'; message: string; latencyMs?: number };
+    backend: { status: 'ok' | 'warning' | 'error'; message: string; latencyMs?: number };
+    webView2: { status: 'ok' | 'warning' | 'error'; message: string; version?: string };
+    bridge: { status: 'ok' | 'warning' | 'error'; message: string; endpoint?: string };
+    display1: { status: 'ok' | 'warning' | 'error'; message: string; name?: string };
+    display2: { status: 'ok' | 'warning' | 'error'; message: string; name?: string };
+  };
+}
+
+export interface NativeBridgeMessage<T = any> {
+  id: string; // Correlation ID (RequestId) (WV-046)
+  timestamp: string;
+  type: 'COMMAND' | 'EVENT' | 'RESPONSE' | 'HEARTBEAT';
+  command?: HardwareCommandType;
+  payload?: T;
+  status?: 'success' | 'failed' | 'timeout';
+  error?: string;
+  idempotencyKey?: string; // WV-048
+  origin?: string; // WV-045
+}
+
+export interface CustomerTouchInteractionEvent {
+  type: 'LOYALTY_PHONE_ENTERED' | 'TIP_SELECTED' | 'RECEIPT_PREFERENCE' | 'PAYMENT_QR_REQUESTED' | 'CUSTOMER_CANCEL';
+  data?: any;
+  timestamp: string;
+}
+
+export type CustomerReceiptPreference = 'printed' | 'sms' | 'email' | 'none';
+
+// ----------------------------------------------------
+// SMART LOCAL POS BRIDGE DEVICE DISCOVERY (EPIC BR-DISC & BR-FIX)
+// ----------------------------------------------------
+
+export type DiscoveredDeviceCategory =
+  | 'receipt_printer'
+  | 'kitchen_printer'
+  | 'label_printer'
+  | 'barcode_scanner'
+  | 'scale'
+  | 'customer_display'
+  | 'cash_drawer'
+  | 'payment_terminal'
+  | 'pole_display'
+  | 'signature_device'
+  | 'software_service'
+  | 'unknown';
+
+export type DiscoveredDeviceStatus =
+  | 'Connected'
+  | 'Ready'
+  | 'Reconnecting'
+  | 'Busy'
+  | 'Needs Attention'
+  | 'Offline'
+  | 'Not Configured'
+  | 'Unsupported';
+
+export type DeviceConnectionType =
+  | 'usb'
+  | 'hid'
+  | 'com'
+  | 'bluetooth'
+  | 'network'
+  | 'windows_spooler'
+  | 'software_service';
+
+export type DeviceDiscoveryMethod =
+  | 'windows_enumeration'
+  | 'usb_hid'
+  | 'com_enumeration'
+  | 'windows_printer'
+  | 'mdns_bonjour'
+  | 'ssdp'
+  | 'configured_endpoint'
+  | 'vendor_sdk'
+  | 'manual_ip'
+  | 'manual_com';
+
+export interface DeviceTechnicalInfo {
+  driverName?: string;
+  firmwareVersion?: string;
+  serialNumber?: string;
+  endpoint?: string;
+  macAddress?: string;
+  baudRate?: number;
+  lastErrorCode?: string;
+  retryHistory?: Array<{
+    timestamp: string;
+    attempt: number;
+    error?: string;
+    success: boolean;
+  }>;
+}
+
+export interface DeviceReconnectRecommendation {
+  problem: string;
+  lastKnownAddress: string;
+  discoveredAddress: string;
+  matchedIdentity: boolean;
+  recommendedAction: string;
+}
+
+export interface DiscoveredPosDevice {
+  deviceKey: string; // Stable unique hardware/network fingerprint (BR-DISC-008)
+  name: string;
+  manufacturer: string;
+  model: string;
+  category: DiscoveredDeviceCategory;
+  connectionType: DeviceConnectionType;
+  ipAddress?: string;
+  port?: number;
+  macAddress?: string;
+  usbComIdentifier?: string; // e.g. USB001, COM3, VID_04B8&PID_0202
+  status: DiscoveredDeviceStatus;
+  discoveryMethod: DeviceDiscoveryMethod;
+  lastSeen: string;
+  lastSuccessfulOperation?: {
+    operation: string;
+    timestamp: string;
+  };
+  failureCounter: number;
+  latencyMs?: number;
+  isAssigned: boolean;
+  assignedRegisterId?: string;
+  isPreferred?: boolean;
+  isFallback?: boolean;
+  fallbackDeviceKey?: string;
+  details?: string;
+  isPhysicalHardware?: boolean;
+  isNetworkDevice?: boolean;
+  networkName?: string; // Human-readable network interface / Wi-Fi SSID / Subnet name
+  subnet?: string;
+  isBuiltInDefault?: boolean;
+  technicalInfo?: DeviceTechnicalInfo;
+  reconnectRecommendation?: DeviceReconnectRecommendation;
+}
+
+export interface RegisterDeviceAssignment {
+  businessId: string;
+  storeId: string;
+  registerId: string;
+  category: DiscoveredDeviceCategory;
+  assignedDeviceKey: string;
+  assignedDeviceName: string;
+  isPreferred: boolean;
+  fallbackDeviceKey?: string;
+  fallbackDeviceName?: string;
+  assignedAt: string;
+  assignedBy: string;
+}
+
+export interface DiagnosticItemResult {
+  id: string;
+  name: string;
+  status: 'ok' | 'warning' | 'error' | 'not_configured';
+  message: string;
+  latencyMs?: number;
+  technicalDetails?: string;
+}
+
+export interface FullDiagnosticsResult {
+  timestamp: string;
+  overallStatus: 'ready' | 'degraded' | 'error';
+  items: DiagnosticItemResult[];
+  lastHardwareError: string | null;
+}
+
+export interface DeviceAuditTrailEntry {
+  id: string;
+  timestamp: string;
+  action:
+    | 'assign'
+    | 'unassign'
+    | 'set_preferred'
+    | 'set_fallback'
+    | 'test_device'
+    | 'reconnect'
+    | 'manual_override'
+    | 'manual_add'
+    | 'dhcp_ip_migrated'
+    | 'auto_recover';
+  deviceKey: string;
+  deviceName: string;
+  userName: string;
+  details: string;
+}
+
+// ----------------------------------------------------
+// DYNAMIC PRINTER REGISTRY & BRIDGE ROUTING TYPES
+// ----------------------------------------------------
+
+export interface DiscoveredPrinter {
+  deviceId: string;
+  name: string;
+  type: 'windows_spooler' | 'usb' | 'network' | 'virtual';
+  status: 'ready' | 'offline' | 'paper_low' | 'paper_out' | 'busy' | 'error' | 'printing';
+  queueName: string;
+  port: string;
+  ipAddress?: string;
+  driver?: string;
+  manufacturer: string;
+  model: string;
+  paperWidth: '80mm' | '58mm';
+  isDefault?: boolean;
+  lastSeen: string;
+  details?: string;
+}
+
+export interface RegisterPrinterAssignment {
+  storeId: string;
+  registerId: string;
+  deviceType: 'RECEIPT_PRINTER';
+  bridgeDeviceId: string;
+  windowsQueue: string;
+  manufacturer: string;
+  model: string;
+  port: string;
+  connectionType: 'windows_spooler' | 'usb' | 'network' | 'virtual';
+  paperWidth: '80mm' | '58mm';
+  status: 'ready' | 'offline' | 'not_configured';
+  default: boolean;
+  enabled: boolean;
+  updatedAt: string;
+}
+
+export type PrintJobStatus =
+  | 'CREATED'
+  | 'SENT_TO_BRIDGE'
+  | 'ROUTING'
+  | 'SENT_TO_SPOOLER'
+  | 'SENT_TO_DEVICE'
+  | 'SUBMITTED'
+  | 'PRINTED'
+  | 'FAILED';
+
+export interface PrintDiagnosticLog {
+  id: string;
+  transactionId: string;
+  registerId: string;
+  bridgeStatus: string;
+  requestedDeviceType: string;
+  configuredDeviceId: string;
+  resolvedPrinter: string;
+  connection: string;
+  windowsQueue: string;
+  printerStatusBeforeJob: string;
+  jobSubmitted: boolean;
+  spoolerJobId: string;
+  finalKnownStatus: PrintJobStatus;
+  timestamp: string;
+  technicalLog: string;
+  errorReason?: string;
+}
+
+// ----------------------------------------------------
+// DYNAMIC CUSTOMER DISPLAY MULTI-MONITOR CONFIGURATION
+// ----------------------------------------------------
+
+export interface ConfiguredCustomerDisplay {
+  registerId: string;
+  enabled: boolean;
+  selectedDisplayId: string | null;
+  matchedHardwareId?: string | null;
+  displayIdentifier: string;
+  resolution: { width: number; height: number };
+  isPrimary: boolean;
+  autoStartOnBoot: boolean;
+  autoRelaunchOnClose: boolean;
+  fullscreenBorderless: boolean;
+  status: 'CONNECTED' | 'DISCONNECTED' | 'NOT_CONFIGURED' | 'WARNING';
+  lastChecked: string;
+  warningMessage?: string;
+}
+
+

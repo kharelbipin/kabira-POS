@@ -8,6 +8,8 @@ interface BarcodeScannerModalProps {
   onClose: () => void;
   products: Product[];
   onScanBarcode: (barcode: string) => void;
+  cartCount?: number;
+  cartTotal?: number;
 }
 
 export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
@@ -15,10 +17,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   onClose,
   products,
   onScanBarcode,
+  cartCount = 0,
+  cartTotal = 0,
 }) => {
   const [manualBarcode, setManualBarcode] = useState<string>('');
   const [lastScanned, setLastScanned] = useState<string | null>(null);
-  const [scanResult, setScanResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [scanResult, setScanResult] = useState<{ success: boolean; message: string; productName?: string; price?: number } | null>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
@@ -29,14 +34,24 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     playBeep('scan');
     setLastScanned(trimmed);
 
-    const found = products.find(p => p.barcode === trimmed || p.sku.toLowerCase() === trimmed.toLowerCase());
+    const found = products.find(p => p.barcode === trimmed || p.sku.toLowerCase() === trimmed.toLowerCase() || (p.barcodes && p.barcodes.some(b => b.barcode.toLowerCase() === trimmed.toLowerCase())));
     if (found) {
-      setScanResult({ success: true, message: `Scanned: ${found.name} (${found.size}) - $${(found.price ?? 0).toFixed(2)}` });
+      setScanResult({
+        success: true,
+        message: `Automatically Added to Cart: ${found.name} (${found.size})`,
+        productName: found.name,
+        price: found.price,
+      });
       onScanBarcode(trimmed);
     } else {
       setScanResult({ success: false, message: `No product found matching barcode "${trimmed}"` });
       playBeep('error');
     }
+
+    // Keep focus in input for continuous scanning
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -103,6 +118,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             <div className="relative flex-1">
               <ScanBarcode className="w-4 h-4 text-[#737373] absolute left-3 top-3" />
               <input
+                ref={inputRef}
                 id="scanner-manual-input"
                 type="text"
                 placeholder="Scan or enter UPC / Barcode (e.g. 080480015003)..."
@@ -117,23 +133,27 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
               type="submit"
               className="px-5 py-2 bg-[#C5A059] hover:bg-[#D4B06A] text-black font-bold uppercase tracking-wider text-xs rounded-lg transition-colors cursor-pointer"
             >
-              Scan
+              Scan & Add
             </button>
           </form>
 
           {/* Quick Tap Demo Barcodes from Inventory */}
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-[#737373] mb-2.5">
-              Tap Barcodes Below to Simulate Instant Laser Scan:
+              Tap Barcodes Below to Simulate Instant Laser Scan (Bridge Ingest):
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto">
-              {products.slice(0, 8).map(p => (
+              {[...products].sort((a, b) => (a.barcode === '012345678905' ? -1 : b.barcode === '012345678905' ? 1 : 0)).slice(0, 8).map(p => (
                 <button
                   key={p.id}
                   type="button"
                   id={`quick-scan-${p.id}`}
                   onClick={() => handleTriggerScan(p.barcode)}
-                  className="flex items-center space-x-2.5 p-2.5 rounded-lg bg-[#141414] hover:bg-[#1A1A1A] border border-[#262626] hover:border-[#C5A059]/40 text-left transition-all cursor-pointer group"
+                  className={`flex items-center space-x-2.5 p-2.5 rounded-lg text-left transition-all cursor-pointer group ${
+                    p.barcode === '012345678905'
+                      ? 'bg-amber-950/40 border border-amber-500/60 hover:bg-amber-900/40'
+                      : 'bg-[#141414] hover:bg-[#1A1A1A] border border-[#262626] hover:border-[#C5A059]/40'
+                  }`}
                 >
                   <img
                     src={p.imageUrl}
@@ -141,8 +161,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     className="w-9 h-9 rounded object-cover border border-[#262626] shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium text-[#E5E5E5] truncate group-hover:text-[#C5A059] transition-colors">
-                      {p.name}
+                    <div className="text-xs font-bold text-[#E5E5E5] truncate group-hover:text-[#C5A059] transition-colors flex items-center space-x-1.5">
+                      <span className="truncate">{p.name}</span>
+                      {p.barcode === '012345678905' && (
+                        <span className="text-[9px] font-black uppercase bg-amber-400 text-black px-1.5 py-0.2 rounded shrink-0">
+                          Demo UPC
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] font-mono text-[#737373] flex items-center space-x-2 mt-0.5">
                       <span>UPC: {p.barcode}</span>
@@ -157,17 +182,27 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="bg-[#0A0A0A] px-6 py-3 border-t border-[#262626] flex justify-between items-center text-xs text-[#737373]">
-          <div className="flex items-center space-x-1.5">
+        <div className="bg-[#0A0A0A] px-6 py-3 border-t border-[#262626] flex justify-between items-center text-xs">
+          <div className="flex items-center space-x-2 text-[#737373]">
             <Volume2 className="w-3.5 h-3.5 text-[#C5A059]" />
             <span>Audio feedback enabled</span>
           </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-[#1A1A1A] hover:bg-[#262626] text-[#E5E5E5] font-bold uppercase tracking-wider text-xs border border-[#262626] cursor-pointer transition-colors"
-          >
-            Done Scanning
-          </button>
+
+          <div className="flex items-center space-x-3">
+            {cartCount > 0 && (
+              <div className="text-right hidden sm:block">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Cart Total: </span>
+                <span className="text-amber-400 font-mono font-bold">{cartCount} items • ${cartTotal.toFixed(2)}</span>
+              </div>
+            )}
+            <button
+              id="scanner-done-btn"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-[#C5A059] hover:bg-[#D4B06A] text-black font-bold uppercase tracking-wider text-xs cursor-pointer transition-colors shadow-xs"
+            >
+              {cartCount > 0 ? `View Cart (${cartCount}) & Done ➔` : 'Done Scanning'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

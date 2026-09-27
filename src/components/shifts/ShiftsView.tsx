@@ -656,7 +656,7 @@ const StartShiftModal: React.FC<StartShiftModalProps> = ({
               <h3 className="text-base font-black uppercase text-white tracking-wider">
                 Open Cash Drawer Shift
               </h3>
-              <p className="text-xs text-[#888888]">Register 1 • 377 Spirits Granbury</p>
+              <p className="text-xs text-[#888888]">Register 1 • KABIRA POS Granbury</p>
             </div>
           </div>
           <button
@@ -1321,8 +1321,14 @@ const ShiftReportModal: React.FC<ShiftReportModalProps> = ({
           <div className="max-w-sm mx-auto bg-white text-black p-5 rounded font-mono text-[11px] leading-relaxed shadow-md border border-neutral-300">
             {/* Store Header */}
             <div className="text-center pb-3 border-b border-dashed border-neutral-400">
-              <h2 className="font-black text-sm tracking-wider uppercase">377 SPIRITS</h2>
-              <p className="text-[10px] text-neutral-600">Granbury, TX • Liquor & Spirits</p>
+              <div className="flex items-center justify-center space-x-1 mb-0.5">
+                <span className="font-black text-sm text-neutral-900 tracking-tight">Ka</span>
+                <span className="font-black text-sm text-sky-600 tracking-tight">Bi</span>
+                <span className="font-black text-sm text-neutral-900 tracking-tight">Ra</span>
+                <span className="font-mono text-[9px] font-black border border-neutral-700 px-1 py-0.2 rounded">POS</span>
+              </div>
+              <p className="text-[10px] font-['Cinzel',serif] font-black text-neutral-800 uppercase tracking-widest">377 SPIRITS</p>
+              <p className="text-[10px] text-neutral-600">Fine Liquors &amp; Craft Spirits</p>
               <p className="text-[10px] text-neutral-600">Tel: (817) 555-0377</p>
               <div className="mt-2 text-[10px] font-bold uppercase bg-neutral-100 py-0.5 border border-neutral-300">
                 {isZReport ? '*** END OF DAY Z-REPORT ***' : '*** MID-DAY X-REPORT ***'}

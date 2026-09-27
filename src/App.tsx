@@ -22,6 +22,7 @@ import { DashboardView } from './components/DashboardView';
 import { UsersView } from './components/UsersView';
 import { SettingsView } from './components/SettingsView';
 import { AuditLogsView } from './components/AuditLogsView';
+import { UserActivityTrackerView } from './components/UserActivityTrackerView';
 import { ShiftsView } from './components/shifts/ShiftsView';
 import { ChecksView } from './components/checks/ChecksView';
 import { OnlineStoreView } from './components/onlineStore/OnlineStoreView';
@@ -32,6 +33,10 @@ import { MobileQueueBusterView } from './components/mobile/MobileQueueBusterView
 import { PosBridgeHubModal } from './components/bridge/PosBridgeHubModal';
 import { CustomerDisplayView } from './components/display/CustomerDisplayView';
 import { posBridge } from './services/posBridge';
+import { webview2Bridge } from './services/webview2Bridge';
+import { IdentifyDisplaysOverlay } from './components/display/IdentifyDisplaysOverlay';
+import { StartupHealthModal } from './components/startup/StartupHealthModal';
+import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 import { Landmark, Boxes, BarChart3, Settings, ShieldAlert } from 'lucide-react';
 
 import { LoginModal } from './components/LoginModal';
@@ -44,6 +49,14 @@ import { ItemDiscountModal } from './components/ItemDiscountModal';
 import { MobileInvoiceCaptureView } from './components/invoice/MobileInvoiceCaptureView';
 import { StandalonePaymentFallbackModal } from './components/payment/StandalonePaymentFallbackModal';
 import { AllFunctionsMenuModal } from './components/AllFunctionsMenuModal';
+import { CustomerDisplayAutoBanner } from './components/display/CustomerDisplayAutoBanner';
+import { deviceDiscovery } from './services/deviceDiscoveryService';
+import { ProducePluScaleModal } from './components/grocery/ProducePluScaleModal';
+import { KitchenKdsModal } from './components/restaurant/KitchenKdsModal';
+import { RestaurantTablesView } from './components/restaurant/RestaurantTablesView';
+import { AdminPosDesigner } from './components/admin/AdminPosDesigner';
+import { StoreFeatureManagementModal } from './components/admin/StoreFeatureManagementModal';
+import { HardwareDeviceManager } from './components/admin/HardwareDeviceManager';
 
 export default function App() {
   // Authentication & Current User (AU-01)
@@ -99,8 +112,26 @@ export default function App() {
     return null;
   });
 
-  // Active View Tab
-  const [currentTab, setCurrentTab] = useState<string>('pos');
+  // Active View Tab - Defaults to Cashier Register Route (WV-003)
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    try {
+      const path = window.location.pathname;
+      const params = new URLSearchParams(window.location.search);
+      if (path === '/register' || path.endsWith('/register') || params.get('route') === 'register' || params.get('tab') === 'pos') {
+        return 'pos';
+      }
+      if (path === '/settings' || params.get('tab') === 'settings') {
+        return 'settings';
+      }
+      if (params.get('tab') === 'hardware-manager' || params.get('tab') === 'device-manager' || params.get('view') === 'hardware') {
+        return 'hardware-manager';
+      }
+      if (path === '/inventory' || params.get('tab') === 'inventory') {
+        return 'inventory';
+      }
+    } catch {}
+    return 'pos';
+  });
 
   // Core Data
   const [products, setProducts] = useState<Product[]>([]);
@@ -131,12 +162,21 @@ export default function App() {
   const [showCustomerDisplayModal, setShowCustomerDisplayModal] = useState<boolean>(false);
   const [showPaymentFallbackModal, setShowPaymentFallbackModal] = useState<boolean>(false);
   const [showAllFunctionsModal, setShowAllFunctionsModal] = useState<boolean>(false);
+  const [showStartupHealthModal, setShowStartupHealthModal] = useState<boolean>(false);
+  const [showScaleModal, setShowScaleModal] = useState<boolean>(false);
+  const [showKdsModal, setShowKdsModal] = useState<boolean>(false);
+  const [showTablesModal, setShowTablesModal] = useState<boolean>(false);
+  const [showDesignerModal, setShowDesignerModal] = useState<boolean>(false);
+  const [showStoreFeatureModal, setShowStoreFeatureModal] = useState<boolean>(false);
 
-  // Standalone Customer-Facing Display Detection (PB-018)
+  // Standalone Customer-Facing Display Detection (WV-012, PB-018)
   const isCustomerDisplayMode = useMemo(() => {
     try {
+      const path = window.location.pathname;
       const params = new URLSearchParams(window.location.search);
       return (
+        path === '/customer-display' ||
+        path.endsWith('/customer-display') ||
         params.get('view') === 'customer-display' ||
         params.get('display') === 'customer' ||
         window.location.hash === '#customer-display'
@@ -162,6 +202,33 @@ export default function App() {
 
   // Offline simulation (DV-06)
   const [isOffline, setIsOffline] = useState<boolean>(false);
+
+  // Barcode Scanner Real-Time Notification & HUD state (User Story: Cashier Barcode Scanning)
+  const [scanNotification, setScanNotification] = useState<{
+    id: string;
+    productName: string;
+    barcode: string;
+    imageUrl?: string;
+    size?: string;
+    price: number;
+    effectivePrice?: number;
+    taxRate: number;
+    stockQuantity: number;
+    inventoryAvailable: number;
+    quantityInCart: number;
+    ageRestriction?: number;
+    pipeline: string;
+    timestamp: string;
+  } | null>(null);
+
+  // Auto-dismiss scan notification after 5 seconds
+  useEffect(() => {
+    if (!scanNotification) return;
+    const t = setTimeout(() => {
+      setScanNotification(null);
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [scanNotification]);
 
   // Initial Data Fetch
   const loadAllData = useCallback(async () => {
@@ -204,6 +271,8 @@ export default function App() {
       return;
     }
     loadAllData();
+    // Auto-open second display screen in webform version (BR-DSP-001 - BR-DSP-007)
+    deviceDiscovery.initCustomerDisplayAutoOpen();
   }, [loadAllData, isCustomerDisplayMode, checkUploadSession, shelfCameraSession, mobileSessionParam]);
 
   // Cart Operations (CA-01, CA-02, CA-03)
@@ -214,7 +283,6 @@ export default function App() {
         // Check stock availability
         if (existing.quantity >= product.stockQuantity) {
           playBeep('error', settings?.scannerSound);
-          alert(`Cannot add more: Only ${product.stockQuantity} units available in inventory.`);
           return prev;
         }
         return prev.map(item =>
@@ -236,6 +304,119 @@ export default function App() {
     });
   };
 
+  // Barcode Scanner Pipeline Handler (User Story: Cashier Barcode Scanning)
+  // Flow: Scanner → POS Bridge → Barcode/UPC → Product API → Inventory Database → Cart
+  const handleBarcodeScanned = useCallback(async (scannedBarcode: string, source: string = 'POS Bridge Hardware Scanner') => {
+    const clean = scannedBarcode.trim();
+    if (!clean) return;
+
+    try {
+      // 1. Resolve product via Product API lookup: Scanner → POS Bridge → Barcode/UPC → Product API → Inventory Database
+      let product: Product | null = null;
+      let inventoryAvail = 0;
+      let effectivePrice: number | undefined;
+
+      try {
+        const lookup = await api.lookupBarcode(clean);
+        if (lookup && lookup.found && lookup.product) {
+          product = lookup.product;
+          inventoryAvail = lookup.inventoryAvailable ?? lookup.product.stockQuantity;
+          effectivePrice = lookup.product.effectivePrice;
+        }
+      } catch (err) {
+        // Fallback to local products array if backend lookup unavailable
+      }
+
+      if (!product) {
+        const cleanLower = clean.toLowerCase();
+        product = products.find(
+          p => (p.barcode && p.barcode.toLowerCase() === cleanLower) ||
+               (p.sku && p.sku.toLowerCase() === cleanLower) ||
+               (p.barcodes && p.barcodes.some(b => b.barcode.toLowerCase() === cleanLower))
+        ) || null;
+        if (product) {
+          inventoryAvail = product.stockQuantity;
+        }
+      }
+
+      if (product) {
+        playBeep('scan', settings?.scannerSound);
+
+        // 2. Add to active cart: If the same barcode is scanned again, increase the quantity to 2 instead of creating another line
+        let newQtyInCart = 1;
+        setCartItems(prev => {
+          const existingIndex = prev.findIndex(item => item.product.id === product!.id);
+          if (existingIndex >= 0) {
+            const existing = prev[existingIndex];
+            if (existing.quantity >= product!.stockQuantity) {
+              playBeep('error', settings?.scannerSound);
+              newQtyInCart = existing.quantity;
+              return prev;
+            }
+            newQtyInCart = existing.quantity + 1;
+            return prev.map((item, idx) =>
+              idx === existingIndex
+                ? { ...item, quantity: item.quantity + 1 }
+                : item
+            );
+          } else {
+            newQtyInCart = 1;
+            return [
+              ...prev,
+              {
+                product: product!,
+                quantity: 1,
+                unitPrice: product!.price,
+                discountAmount: 0,
+              },
+            ];
+          }
+        });
+
+        const remainingStock = Math.max(0, product.stockQuantity - newQtyInCart);
+
+        // 3. Set Cashier HUD Notification (Product Name, Image, Size, Price, Tax, Inventory Availability, Age 21+)
+        setScanNotification({
+          id: `scan-${Date.now()}`,
+          productName: product.name,
+          barcode: clean,
+          imageUrl: product.imageUrl,
+          size: product.size,
+          price: product.price,
+          effectivePrice: effectivePrice ?? product.price,
+          taxRate: product.taxRate ?? 0.0825,
+          stockQuantity: product.stockQuantity,
+          inventoryAvailable: remainingStock,
+          quantityInCart: newQtyInCart,
+          ageRestriction: product.ageRestriction ?? 21,
+          pipeline: 'Scanner → POS Bridge → Barcode/UPC → Product API → Inventory Database → Cart',
+          timestamp: new Date().toLocaleTimeString(),
+        });
+
+        // 4. Synchronize with Secondary Customer Display
+        posBridge.broadcastCustomerDisplay({
+          lastScannedItem: `${product.name} (${product.size || ''})`,
+        });
+
+        // 5. Audit Log Event
+        fetch('/api/user-activities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'BARCODE_SCAN',
+            targetType: 'product',
+            targetId: product.id,
+            details: `Scanned UPC "${clean}" via ${source}: Automatically added 1x "${product.name}" ($${product.price.toFixed(2)}) to active cart (Total Qty: ${newQtyInCart}). Pipeline: Scanner → POS Bridge → Barcode/UPC → Product API → Inventory Database → Cart`,
+          }),
+        }).catch(() => {});
+      } else {
+        playBeep('error', settings?.scannerSound);
+      }
+    } catch (e) {
+      playBeep('error', settings?.scannerSound);
+    }
+  }, [products, settings]);
+
   const handleUpdateQuantity = (productId: string, delta: number) => {
     playBeep('click', settings?.scannerSound);
     setCartItems(prev =>
@@ -246,7 +427,6 @@ export default function App() {
             if (nextQty <= 0) return null;
             if (nextQty > item.product.stockQuantity) {
               playBeep('error', settings?.scannerSound);
-              alert(`Maximum available stock reached (${item.product.stockQuantity})`);
               return item;
             }
             return { ...item, quantity: nextQty };
@@ -359,6 +539,92 @@ export default function App() {
   const grandTotal = subtotalAfterDiscounts + taxTotal;
   const discountTotalAll = itemDiscountsTotal + calculatedOrderDiscount;
 
+  // Real-time synchronization of register cart to customer-facing display (WV-019 to WV-025)
+  useEffect(() => {
+    if (isCustomerDisplayMode) return;
+    if (cartItems.length === 0) {
+      if (!lastCompletedOrder) {
+        posBridge.broadcastCustomerDisplay({
+          screenState: 'welcome',
+          items: [],
+          subtotal: 0,
+          discountTotal: 0,
+          taxTotal: 0,
+          grandTotal: 0,
+        });
+      }
+    } else {
+      const lastItem = cartItems[cartItems.length - 1];
+      posBridge.broadcastCustomerDisplay({
+        screenState: 'active_cart',
+        items: cartItems.map(it => ({
+          name: it.product.name,
+          size: it.product.size || it.product.volume,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          lineTotal: (it.unitPrice * it.quantity) - (it.discountAmount || 0),
+        })),
+        subtotal: rawSubtotal,
+        discountTotal: discountTotalAll,
+        taxTotal: taxTotal,
+        grandTotal: grandTotal,
+        lastScannedItem: lastItem ? `${lastItem.product.name} (x${lastItem.quantity})` : undefined,
+      });
+    }
+  }, [cartItems, rawSubtotal, discountTotalAll, taxTotal, grandTotal, lastCompletedOrder, isCustomerDisplayMode]);
+
+  // Global Barcode Scanner Listeners (Hardware Keyboard Wedge + POS Bridge Pipeline)
+  useEffect(() => {
+    if (isCustomerDisplayMode) return;
+    const unregWv = webview2Bridge.registerBarcodeScannerListener((scannedBarcode) => {
+      handleBarcodeScanned(scannedBarcode, 'Hardware USB Keyboard Wedge');
+    });
+
+    const unregBridge = posBridge.subscribeBarcodeScan((event) => {
+      if (event && event.barcode) {
+        handleBarcodeScanned(event.barcode, event.source || 'POS Bridge Scanner');
+      }
+    });
+
+    return () => {
+      unregWv();
+      unregBridge();
+    };
+  }, [handleBarcodeScanned, isCustomerDisplayMode]);
+
+  // Customer Display Touch Action Listener (WV-050)
+  useEffect(() => {
+    if (isCustomerDisplayMode) return;
+    const unregTouch = webview2Bridge.listenCustomerTouchActions((event) => {
+      if (event.type === 'LOYALTY_PHONE_ENTERED' && event.data?.phone) {
+        const rawPhone = event.data.phone.replace(/\D/g, '');
+        const foundCust = customers.find(c => c.phone.replace(/\D/g, '').includes(rawPhone));
+        if (foundCust) {
+          setSelectedCustomer(foundCust);
+          playBeep('success');
+        } else if (rawPhone.length >= 7) {
+          const newCust: Customer = {
+            id: `cust_${Date.now()}`,
+            name: `VIP Customer (${rawPhone.slice(-4)})`,
+            phone: event.data.phone,
+            email: '',
+            loyaltyPoints: 50,
+            totalSpent: 0,
+            orderCount: 0,
+            active: true,
+            createdAt: new Date().toISOString(),
+          };
+          api.createCustomer(newCust).then(saved => {
+            setCustomers(prev => [...prev, saved]);
+            setSelectedCustomer(saved);
+            playBeep('success');
+          }).catch(console.error);
+        }
+      }
+    });
+    return unregTouch;
+  }, [customers, isCustomerDisplayMode]);
+
   // Checkout Completion (CA-06, CA-07, CA-08)
   const handleCompleteOrder = async (paymentDetails: any) => {
     if (!currentUser) throw new Error('No cashier session active');
@@ -381,11 +647,12 @@ export default function App() {
       pointsRedeemed,
       pointsDiscountAmount,
       payment: paymentDetails,
+      payments: paymentDetails.payments || undefined,
     };
 
     const completed = await api.createOrder(orderPayload);
 
-    // POS Bridge Hardware Integration (PB-009, PB-014, PB-018)
+    // POS Bridge & WebView2 Hardware Integration (PB-009, WV-036, WV-037)
     if (paymentDetails.method === 'cash' || paymentDetails.method === 'split') {
       posBridge.kickCashDrawer({
         type: paymentDetails.method === 'cash' ? 'sale_cash' : 'sale_split',
@@ -394,10 +661,18 @@ export default function App() {
         amount: paymentDetails.amountPaid,
         user: currentUser || undefined,
       });
+      webview2Bridge.sendCommand('OPEN_DRAWER', {
+        reason: `Sale ${completed.orderNumber} cash tender`,
+        orderNumber: completed.orderNumber,
+      }).catch(() => {});
     }
 
     if (settings?.autoPrintReceipt ?? true) {
       posBridge.printReceipt(completed, settings);
+      webview2Bridge.sendCommand('PRINT_RECEIPT', {
+        orderId: completed.id,
+        orderNumber: completed.orderNumber,
+      }).catch(() => {});
     }
 
     posBridge.broadcastCustomerDisplay({
@@ -540,18 +815,7 @@ export default function App() {
         settings={settings}
         onOpenBridgeHub={() => setShowBridgeHubModal(true)}
         onOpenCustomerDisplay={() => {
-          try {
-            const w = window.open(
-              `${window.location.origin}${window.location.pathname}?view=customer-display`,
-              'CustomerDisplayWindow',
-              'width=1024,height=768,menubar=no,toolbar=no,location=no,status=no'
-            );
-            if (!w || w.closed || typeof w.closed === 'undefined') {
-              setShowCustomerDisplayModal(true);
-            }
-          } catch {
-            setShowCustomerDisplayModal(true);
-          }
+          setShowCustomerDisplayModal(true);
         }}
         onOpenAllFunctions={() => setShowAllFunctionsModal(true)}
       />
@@ -595,6 +859,14 @@ export default function App() {
             onProductCreated={newProd => {
               setProducts(prev => [newProd, ...prev]);
             }}
+            onOpenScannerModal={() => setShowScannerModal(true)}
+            onOpenScaleModal={() => setShowScaleModal(true)}
+            onOpenTablesView={() => setShowTablesModal(true)}
+            onOpenKdsModal={() => setShowKdsModal(true)}
+            onOpenDesigner={() => setShowDesignerModal(true)}
+            onScanBarcode={handleBarcodeScanned}
+            scanNotification={scanNotification}
+            onDismissScanNotification={() => setScanNotification(null)}
           />
         )}
 
@@ -747,13 +1019,28 @@ export default function App() {
           )
         )}
 
-        {currentTab === 'audit' && <AuditLogsView />}
+        {(currentTab === 'audit' || currentTab === 'audit-log') && <AuditLogsView />}
+        {currentTab === 'user-activity' && (
+          <UserActivityTrackerView currentUser={currentUser || { id: 'usr-1', name: 'Sarah Connor (Admin)', email: 'admin@pos.local', role: 'Admin', active: true, pin: '9999', createdAt: '' }} />
+        )}
 
         {currentTab === 'online-store' && (
           <OnlineStoreView
             currentUser={currentUser}
             settings={settings}
           />
+        )}
+
+        {(currentTab === 'hardware-manager' || currentTab === 'device-manager') && (
+          <div className="h-full overflow-y-auto p-4 md:p-6 bg-[#0A0A0A]">
+            <div className="max-w-7xl mx-auto">
+              <HardwareDeviceManager
+                onOpenCustomerDisplay={() => {
+                  setShowCustomerDisplayModal(true);
+                }}
+              />
+            </div>
+          </div>
         )}
       </main>
 
@@ -802,13 +1089,10 @@ export default function App() {
         isOpen={showScannerModal}
         onClose={() => setShowScannerModal(false)}
         products={products}
+        cartCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
+        cartTotal={cartItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity - (item.discountAmount || 0)), 0)}
         onScanBarcode={code => {
-          const found = products.find(
-            p => p.barcode === code || p.sku.toLowerCase() === code.toLowerCase()
-          );
-          if (found) {
-            handleAddToCart(found);
-          }
+          handleBarcodeScanned(code, 'Barcode Scanner Terminal Modal');
         }}
       />
 
@@ -831,6 +1115,7 @@ export default function App() {
       <PosBridgeHubModal
         isOpen={showBridgeHubModal}
         onClose={() => setShowBridgeHubModal(false)}
+        onOpenHardwareManager={() => setCurrentTab('hardware-manager')}
       />
 
       {/* Secondary Customer Display In-App Window (PB-018) */}
@@ -925,6 +1210,8 @@ export default function App() {
         isOpen={showAllFunctionsModal}
         onClose={() => setShowAllFunctionsModal(false)}
         onNavigateTab={tab => setCurrentTab(tab as any)}
+        currentUser={currentUser}
+        settings={settings}
         onOpenModal={modalName => {
           if (modalName === 'checkout-fallback') {
             setShowPaymentFallbackModal(true);
@@ -936,9 +1223,139 @@ export default function App() {
             setShowCustomerDisplayModal(true);
           } else if (modalName === 'bridge-hub') {
             setShowBridgeHubModal(true);
+          } else if (modalName === 'health-check') {
+            setShowStartupHealthModal(true);
+          } else if (modalName === 'scale-plu') {
+            setShowScaleModal(true);
+          } else if (modalName === 'restaurant-tables') {
+            setShowTablesModal(true);
+          } else if (modalName === 'kitchen-kds') {
+            setShowKdsModal(true);
+          } else if (modalName === 'pos-designer') {
+            setShowDesignerModal(true);
+          } else if (modalName === 'store-features') {
+            setShowStoreFeatureModal(true);
           }
         }}
       />
+
+      {/* Identify Displays Overlay for Display 1 (WV-015) */}
+      <IdentifyDisplaysOverlay currentDisplayNumber={1} />
+
+      {/* Startup Health Check & Peripheral Readiness Modal (WV-006, WV-007, WV-008) */}
+      <StartupHealthModal
+        isOpen={showStartupHealthModal}
+        onClose={() => setShowStartupHealthModal(false)}
+        onProceedToRegister={() => {
+          setShowStartupHealthModal(false);
+          setCurrentTab('pos');
+        }}
+      />
+
+      {/* PWA Offline Mode Status Indicator */}
+      <OfflineIndicator />
+
+      {/* Produce Scale & PLU Quick Code Modal */}
+      <ProducePluScaleModal
+        isOpen={showScaleModal}
+        onClose={() => setShowScaleModal(false)}
+        onAddProduceToCart={(product, weightInLbs, totalPrice) => {
+          setCartItems(prev => {
+            const existing = prev.find(item => item.product.id === product.id);
+            if (existing) {
+              return prev.map(item =>
+                item.product.id === product.id
+                  ? { ...item, quantity: parseFloat((item.quantity + weightInLbs).toFixed(2)) }
+                  : item
+              );
+            }
+            return [
+              ...prev,
+              {
+                product: {
+                  ...product,
+                  price: parseFloat((totalPrice / weightInLbs).toFixed(2)),
+                },
+                quantity: weightInLbs,
+              },
+            ];
+          });
+          playBeep('success');
+          setShowScaleModal(false);
+        }}
+      />
+
+      {/* Kitchen Display System (KDS) Modal */}
+      <KitchenKdsModal
+        isOpen={showKdsModal}
+        onClose={() => setShowKdsModal(false)}
+      />
+
+      {/* Restaurant Dining Room & Table Floor Map Modal */}
+      {showTablesModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-6xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950">
+              <div className="flex items-center space-x-2">
+                <span className="text-xl">🍽️</span>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Restaurant Dining Room & Table Floor Map</h2>
+                  <p className="text-xs text-slate-400">Manage floor seating, live table timers, and guest orders</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                id="btn-close-tables-modal"
+                onClick={() => setShowTablesModal(false)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              <RestaurantTablesView
+                onSelectTableForOrder={_table => {
+                  setShowTablesModal(false);
+                  setCurrentTab('pos');
+                }}
+                onOpenKds={() => {
+                  setShowTablesModal(false);
+                  setShowKdsModal(true);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POS Modular Designer Modal */}
+      {showDesignerModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-7xl h-[92vh] overflow-hidden flex flex-col shadow-2xl">
+            <AdminPosDesigner
+              onClose={() => setShowDesignerModal(false)}
+              onApplyConfiguration={_cfg => {
+                setShowDesignerModal(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Store-Level POS Feature Management Modal */}
+      <StoreFeatureManagementModal
+        isOpen={showStoreFeatureModal}
+        onClose={() => setShowStoreFeatureModal(false)}
+        currentUser={currentUser}
+        activeStoreId="store-1"
+      />
+
+      {/* Auto-Open Customer Display 2 Screen Banner & Floating Controller (Webform & Dual-Display) */}
+      {!isCustomerDisplayMode && !checkUploadSession && !shelfCameraSession && !mobileSessionParam && (
+        <CustomerDisplayAutoBanner
+          onOpenCustomerDisplayModal={() => setShowCustomerDisplayModal(true)}
+        />
+      )}
     </div>
   );
 }

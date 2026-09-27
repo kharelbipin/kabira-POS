@@ -175,6 +175,37 @@ class ApiService {
     return this.request<Product[]>(`/products?${q.toString()}`);
   }
 
+  // Barcode / UPC Lookup via Pipeline: Scanner → POS Bridge → Barcode/UPC → Product API → Inventory Database → Cart
+  async lookupBarcode(barcode: string): Promise<{
+    found: boolean;
+    pipeline?: string;
+    barcode?: string;
+    product?: Product & { effectivePrice?: number; discounts?: any[] };
+    inventoryAvailable?: number;
+    message?: string;
+  }> {
+    const code = encodeURIComponent(barcode.trim());
+    return this.request(`/products/barcode-lookup/${code}`);
+  }
+
+  // POS Bridge Hardware Scanner Event Dispatcher
+  async bridgeScanBarcode(barcode: string, source: string = 'Hardware Barcode Scanner', registerId: string = 'reg-1', storeId: string = 'store-granbury'): Promise<{
+    success: boolean;
+    found: boolean;
+    pipeline?: string;
+    barcode?: string;
+    source?: string;
+    timestamp?: string;
+    product?: Product;
+    inventoryAvailable?: number;
+    message?: string;
+  }> {
+    return this.request('/bridge/scan-barcode', {
+      method: 'POST',
+      body: JSON.stringify({ barcode: barcode.trim(), source, registerId, storeId }),
+    });
+  }
+
   async createProduct(data: Partial<Product>) {
     return this.request<Product>('/products', {
       method: 'POST',
@@ -437,6 +468,7 @@ class ApiService {
     pointsRedeemed?: number;
     pointsDiscountAmount?: number;
     payment: any;
+    payments?: any[];
     cashierId?: string;
     cashierName?: string;
   }) {

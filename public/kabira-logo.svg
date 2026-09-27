@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" fill="none">
+  <defs>
+    <!-- Blue Gradients -->
+    <linearGradient id="kb-blue-primary" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00A3FF" />
+      <stop offset="50%" stop-color="#0077EE" />
+      <stop offset="100%" stop-color="#0052CC" />
+    </linearGradient>
+    <linearGradient id="kb-blue-light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#0284C7" />
+    </linearGradient>
+    <linearGradient id="kb-blue-glow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00D2FF" />
+      <stop offset="100%" stop-color="#0066FF" />
+    </linearGradient>
+
+    <!-- Dark Slate Gradients -->
+    <linearGradient id="kb-dark-stem" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#090D16" />
+    </linearGradient>
+    <linearGradient id="kb-swoosh-silver" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#CBD5E1" />
+      <stop offset="50%" stop-color="#94A3B8" />
+      <stop offset="100%" stop-color="#475569" />
+    </linearGradient>
+    <linearGradient id="kb-swoosh-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="40%" stop-color="#0080FF" />
+      <stop offset="100%" stop-color="#0047BA" />
+    </linearGradient>
+    <filter id="kb-shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- K Logo Graphic Group -->
+  <g filter="url(#kb-shadow)">
+    <!-- Back Silver Orbit Swoosh -->
+    <path
+      d="M 120 180 C 120 120, 200 90, 310 110 C 370 122, 385 145, 360 170 C 335 195, 270 215, 175 200 C 130 193, 115 185, 120 180 Z"
+      fill="url(#kb-swoosh-silver)"
+      opacity="0.85"
+    />
+
+    <!-- Vertical Stem of the K -->
+    <path
+      d="M 135 45 L 195 45 L 195 235 L 135 235 Z"
+      fill="url(#kb-dark-stem)"
+    />
+
+    <!-- Upper Diagonal Arm of the K -->
+    <path
+      d="M 180 148 L 265 45 L 335 45 L 225 178 Z"
+      fill="url(#kb-blue-primary)"
+    />
+
+    <!-- Lower Diagonal Arm of the K -->
+    <path
+      d="M 200 152 L 315 248 L 245 248 L 165 175 Z"
+      fill="url(#kb-blue-light)"
+    />
+
+    <!-- Front Blue Dynamic Orbit Swoosh -->
+    <path
+      d="M 90 195 C 90 135, 175 95, 290 115 C 330 122, 365 138, 375 155 C 355 160, 320 160, 280 158 C 190 152, 130 170, 105 210 C 95 228, 90 230, 88 238 C 86 242, 85 240, 87 232 C 89 220, 89 205, 90 195 Z"
+      fill="url(#kb-swoosh-blue)"
+    />
+    <path
+      d="M 90 215 C 92 180, 130 150, 195 140 C 145 160, 115 190, 105 230 C 98 245, 95 245, 93 235 C 91 228, 90 220, 90 215 Z"
+      fill="#00D2FF"
+    />
+
+    <!-- Digital Pixel Blocks (Top Right) -->
+    <!-- Square 1: Top Rightmost Bright Sky Blue -->
+    <rect x="340" y="25" width="20" height="20" fill="#00A3FF" rx="1" />
+    <!-- Square 2: Left of Square 1 Deep Blue -->
+    <rect x="315" y="45" width="22" height="22" fill="#0066EE" rx="1" />
+    <!-- Square 3: Below Square 1 Dark Navy -->
+    <rect x="340" y="50" width="20" height="20" fill="#1E293B" rx="1" />
+    <!-- Square 4: Bottom Cyan Accent -->
+    <rect x="328" y="72" width="16" height="16" fill="#38BDF8" rx="1" />
+  </g>
+
+  <!-- Typography "KaBiRa" -->
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="900">
+    <!-- "Ka" in Slate Dark -->
+    <text x="50" y="345" font-size="92" fill="#0F172A" letter-spacing="-2">Ka</text>
+    <!-- "Bi" in Vivid Blue -->
+    <text x="180" y="345" font-size="92" fill="url(#kb-blue-primary)" letter-spacing="-2">Bi</text>
+    <!-- "Ra" in Slate Dark -->
+    <text x="278" y="345" font-size="92" fill="#0F172A" letter-spacing="-2">Ra</text>
+  </g>
+
+  <!-- Subtitle Divider & 377 SPIRITS -->
+  <g>
+    <line x1="50" y1="375" x2="160" y2="375" stroke="#CBD5E1" stroke-width="2.5" />
+    <text
+      x="250"
+      y="382"
+      text-anchor="middle"
+      font-family="'Cinzel', Georgia, serif"
+      font-weight="900"
+      font-size="22"
+      fill="#0284C7"
+      letter-spacing="5"
+    >
+      377 SPIRITS
+    </text>
+    <line x1="340" y1="375" x2="450" y2="375" stroke="#CBD5E1" stroke-width="2.5" />
+
+    <text
+      x="250"
+      y="415"
+      text-anchor="middle"
+      font-family="system-ui, -apple-system, sans-serif"
+      font-weight="700"
+      font-size="12"
+      fill="#64748B"
+      letter-spacing="4"
+    >
+      POINT OF SALE &amp; LIQUOR SYSTEM
+    </text>
+  </g>
+</svg>

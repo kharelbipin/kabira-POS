@@ -9,6 +9,7 @@ import { LottoPayoutModal } from './pos/LottoPayoutModal';
 import { ManualDrawerModal } from './pos/ManualDrawerModal';
 import { CartTransferModal } from './pos/CartTransferModal';
 import { BottleImage } from './BottleImage';
+import { MenuModifiersModal } from './restaurant/MenuModifiersModal';
 import {
   Search,
   ScanBarcode,
@@ -39,6 +40,11 @@ import {
   ShieldCheck,
   Landmark,
   Heart,
+  Scale,
+  Utensils,
+  Sliders,
+  ChefHat,
+  X,
 } from 'lucide-react';
 
 interface POSViewProps {
@@ -65,6 +71,28 @@ interface POSViewProps {
   currentUser: User | null;
   onProductCreated?: (newProduct: Product) => void;
   onOpenScannerModal?: () => void;
+  onOpenScaleModal?: () => void;
+  onOpenTablesView?: () => void;
+  onOpenKdsModal?: () => void;
+  onOpenDesigner?: () => void;
+  onScanBarcode?: (barcode: string, source?: string) => void;
+  scanNotification?: {
+    id: string;
+    productName: string;
+    barcode: string;
+    imageUrl?: string;
+    size?: string;
+    price: number;
+    effectivePrice?: number;
+    taxRate: number;
+    stockQuantity: number;
+    inventoryAvailable: number;
+    quantityInCart: number;
+    ageRestriction?: number;
+    pipeline: string;
+    timestamp: string;
+  } | null;
+  onDismissScanNotification?: () => void;
 }
 
 export const POSView: React.FC<POSViewProps> = ({
@@ -91,10 +119,18 @@ export const POSView: React.FC<POSViewProps> = ({
   currentUser,
   onProductCreated,
   onOpenScannerModal,
+  onOpenScaleModal,
+  onOpenTablesView,
+  onOpenKdsModal,
+  onOpenDesigner,
+  onScanBarcode,
+  scanNotification,
+  onDismissScanNotification,
 }) => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [barcodeInput, setBarcodeInput] = useState<string>('');
+  const [unrecognizedBarcode, setUnrecognizedBarcode] = useState<string | undefined>(undefined);
   const [mobileCartOpen, setMobileCartOpen] = useState<boolean>(false);
   const [showAddManualModal, setShowAddManualModal] = useState<boolean>(false);
   const [showLottoSaleModal, setShowLottoSaleModal] = useState<boolean>(false);
@@ -138,7 +174,7 @@ export const POSView: React.FC<POSViewProps> = ({
         grandTotal,
       },
       {
-        storeName: settings?.storeName || '377 Spirits',
+        storeName: settings?.storeName || 'KABIRA POS',
         tagline: settings?.tagline || 'Fine Liquors, Craft Spirits, Wine & Beer',
       }
     );
@@ -210,6 +246,10 @@ export const POSView: React.FC<POSViewProps> = ({
   }, [products, cartItems]);
 
   const handleDirectBarcodeScan = (code: string) => {
+    if (onScanBarcode) {
+      onScanBarcode(code.trim(), 'Physical USB Barcode Scanner (Zebra DS2208)');
+      return;
+    }
     const trimmed = code.trim().toLowerCase();
     const product = products.find(p => {
       if (p.barcode.toLowerCase() === trimmed || p.sku.toLowerCase() === trimmed) return true;
@@ -221,6 +261,8 @@ export const POSView: React.FC<POSViewProps> = ({
       onAddToCart(product);
     } else {
       playBeep('error', settings?.scannerSound);
+      setUnrecognizedBarcode(code.trim());
+      setShowAddManualModal(true);
     }
   };
 
@@ -308,6 +350,28 @@ export const POSView: React.FC<POSViewProps> = ({
 
   // Tobacco & Alcohol Cutoff Age for Cashier / Manager register (not Admin)
   const isCashierOrManagerRegister = currentUser?.role === 'Cashier' || currentUser?.role === 'Manager';
+  const isAdmin = currentUser?.role === 'Admin';
+  const isManager = currentUser?.role === 'Manager';
+  const isCashier = currentUser?.role === 'Cashier';
+
+  // Role-Based Button Visibility:
+  // scale/plu, table, kds, designer button should NOT be shown in cashier and manager side.
+  // This is an admin-governed function displayed only in admin side (unless admin explicitly delegates access).
+  const canShowScale = isAdmin ||
+    (isManager && !!settings?.adminAllowedPosButtons?.allowScaleForManager) ||
+    (isCashier && !!settings?.adminAllowedPosButtons?.allowScaleForCashier);
+
+  const canShowTables = isAdmin ||
+    (isManager && !!settings?.adminAllowedPosButtons?.allowTablesForManager) ||
+    (isCashier && !!settings?.adminAllowedPosButtons?.allowTablesForCashier);
+
+  const canShowKds = isAdmin ||
+    (isManager && !!settings?.adminAllowedPosButtons?.allowKdsForManager) ||
+    (isCashier && !!settings?.adminAllowedPosButtons?.allowKdsForCashier);
+
+  const canShowDesigner = isAdmin ||
+    (isManager && !!settings?.adminAllowedPosButtons?.allowDesignerForManager) ||
+    (isCashier && !!settings?.adminAllowedPosButtons?.allowDesignerForCashier);
   const cutoffDate = useMemo(() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 21);
@@ -416,6 +480,74 @@ export const POSView: React.FC<POSViewProps> = ({
             <ScanBarcode className="w-4 h-4 text-amber-700" />
             <span>Mobile Cart</span>
           </button>
+
+          {/* [⚖️ Scale / PLU (Produce & Deli)] - Admin only by default */}
+          {canShowScale && onOpenScaleModal && (
+            <button
+              type="button"
+              id="pos-btn-scale"
+              onClick={() => {
+                playBeep('click');
+                onOpenScaleModal();
+              }}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
+              title="Open Produce Scale & PLU Quick Code Lookup (Admin Controlled)"
+            >
+              <Scale className="w-4 h-4 text-emerald-700" />
+              <span>Scale / PLU</span>
+            </button>
+          )}
+
+          {/* [🍽️ Tables & Floor Map (Restaurant / Bar)] - Admin only by default */}
+          {canShowTables && onOpenTablesView && (
+            <button
+              type="button"
+              id="pos-btn-tables"
+              onClick={() => {
+                playBeep('click');
+                onOpenTablesView();
+              }}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-sky-50 hover:bg-sky-100 border border-sky-300 text-sky-900 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
+              title="Open Restaurant Table Floor Map & Guest Checks (Admin Controlled)"
+            >
+              <Utensils className="w-4 h-4 text-sky-700" />
+              <span>Tables</span>
+            </button>
+          )}
+
+          {/* [👨‍🍳 Kitchen KDS] - Admin only by default */}
+          {canShowKds && onOpenKdsModal && (
+            <button
+              type="button"
+              id="pos-btn-kds"
+              onClick={() => {
+                playBeep('click');
+                onOpenKdsModal();
+              }}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-300 text-orange-900 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
+              title="Open Kitchen Display System (KDS) (Admin Controlled)"
+            >
+              <ChefHat className="w-4 h-4 text-orange-700" />
+              <span>KDS</span>
+            </button>
+          )}
+
+          {/* [⚙️ POS Designer] - Admin only by default */}
+          {canShowDesigner && onOpenDesigner && (
+            <button
+              type="button"
+              id="pos-btn-designer"
+              onClick={() => {
+                playBeep('click');
+                onOpenDesigner();
+              }}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 text-indigo-900 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
+              title="Open Modular POS Designer & Industry Presets (Admin Controlled)"
+            >
+              <Sliders className="w-4 h-4 text-indigo-700" />
+              <span>Designer</span>
+            </button>
+          )}
         </div>
 
         {/* Tobacco & Alcohol Cutoff Age Compliance Bar (Cashier & Manager register only, not Admin) */}
@@ -525,6 +657,132 @@ export const POSView: React.FC<POSViewProps> = ({
 
         {/* MIDDLE COLUMN: Product Catalog Grid */}
         <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-[#F8FAFC] h-full overflow-hidden">
+          {/* Cashier Barcode Scan HUD Toast (Shows real-time product, price, inventory availability, age restriction) */}
+          {scanNotification && (
+            <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-amber-950 border-b-2 border-emerald-500 text-white px-4 py-2.5 flex items-center justify-between shadow-md animate-in slide-in-from-top-2 duration-200 shrink-0">
+              <div className="flex items-center space-x-3 min-w-0">
+                {scanNotification.imageUrl ? (
+                  <img
+                    src={scanNotification.imageUrl}
+                    alt={scanNotification.productName}
+                    className="w-10 h-10 object-contain rounded-lg bg-black/40 border border-emerald-500/40 p-0.5 shrink-0"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                    <ScanBarcode className="w-5 h-5 text-emerald-400" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="flex items-center space-x-2 flex-wrap">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800">
+                      ✓ Barcode Scanned & Auto-Added
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-300">UPC: {scanNotification.barcode}</span>
+                    {scanNotification.ageRestriction ? (
+                      <span className="text-[9px] font-black bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/40">
+                        {scanNotification.ageRestriction}+ Required
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex items-baseline space-x-2 mt-0.5">
+                    <h4 className="text-xs font-black text-white truncate max-w-md">
+                      {scanNotification.productName} ({scanNotification.size || 'Standard'})
+                    </h4>
+                    <span className="text-xs font-bold text-amber-300 font-mono">
+                      ${scanNotification.price.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2.5 text-[10px] text-slate-300 font-mono mt-0.5 flex-wrap">
+                    <span className="text-emerald-300 font-bold">
+                      Qty in Cart: x{scanNotification.quantityInCart} (Incremented, no duplicate line)
+                    </span>
+                    <span>•</span>
+                    <span className="text-sky-300 font-bold">
+                      Inventory Remaining: {scanNotification.inventoryAvailable} / {scanNotification.stockQuantity}
+                    </span>
+                    <span>•</span>
+                    <span className="text-slate-400 text-[9px] hidden xl:inline">
+                      Pipeline: Scanner → POS Bridge → Barcode/UPC → Product API → Inventory Database → Cart
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2 shrink-0">
+                {onDismissScanNotification && (
+                  <button
+                    onClick={onDismissScanNotification}
+                    className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800/80 transition-colors"
+                    title="Dismiss notice"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Quick Barcode Scanner & Search Bar */}
+          <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 flex-wrap">
+            <div className="flex items-center space-x-2 shrink-0">
+              <div className="flex items-center space-x-1.5 px-2 py-1 rounded-lg bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-[11px] font-mono font-bold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>POS Bridge Scanner: Zebra DS2208 (USB HID Wedge Active)</span>
+              </div>
+            </div>
+
+            {/* Instant Scan / Barcode Input Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (barcodeInput.trim()) {
+                  handleDirectBarcodeScan(barcodeInput.trim());
+                  setBarcodeInput('');
+                }
+              }}
+              className="flex-1 min-w-[280px] max-w-xl flex items-center gap-1.5"
+            >
+              <div className="relative flex-1">
+                <ScanBarcode className="w-4 h-4 text-amber-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={barcodeInput}
+                  onChange={e => setBarcodeInput(e.target.value)}
+                  placeholder="Scan barcode or enter UPC (e.g. 012345678905) + Enter..."
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-amber-400 font-mono"
+                />
+              </div>
+              <button
+                type="submit"
+                className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black rounded-xl uppercase tracking-wider shrink-0 cursor-pointer shadow-xs"
+              >
+                Scan Gun
+              </button>
+            </form>
+
+            {/* Quick 1-Click Scan Chips matching User Story 3 */}
+            <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto">
+              <button
+                type="button"
+                id="quick-scan-sample-012345678905"
+                onClick={() => handleDirectBarcodeScan('012345678905')}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10.5px] font-bold font-mono transition-all flex items-center space-x-1 cursor-pointer"
+                title="Simulate scanning 012345678905 (Garrison Brothers TX Bourbon 750mL) through POS Bridge pipeline"
+              >
+                <ScanBarcode className="w-3 h-3 text-amber-400" />
+                <span>Scan 012345678905 (Garrison Brothers)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDirectBarcodeScan('080480015003')}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10.5px] font-bold font-mono transition-all flex items-center space-x-1 cursor-pointer hidden xl:flex"
+                title="Simulate scanning 080480015003 (Woodford Reserve Double Oaked)"
+              >
+                <ScanBarcode className="w-3 h-3 text-sky-400" />
+                <span>Scan 080480015003 (Woodford)</span>
+              </button>
+            </div>
+          </div>
+
           {/* Header Row: Category Title, Count & Sort Controls */}
           <div className="px-4 py-2 flex items-center justify-between border-b border-slate-200 bg-white shrink-0">
             <div className="flex items-center space-x-2">
@@ -774,8 +1032,8 @@ export const POSView: React.FC<POSViewProps> = ({
           </span>
           <span className="text-slate-300">•</span>
           <span className="flex items-center space-x-1">
-            <MapPin className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-semibold text-slate-700">Granbury, TX</span>
+            <Wine className="w-3.5 h-3.5 text-amber-500" />
+            <span className="font-semibold text-slate-700 tracking-wider">377 SPIRITS</span>
           </span>
         </div>
 
@@ -799,7 +1057,11 @@ export const POSView: React.FC<POSViewProps> = ({
       {/* Cashier Add Manual Item Modal */}
       <AddManualItemModal
         isOpen={showAddManualModal}
-        onClose={() => setShowAddManualModal(false)}
+        initialBarcode={unrecognizedBarcode}
+        onClose={() => {
+          setShowAddManualModal(false);
+          setUnrecognizedBarcode(undefined);
+        }}
         categories={categories}
         settings={settings}
         onAddCustomItemToCart={(customProduct, qty) => {

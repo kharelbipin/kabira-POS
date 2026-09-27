@@ -32,7 +32,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onRefresh 
   const [activeSection, setActiveSection] = useState<'store' | 'promotions' | 'hardware'>('store');
   const [formData, setFormData] = useState<StoreSettings>(
     settings || {
-      storeName: '377 Spirits',
+      storeName: 'KABIRA POS',
       tagline: 'Fine Liquors, Craft Spirits, Wine & Beer',
       address: 'Granbury, TX 76049',
       city: 'Granbury',
@@ -40,12 +40,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onRefresh 
       zip: '76049',
       cityStateZip: 'Granbury, TX 76049',
       phone: '(817) 555-0377',
-      email: 'info@377spirits.com',
+      email: 'info@kabirapos.com',
       taxId: 'TX-76-3770149',
       currency: 'USD',
       defaultTaxRate: 0.0825,
-      receiptHeader: '377 Spirits\nGranbury, TX 76049',
-      receiptFooter: 'Thank you for shopping with us! Please drink responsibly.',
+      receiptHeader: 'KABIRA POS\nGranbury, TX 76049',
+      receiptFooter: 'Thank you for shopping with us! Please enjoy responsibly.',
       requireManagerDiscountAbove: 20,
       enableCash: true,
       enableCard: true,

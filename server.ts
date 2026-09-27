@@ -18,19 +18,13 @@ async function startServer() {
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
 
-  // Global error handler middleware (BA-02)
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error('API Error:', err);
-    res.status(err.status || 500).json({
-      error: err.message || 'Internal server error occurred',
-      timestamp: new Date().toISOString(),
-    });
-  });
-
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -42,8 +36,23 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  // Global error handler middleware (mounted after all routes and handlers)
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('API Error:', err);
+    if (!res.headersSent) {
+      res.status(err.status || 500).json({
+        error: err.message || 'Internal server error occurred',
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[POS Server] Running on http://0.0.0.0:${PORT}`);
+  });
+
+  server.on('upgrade', (req, socket) => {
+    socket.destroy();
   });
 }
 

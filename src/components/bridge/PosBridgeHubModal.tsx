@@ -28,12 +28,14 @@ interface PosBridgeHubModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenCustomerDisplayWindow?: () => void;
+  onOpenHardwareManager?: () => void;
 }
 
 export const PosBridgeHubModal: React.FC<PosBridgeHubModalProps> = ({
   isOpen,
   onClose,
   onOpenCustomerDisplayWindow,
+  onOpenHardwareManager,
 }) => {
   const [bridgeStatus, setBridgeStatus] = useState<PosBridgeStatus>(posBridge.getStatus());
   const [config, setConfig] = useState<PosBridgeConfig>(posBridge.getConfig());
@@ -174,6 +176,19 @@ export const PosBridgeHubModal: React.FC<PosBridgeHubModalProps> = ({
           </div>
 
           <div className="flex items-center space-x-2">
+            {onOpenHardwareManager && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenHardwareManager();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-xs font-bold border border-sky-500/40 flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Cpu className="w-3.5 h-3.5 text-sky-400" />
+                <span>Centralized Hardware Manager</span>
+              </button>
+            )}
             <button
               onClick={handleRestartBridge}
               disabled={isRestarting}
