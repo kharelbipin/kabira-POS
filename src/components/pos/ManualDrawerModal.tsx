@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Landmark, X, ShieldAlert, CheckCircle2, KeyRound } from 'lucide-react';
 import { User } from '../../types';
 import { playBeep } from '../../utils/audio';
-import { posBridge } from '../../services/posBridge';
+import { hardwareStore } from '../../hardware';
 
 interface ManualDrawerModalProps {
   isOpen: boolean;
@@ -32,9 +32,7 @@ export const ManualDrawerModal: React.FC<ManualDrawerModalProps> = ({
 
   if (!isOpen) return null;
 
-  const bridgeConfig = posBridge.getConfig();
   const requiresManagerPin =
-    bridgeConfig.requireManagerPinManualDrawer &&
     currentUser?.role !== 'Admin' &&
     currentUser?.role !== 'Manager';
 
@@ -55,11 +53,9 @@ export const ManualDrawerModal: React.FC<ManualDrawerModalProps> = ({
     setIsKicking(true);
     playBeep('click');
 
-    const res = await posBridge.kickCashDrawer({
-      type: 'manual_open',
-      user: currentUser || undefined,
-      managerPin: requiresManagerPin ? managerPin : undefined,
+    const res = await hardwareStore.openCashDrawer({
       reason,
+      managerPin: requiresManagerPin ? managerPin : undefined,
     });
 
     setIsKicking(false);
@@ -69,7 +65,7 @@ export const ManualDrawerModal: React.FC<ManualDrawerModalProps> = ({
       onClose();
     } else {
       playBeep('error');
-      setErrorMsg(res.error || 'Failed to open cash drawer.');
+      setErrorMsg(res.error || res.message || 'Failed to open cash drawer.');
     }
   };
 

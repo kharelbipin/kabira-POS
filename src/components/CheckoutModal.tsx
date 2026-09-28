@@ -8,7 +8,7 @@ import {
   PaymentRecord,
 } from '../types';
 import { playBeep } from '../utils/audio';
-import { posBridge } from '../services/posBridge';
+import { hardwareStore } from '../hardware';
 import { CardPaymentFallbackManager } from './payment/CardPaymentFallbackManager';
 import {
   Banknote,
@@ -263,12 +263,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
 
     // Hardware cash drawer kick
-    posBridge.kickCashDrawer({
-      type: 'sale_cash',
-      reason: `Cash tender payment: $${actualPaymentAmount.toFixed(2)}`,
-      amount: actualPaymentAmount,
-      user: currentUser || undefined,
-    }).catch(() => {});
+    hardwareStore.openCashDrawer().catch(() => {});
 
     const newPaymentRecord: PaymentRecord = {
       id: `pay-${Date.now()}-cash-${Math.random().toString(36).substr(2, 4)}`,
@@ -431,12 +426,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     playBeep('click');
     if (target.method === 'cash') {
       // Return cash from drawer
-      posBridge.kickCashDrawer({
-        type: 'sale_cash',
-        reason: `Void cash partial tender: $${target.amount.toFixed(2)}`,
-        amount: target.amount,
-        user: currentUser || undefined,
-      }).catch(() => {});
+      hardwareStore.openCashDrawer().catch(() => {});
     }
 
     setRecordedPayments(prev => prev.filter(p => p.id !== paymentId));
@@ -504,12 +494,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     playBeep('click');
     const cashTotal = successfulPayments.filter(p => p.method === 'cash').reduce((s, p) => s + p.amount, 0);
     if (cashTotal > 0) {
-      posBridge.kickCashDrawer({
-        type: 'sale_cash',
-        reason: `Reversal of partial cash payments ($${cashTotal.toFixed(2)}) on cancelled transaction`,
-        amount: cashTotal,
-        user: currentUser || undefined,
-      }).catch(() => {});
+      hardwareStore.openCashDrawer().catch(() => {});
     }
 
     setRecordedPayments([]);

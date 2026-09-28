@@ -7,3 +7,6 @@ coverage/
 .env*
 !.env.example
 bun.lock*
+bin/
+obj/
+*.user

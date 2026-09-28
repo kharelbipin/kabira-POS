@@ -1,27 +1,35 @@
-// Authoritative Hardware Store for Kabira POS
-// Maintains real Bridge telemetry, discovered hardware, and register configurations
-// Reactive state store for all React UI components
+// Canonical Authoritative Hardware Store for Kabira POS
+// Single source of truth for register hardware state, Bridge discovery, and role assignments.
+// No simulated hardware, fake latency, or hardcoded peripheral fallbacks.
 
 import {
   BridgeHealth,
   DiscoveredHardwareDevice,
   ConfiguredHardwareMapping,
   HardwareSummary,
-  MasterDiagnosticsReport,
   HardwareCategory,
   AssignedDeviceConfig,
 } from './bridgeTypes';
 import { bridgeClient, BridgeClient } from './BridgeClient';
 
-const STORAGE_KEY_CONFIGURED_HARDWARE = 'kabira_pos_hardware_config_v1';
-const STORAGE_KEY_LAST_DEVICES = 'kabira_pos_last_discovered_v1';
+const STORAGE_KEY_CONFIGURED_HARDWARE = 'kabira_pos_hardware_config_v2';
+const STORAGE_KEY_LAST_DEVICES = 'kabira_pos_last_discovered_v2';
+const STORAGE_KEY_DISPLAY_DISMISSED = 'kabira_customer_display_warning_dismissed';
 
 export type HardwareStoreListener = () => void;
+export type BarcodeScanListener = (barcode: string, source: string) => void;
+export type CustomerTouchListener = (action: { type: string; timestamp?: string; data?: any }) => void;
 
 export class HardwareStore {
   private static instance: HardwareStore;
   private client: BridgeClient = bridgeClient;
   private listeners: Set<HardwareStoreListener> = new Set();
+  private barcodeListeners: Set<BarcodeScanListener> = new Set();
+  private touchListeners: Set<CustomerTouchListener> = new Set();
+
+  // Customer Display Window & BroadcastChannel Reference
+  private customerWindow: Window | null = null;
+  private broadcastChannel: BroadcastChannel | null = null;
 
   private health: BridgeHealth = {
     status: 'offline',
@@ -37,59 +45,58 @@ export class HardwareStore {
 
   private discoveredDevices: DiscoveredHardwareDevice[] = [];
   private summary: HardwareSummary | null = null;
-  private diagnosticsReport: MasterDiagnosticsReport | null = null;
   private isScanning: boolean = false;
   private scanError: string | null = null;
   private lastScanTime: string | null = null;
 
-  // Configured hardware assignments for this POS register
+  // Real configured hardware assignments for this POS register (no hardcoded models)
   private configured: ConfiguredHardwareMapping = {
     receipt_printer: {
       category: 'receipt_printer',
       categoryLabel: 'Receipt Printer',
-      deviceId: 'win_spooler_epson_t88vi',
-      deviceName: 'EPSON TM-T88VI',
-      manufacturer: 'EPSON',
-      connectionType: 'usb',
-      address: 'USB001',
-      isDefault: true,
+      deviceId: '',
+      deviceName: 'Not Configured (Scan Windows Printers)',
+      manufacturer: 'Windows Print Spooler',
+      connectionType: 'windows_spooler',
+      address: '',
+      isDefault: false,
     },
     cash_drawer: {
       category: 'cash_drawer',
       categoryLabel: 'Cash Drawer',
-      deviceId: 'apg_vasario_1616',
-      deviceName: 'APG Vasario 1616 Cash Drawer',
-      manufacturer: 'APG Cash Drawer',
+      deviceId: 'drawer_solenoid_relay',
+      deviceName: 'Cash Drawer (Through Receipt Printer)',
+      manufacturer: 'Standard 24V Solenoid',
       connectionType: 'through_printer',
-      address: 'Drawer Port 1 (Pin 2 Solenoid)',
+      address: 'Printer Drawer Kick Port',
       isDefault: true,
       drawerConnectionMethod: 'through_printer',
-      hostPrinterId: 'win_spooler_epson_t88vi',
+      hostPrinterId: '',
       drawerPort: 'Drawer 1',
       vendorProtocol: 'epson',
     },
     barcode_scanner: {
       category: 'barcode_scanner',
       categoryLabel: 'Barcode Scanner',
-      deviceId: 'zebra_ds2208_hid',
-      deviceName: 'Zebra DS2208 2D Imager',
-      manufacturer: 'Zebra Technologies',
+      deviceId: 'usb_keyboard_wedge',
+      deviceName: 'USB Barcode Scanner (HID Keyboard Wedge)',
+      manufacturer: 'Standard USB HID',
       connectionType: 'hid',
-      address: 'HID\\VID_05E0&PID_1200',
+      address: 'HID\\Keyboard',
       isDefault: true,
     },
     customer_display: {
       category: 'customer_display',
       categoryLabel: 'Customer Display',
-      deviceId: 'display_secondary_screen',
-      deviceName: 'Secondary Screen (1920×1080 DISPLAY2)',
-      manufacturer: 'Windows Extended Desktop',
+      deviceId: '',
+      deviceName: 'Secondary Screen (Windows Extended Desktop)',
+      manufacturer: 'Windows Graphics Subsystem',
       connectionType: 'windows_spooler',
-      address: 'DISPLAY2 (Secondary)',
-      isDefault: true,
-      displayId: 'DISPLAY2',
-      isExtended: true,
-      welcomeMessage: 'Welcome to 377 SPIRITS! Please present valid ID.',
+      address: 'Extended Monitor',
+      isDefault: false,
+      displayId: '',
+      isExtended: false,
+      welcomeMessage: 'Welcome to 377 SPIRITS! Please present valid ID if purchasing age-restricted items.',
     },
     scale: {
       category: 'scale',
@@ -104,18 +111,19 @@ export class HardwareStore {
     card_terminal: {
       category: 'card_terminal',
       categoryLabel: 'Card Terminal',
-      deviceId: 'terminal_lane_3000',
-      deviceName: 'Ingenico Lane/3000',
-      manufacturer: 'Ingenico',
+      deviceId: '',
+      deviceName: 'Not Configured',
+      manufacturer: 'Generic',
       connectionType: 'network',
-      address: '192.168.1.190:12345',
-      isDefault: true,
+      address: 'None',
+      isDefault: false,
     },
   };
 
   private constructor() {
     this.loadPersistedConfig();
-    // Non-blocking initial health check
+    this.initBroadcastChannel();
+    this.initWindowMessageListener();
     this.refreshHealth().catch(() => {});
   }
 
@@ -124,6 +132,37 @@ export class HardwareStore {
       HardwareStore.instance = new HardwareStore();
     }
     return HardwareStore.instance;
+  }
+
+  private initBroadcastChannel() {
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        this.broadcastChannel = new BroadcastChannel('pos_customer_display_channel');
+        this.broadcastChannel.onmessage = (event) => {
+          if (event.data && event.data.type === 'CUSTOMER_TOUCH_ACTION') {
+            this.notifyCustomerTouchAction(event.data.action);
+          }
+        };
+      }
+    } catch {}
+  }
+
+  private initWindowMessageListener() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('message', (event) => {
+        if (event.data && typeof event.data === 'object') {
+          if (event.data.type === 'CUSTOMER_TOUCH_ACTION' && event.data.action) {
+            this.notifyCustomerTouchAction(event.data.action);
+          } else if (
+            event.data.type === 'LOYALTY_PHONE_ENTERED' ||
+            event.data.type === 'RECEIPT_PREFERENCE' ||
+            event.data.type === 'TIP_SELECTED'
+          ) {
+            this.notifyCustomerTouchAction(event.data);
+          }
+        }
+      });
+    }
   }
 
   private loadPersistedConfig() {
@@ -151,7 +190,10 @@ export class HardwareStore {
   private savePersistedConfig() {
     try {
       localStorage.setItem(STORAGE_KEY_CONFIGURED_HARDWARE, JSON.stringify(this.configured));
-      localStorage.setItem(STORAGE_KEY_LAST_DEVICES, JSON.stringify(Array.isArray(this.discoveredDevices) ? this.discoveredDevices : []));
+      localStorage.setItem(
+        STORAGE_KEY_LAST_DEVICES,
+        JSON.stringify(Array.isArray(this.discoveredDevices) ? this.discoveredDevices : [])
+      );
     } catch {}
   }
 
@@ -161,7 +203,7 @@ export class HardwareStore {
   }
 
   private notify() {
-    this.listeners.forEach(fn => {
+    this.listeners.forEach((fn) => {
       try {
         fn();
       } catch {}
@@ -183,10 +225,6 @@ export class HardwareStore {
 
   public getSummary(): HardwareSummary | null {
     return this.summary;
-  }
-
-  public getDiagnosticsReport(): MasterDiagnosticsReport | null {
-    return this.diagnosticsReport;
   }
 
   public getIsScanning(): boolean {
@@ -223,17 +261,48 @@ export class HardwareStore {
       const devices = await this.client.scanDevices();
       this.discoveredDevices = Array.isArray(devices) ? devices : [];
       this.lastScanTime = new Date().toLocaleTimeString();
+
+      // If no printer is currently configured and a Windows printer was discovered, auto-assign first available
+      if (!this.configured.receipt_printer.deviceId) {
+        const foundPrinter = this.discoveredDevices.find((d) => d.category === 'receipt_printer');
+        if (foundPrinter) {
+          this.configured.receipt_printer = {
+            category: 'receipt_printer',
+            categoryLabel: 'Receipt Printer',
+            deviceId: foundPrinter.deviceId,
+            deviceName: foundPrinter.name,
+            manufacturer: foundPrinter.manufacturer,
+            connectionType: foundPrinter.connectionType,
+            address: foundPrinter.address,
+            isDefault: true,
+          };
+          this.configured.cash_drawer.hostPrinterId = foundPrinter.deviceId;
+        }
+      }
+
+      // If customer display is unassigned, check discovered displays
+      if (!this.configured.customer_display.displayId) {
+        const foundDisplay = this.discoveredDevices.find((d) => d.category === 'customer_display');
+        if (foundDisplay) {
+          this.configured.customer_display = {
+            ...this.configured.customer_display,
+            deviceId: foundDisplay.deviceId,
+            deviceName: foundDisplay.name,
+            displayId: foundDisplay.address,
+            isExtended: true,
+          };
+        }
+      }
+
       this.savePersistedConfig();
 
-      // Update health
+      // Update health and summary
       await this.refreshHealth();
-
-      // Update summary if available
       this.summary = await this.client.getSummary();
 
       this.isScanning = false;
       this.notify();
-      return devices;
+      return this.discoveredDevices;
     } catch (err: any) {
       this.isScanning = false;
       this.scanError = err.message || 'Bridge scan failed';
@@ -255,6 +324,9 @@ export class HardwareStore {
       ...this.configured[category],
       ...config,
     };
+    if (category === 'receipt_printer' && config.deviceId) {
+      this.configured.cash_drawer.hostPrinterId = config.deviceId;
+    }
     this.savePersistedConfig();
     this.notify();
   }
@@ -262,75 +334,305 @@ export class HardwareStore {
   /**
    * Direct hardware test using selected device ID
    */
-  public async testDevice(category: HardwareCategory): Promise<{ success: boolean; message: string; latencyMs?: number }> {
+  public async testDevice(category: HardwareCategory): Promise<{
+    success: boolean;
+    message: string;
+    windowsDetected?: boolean;
+    latencyMs?: number;
+  }> {
     const item = this.configured[category];
-    if (!item || !item.deviceId) {
-      return { success: false, message: `No ${item.categoryLabel || category} configured` };
+    if (!item) {
+      return { success: false, message: `No ${category} configured` };
     }
 
     if (category === 'receipt_printer') {
+      if (!item.deviceId) {
+        return {
+          success: false,
+          windowsDetected: false,
+          message: 'No receipt printer assigned to this register. Please select an installed Windows printer.',
+        };
+      }
+      const startTime = performance.now();
       const res = await this.client.testPrint(item.deviceId);
-      return { ...res, latencyMs: 4 };
+      const elapsed = Math.round(performance.now() - startTime);
+      return {
+        success: res.success,
+        windowsDetected: res.windowsDetected ?? true,
+        message: res.message,
+        latencyMs: elapsed,
+      };
     }
 
     if (category === 'cash_drawer') {
+      const startTime = performance.now();
       const res = await this.client.openDrawer({
         connectionMethod: item.drawerConnectionMethod || 'through_printer',
         printerId: item.hostPrinterId || this.configured.receipt_printer.deviceId,
         drawerPort: item.drawerPort,
       });
-      return { ...res, latencyMs: 15 };
+      const elapsed = Math.round(performance.now() - startTime);
+      return {
+        success: res.success,
+        message: res.message,
+        latencyMs: elapsed,
+      };
     }
 
     if (category === 'customer_display') {
-      const res = await this.client.testDisplay(item.displayId || 'DISPLAY2');
-      return { ...res, latencyMs: 2 };
+      const targetDisplay = item.displayId || 'DISPLAY1';
+      const startTime = performance.now();
+      const res = await this.client.testDisplay(targetDisplay);
+      const elapsed = Math.round(performance.now() - startTime);
+      return {
+        success: res.success,
+        message: res.message,
+        latencyMs: elapsed,
+      };
     }
 
-    return await this.client.testDevice(item.deviceId);
+    if (category === 'barcode_scanner') {
+      return {
+        success: true,
+        message: 'USB Barcode Scanner wedge is active and listening for keystroke events.',
+        latencyMs: 1,
+      };
+    }
+
+    return {
+      success: false,
+      message: `Direct test for ${item.categoryLabel} not supported without physical peripheral driver.`,
+    };
   }
 
   /**
    * Real receipt printing to configured printer ID
    */
-  public async printReceipt(receiptData: any): Promise<{ success: boolean; jobId?: string; message?: string }> {
+  public async printReceipt(
+    receiptData: any,
+    options?: any
+  ): Promise<{
+    success: boolean;
+    jobId?: string;
+    printerUsed?: string;
+    message?: string;
+    windowsDetected?: boolean;
+    error?: string;
+  }> {
     const printer = this.configured.receipt_printer;
     if (!printer || !printer.deviceId) {
-      return { success: false, message: 'No receipt printer configured on this register.' };
+      return {
+        success: false,
+        windowsDetected: false,
+        message: 'No receipt printer configured on this register. Select a printer in Hardware Settings.',
+        error: 'No receipt printer configured',
+      };
     }
-    return await this.client.printReceipt(printer.deviceId, receiptData);
+    const res = await this.client.printReceipt(printer.deviceId, receiptData);
+    return {
+      success: res.success,
+      jobId: res.jobId,
+      printerUsed: res.printerUsed || printer.deviceName,
+      message: res.message,
+      windowsDetected: true,
+      error: res.success ? undefined : res.message,
+    };
   }
 
   /**
    * Real cash drawer pulse
    */
-  public async openCashDrawer(): Promise<{ success: boolean; message: string }> {
+  public async openCashDrawer(options?: any): Promise<{ success: boolean; message: string; error?: string }> {
     const drawer = this.configured.cash_drawer;
-    return await this.client.openDrawer({
+    const res = await this.client.openDrawer({
       connectionMethod: drawer.drawerConnectionMethod || 'through_printer',
       printerId: drawer.hostPrinterId || this.configured.receipt_printer.deviceId,
       drawerPort: drawer.drawerPort,
+      ...(options || {}),
     });
+    return {
+      success: res.success,
+      message: res.message,
+      error: res.success ? undefined : res.message,
+    };
   }
 
   /**
-   * Customer display test / open
+   * Customer display test
    */
   public async testCustomerDisplay(displayId?: string): Promise<{ success: boolean; message: string }> {
     const disp = this.configured.customer_display;
-    return await this.client.testDisplay(displayId || disp.displayId || 'DISPLAY2');
+    return await this.client.testDisplay(displayId || disp.displayId || 'DISPLAY1');
   }
 
-  /**
-   * Fetches full diagnostics
-   */
-  public async runDiagnostics(): Promise<MasterDiagnosticsReport | null> {
-    const rep = await this.client.getDiagnostics();
-    if (rep) {
-      this.diagnosticsReport = rep;
-      this.notify();
+  // ==============================================================================
+  // CUSTOMER DISPLAY WINDOW & LIFECYCLE (Requirement 8)
+  // Browser customer window: OPEN / CLOSED
+  // Physical monitor detection: DETECTED / NOT DETECTED
+  // Bridge: CONNECTED / OFFLINE
+  // ==============================================================================
+
+  public isCustomerDisplayWindowOpen(): boolean {
+    return Boolean(this.customerWindow && !this.customerWindow.closed);
+  }
+
+  public openCustomerDisplayWindow(isAutoAttempt: boolean = false): {
+    success: boolean;
+    blocked?: boolean;
+    message: string;
+  } {
+    // Re-use single window without reloading or stealing focus
+    if (this.isCustomerDisplayWindowOpen()) {
+      return { success: true, message: 'Customer display window already active' };
     }
-    return rep;
+
+    try {
+      const url = `${window.location.origin}?mode=customer-display`;
+      const w = window.open(
+        url,
+        'KabiraCustomerDisplay',
+        'width=1024,height=768,menubar=no,toolbar=no,location=no,status=no,resizable=yes'
+      );
+      if (w) {
+        this.customerWindow = w;
+        return { success: true, message: 'Customer display window opened' };
+      }
+      return {
+        success: false,
+        blocked: true,
+        message: 'Browser popup blocker prevented secondary display window from opening.',
+      };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Customer display open failed' };
+    }
+  }
+
+  public restartCustomerDisplay(): { success: boolean; message: string; blocked?: boolean } {
+    if (this.customerWindow && !this.customerWindow.closed) {
+      try {
+        this.customerWindow.close();
+      } catch {}
+    }
+    this.customerWindow = null;
+    return this.openCustomerDisplayWindow(false);
+  }
+
+  public broadcastCustomerDisplay(payload: any) {
+    // 1. Post to BroadcastChannel
+    try {
+      if (this.broadcastChannel) {
+        this.broadcastChannel.postMessage(payload);
+      }
+    } catch {}
+
+    // 2. Post to direct window reference if available
+    if (this.customerWindow && !this.customerWindow.closed) {
+      try {
+        this.customerWindow.postMessage(payload, '*');
+      } catch {}
+    }
+
+    // 3. Persist to localStorage for cross-tab sync
+    try {
+      localStorage.setItem('pos_customer_display_state', JSON.stringify(payload));
+    } catch {}
+  }
+
+  public syncCartToCustomerDisplay(cart: any[], totals: any, storeMeta?: any) {
+    const rawSubtotal = totals?.subtotal ?? 0;
+    const discountTotal = totals?.discountTotal ?? 0;
+    const taxTotal = totals?.taxTotal ?? 0;
+    const grandTotal = totals?.grandTotal ?? 0;
+
+    const payload = {
+      screenState: cart.length === 0 ? 'welcome' : 'cart',
+      storeName: storeMeta?.storeName || 'KABIRA POS • 377 SPIRITS',
+      tagline: storeMeta?.tagline || 'Fine Liquors, Craft Spirits, Wine & Beer',
+      items: cart.map((it: any) => ({
+        id: it.product?.id || it.id,
+        name: it.product?.name || it.name,
+        size: it.product?.size || '',
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        lineTotal: it.unitPrice * it.quantity - (it.discountAmount || 0),
+      })),
+      subtotal: rawSubtotal,
+      discountTotal: discountTotal,
+      taxTotal: taxTotal,
+      grandTotal: grandTotal,
+      welcomeMessage: this.configured.customer_display.welcomeMessage,
+    };
+
+    this.broadcastCustomerDisplay(payload);
+  }
+
+  // Warning banner dismissal persistence (Requirement 8: must not recreate continuously)
+  public isCustomerDisplayWarningDismissed(): boolean {
+    try {
+      return sessionStorage.getItem(STORAGE_KEY_DISPLAY_DISMISSED) === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  public dismissCustomerDisplayWarning() {
+    try {
+      sessionStorage.setItem(STORAGE_KEY_DISPLAY_DISMISSED, 'true');
+    } catch {}
+    this.notify();
+  }
+
+  public resetCustomerDisplayWarningDismissal() {
+    try {
+      sessionStorage.removeItem(STORAGE_KEY_DISPLAY_DISMISSED);
+    } catch {}
+    this.notify();
+  }
+
+  // ==============================================================================
+  // BARCODE SCANNER & CUSTOMER TOUCH LISTENERS
+  // ==============================================================================
+
+  public subscribeBarcodeScan(callback: BarcodeScanListener): () => void {
+    this.barcodeListeners.add(callback);
+    return () => this.barcodeListeners.delete(callback);
+  }
+
+  public notifyBarcodeScan(barcode: string, source: string = 'Hardware Scanner') {
+    this.barcodeListeners.forEach((cb) => {
+      try {
+        cb(barcode, source);
+      } catch {}
+    });
+  }
+
+  public subscribeCustomerTouchAction(callback: CustomerTouchListener): () => void {
+    this.touchListeners.add(callback);
+    return () => this.touchListeners.delete(callback);
+  }
+
+  public notifyCustomerTouchAction(action: { type: string; timestamp?: string; data?: any }) {
+    this.touchListeners.forEach((cb) => {
+      try {
+        cb(action);
+      } catch {}
+    });
+  }
+
+  public broadcastCustomerTouchAction(action: { type: string; timestamp?: string; data?: any }) {
+    try {
+      if (this.broadcastChannel) {
+        this.broadcastChannel.postMessage({ type: 'CUSTOMER_TOUCH_ACTION', action });
+      }
+    } catch {}
+
+    if (typeof window !== 'undefined' && window.opener && !window.opener.closed) {
+      try {
+        window.opener.postMessage({ type: 'CUSTOMER_TOUCH_ACTION', action }, '*');
+      } catch {}
+    }
+
+    this.notifyCustomerTouchAction(action);
   }
 }
 

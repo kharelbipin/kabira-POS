@@ -1,13 +1,23 @@
-// Authoritative Bridge Client for Kabira POS
-// Single point of contact with the local Windows Hardware Bridge (127.0.0.1:5055)
-// No simulated discovery. React asks the Bridge and displays the real result.
+// Canonical Authoritative Bridge Client for Kabira POS
+// Connects directly to the local Windows Hardware Bridge: http://127.0.0.1:5055
+// Strict Canonical API Contract:
+//   GET  /api/bridge/health
+//   GET  /api/bridge/version
+//   POST /api/hardware/scan
+//   GET  /api/hardware/devices
+//   GET  /api/hardware/summary
+//   GET  /api/printers
+//   POST /api/printers/{deviceId}/test-print
+//   POST /api/printers/{deviceId}/print
+//   POST /api/drawer/open
+//   GET  /api/displays
+//   POST /api/displays/{displayId}/test
 
 import {
   BridgeHealth,
   DiscoveredHardwareDevice,
   HardwareSummary,
   WindowsDisplayInfo,
-  MasterDiagnosticsReport,
 } from './bridgeTypes';
 import { BridgeConnectionError, BridgeTimeoutError, BridgeDeviceError } from './bridgeErrors';
 
@@ -15,17 +25,19 @@ export class BridgeClient {
   private static instance: BridgeClient;
   private bridgeBaseUrl: string = 'http://127.0.0.1:5055';
   private requestTimeoutMs: number = 3500;
+  private bridgeToken: string = 'kabira-pos-bridge-token-v24';
 
   private constructor() {
-    // Allow override via localStorage if configured
     try {
       const customUrl = localStorage.getItem('pos_bridge_endpoint_v1');
       if (customUrl) {
         this.bridgeBaseUrl = customUrl;
       }
-    } catch {
-      // localStorage may fail in restricted sandbox
-    }
+      const savedToken = localStorage.getItem('pos_bridge_token_v1');
+      if (savedToken) {
+        this.bridgeToken = savedToken;
+      }
+    } catch {}
   }
 
   public static getInstance(): BridgeClient {
@@ -46,8 +58,36 @@ export class BridgeClient {
     return this.bridgeBaseUrl;
   }
 
+  public setToken(token: string) {
+    this.bridgeToken = token;
+    try {
+      localStorage.setItem('pos_bridge_token_v1', token);
+    } catch {}
+  }
+
+  public getToken(): string {
+    return this.bridgeToken;
+  }
+
   /**
-   * Internal HTTP fetch wrapper with strict timeout and truthful failure handling
+   * Mode detection: default is strictly 'bridge'.
+   * 'mock' is isolated and only active if explicitly configured via localStorage or URL query param.
+   * Production NEVER automatically falls back to mock.
+   */
+  public getHardwareMode(): 'bridge' | 'mock' {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('hardwareMode') === 'mock') return 'mock';
+        const saved = localStorage.getItem('kabira_hardware_mode');
+        if (saved === 'mock') return 'mock';
+      }
+    } catch {}
+    return 'bridge';
+  }
+
+  /**
+   * Internal HTTP fetch wrapper with strict canonical headers and truthful failure handling
    */
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.bridgeBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
@@ -60,6 +100,7 @@ export class BridgeClient {
         headers: {
           'Content-Type': 'application/json',
           'X-Client': 'Kabira-POS-React',
+          'X-Bridge-Token': this.bridgeToken,
           ...(options.headers || {}),
         },
         signal: controller.signal,
@@ -86,31 +127,24 @@ export class BridgeClient {
         throw err;
       }
       throw new BridgeConnectionError(
-        `Hardware Bridge Unavailable at ${this.bridgeBaseUrl}. Please ensure Kabira POS Hardware Bridge service is running.`,
+        `Hardware Bridge Unavailable at ${this.bridgeBaseUrl}. Please ensure KaBiRa POS Hardware Bridge service is running.`,
         this.bridgeBaseUrl
       );
     }
   }
 
   /**
-   * Checks Bridge service health
+   * 1. GET /api/bridge/health
    */
   public async getHealth(): Promise<BridgeHealth> {
     const startTime = performance.now();
     try {
-      // Try /health or /api/bridge/health
-      let res: any;
-      try {
-        res = await this.request<any>('/health');
-      } catch {
-        res = await this.request<any>('/api/bridge/health');
-      }
-
+      const res = await this.request<any>('/api/bridge/health');
       const elapsed = Math.round(performance.now() - startTime);
 
       return {
         status: res.status === 'running' || res.serviceRunning ? 'running' : 'degraded',
-        version: res.version || '1.0.4',
+        version: res.version || '2.4.1-LTS',
         machineName: res.machineName || 'POS-HOST',
         serviceRunning: Boolean(res.serviceRunning ?? true),
         windowsDiscovery: Boolean(res.windowsDiscovery ?? true),
@@ -136,36 +170,33 @@ export class BridgeClient {
   }
 
   /**
-   * Performs full hardware scan via Bridge Windows discovery
+   * 2. GET /api/bridge/version
+   */
+  public async getVersion(): Promise<{ bridgeVersion: string; runtime: string; os: string; status: string }> {
+    return await this.request<{ bridgeVersion: string; runtime: string; os: string; status: string }>('/api/bridge/version');
+  }
+
+  /**
+   * 3. POST /api/hardware/scan
    */
   public async scanDevices(): Promise<DiscoveredHardwareDevice[]> {
     try {
-      let res: any;
-      try {
-        res = await this.request<any>('/devices/scan', { method: 'POST' });
-      } catch {
-        res = await this.request<any>('/api/hardware/scan', { method: 'POST' });
-      }
+      const res = await this.request<any>('/api/hardware/scan', { method: 'POST' });
       if (Array.isArray(res)) return res;
       if (res && Array.isArray(res.devices)) return res.devices;
       return [];
     } catch (err: any) {
-      // If bridge is offline, do NOT manufacture fake hardware.
+      // Truthful: if bridge is offline, do NOT manufacture fake hardware.
       throw err;
     }
   }
 
   /**
-   * Retrieves discovered devices from Bridge
+   * 4. GET /api/hardware/devices
    */
   public async getDevices(): Promise<DiscoveredHardwareDevice[]> {
     try {
-      let res: any;
-      try {
-        res = await this.request<any>('/devices');
-      } catch {
-        res = await this.request<any>('/api/hardware/devices');
-      }
+      const res = await this.request<any>('/api/hardware/devices');
       if (Array.isArray(res)) return res;
       if (res && Array.isArray(res.devices)) return res.devices;
       return [];
@@ -175,47 +206,77 @@ export class BridgeClient {
   }
 
   /**
-   * Retrieves hardware summary from Bridge
+   * 5. GET /api/hardware/summary
    */
   public async getSummary(): Promise<HardwareSummary | null> {
     try {
-      return await this.request<HardwareSummary>('/devices/summary');
+      return await this.request<HardwareSummary>('/api/hardware/summary');
     } catch {
       return null;
     }
   }
 
   /**
-   * Tests a device through the Bridge
+   * 6. GET /api/printers
    */
-  public async testDevice(deviceId: string): Promise<{ success: boolean; message: string; latencyMs: number }> {
-    const start = performance.now();
+  public async getPrinters(): Promise<Array<{
+    deviceId: string;
+    name: string;
+    queueName: string;
+    port: string;
+    driver: string;
+    manufacturer: string;
+    connection: string;
+    windowsDetected: boolean;
+    status: string;
+    isDefault: boolean;
+  }>> {
     try {
-      const res = await this.request<{ success: boolean; message?: string }>(`/devices/${encodeURIComponent(deviceId)}/test`, {
-        method: 'POST',
-      });
-      return {
-        success: Boolean(res.success),
-        message: res.message || 'Device responded successfully',
-        latencyMs: Math.round(performance.now() - start),
-      };
+      const res = await this.request<any>('/api/printers');
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.printers)) return res.printers;
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * 7. POST /api/printers/{deviceId}/test-print
+   */
+  public async testPrint(deviceId: string): Promise<{ success: boolean; message: string; windowsDetected?: boolean }> {
+    try {
+      return await this.request<{ success: boolean; message: string; windowsDetected?: boolean }>(
+        `/api/printers/${encodeURIComponent(deviceId)}/test-print`,
+        { method: 'POST' }
+      );
     } catch (err: any) {
       return {
         success: false,
-        message: err.message || 'Direct device communication failed',
-        latencyMs: Math.round(performance.now() - start),
+        windowsDetected: true,
+        message: err.message || 'Direct test print failed: communication timeout with Windows spooler',
       };
     }
   }
 
   /**
-   * Direct receipt printing through selected Device ID
+   * 8. POST /api/printers/{deviceId}/print
    */
-  public async printReceipt(printerId: string, receiptPayload: any): Promise<{ success: boolean; jobId?: string; message?: string }> {
+  public async printReceipt(deviceId: string, receiptPayload: any): Promise<{
+    success: boolean;
+    jobId?: string;
+    printerUsed?: string;
+    message?: string;
+  }> {
     try {
-      return await this.request<{ success: boolean; jobId?: string; message?: string }>(`/printers/${encodeURIComponent(printerId)}/print`, {
+      return await this.request<{
+        success: boolean;
+        jobId?: string;
+        printerUsed?: string;
+        message?: string;
+      }>(`/api/printers/${encodeURIComponent(deviceId)}/print`, {
         method: 'POST',
-        body: JSON.stringify(receiptPayload),
+        body: typeof receiptPayload === 'string' ? receiptPayload : JSON.stringify(receiptPayload),
       });
     } catch (err: any) {
       return {
@@ -226,23 +287,7 @@ export class BridgeClient {
   }
 
   /**
-   * Test print on selected Printer Device ID
-   */
-  public async testPrint(printerId: string): Promise<{ success: boolean; message: string }> {
-    try {
-      return await this.request<{ success: boolean; message: string }>(`/printers/${encodeURIComponent(printerId)}/test`, {
-        method: 'POST',
-      });
-    } catch (err: any) {
-      return {
-        success: false,
-        message: `Direct printer communication failed: ${err.message}`,
-      };
-    }
-  }
-
-  /**
-   * Kicks cash drawer through selected Printer Adapter or direct COM/USB
+   * 9. POST /api/drawer/open
    */
   public async openDrawer(options: {
     connectionMethod?: 'through_printer' | 'usb' | 'serial' | 'network';
@@ -251,7 +296,7 @@ export class BridgeClient {
     pulseDurationMs?: number;
   } = {}): Promise<{ success: boolean; message: string }> {
     try {
-      return await this.request<{ success: boolean; message: string }>('/drawer/open', {
+      return await this.request<{ success: boolean; message: string }>('/api/drawer/open', {
         method: 'POST',
         body: JSON.stringify(options),
       });
@@ -264,14 +309,14 @@ export class BridgeClient {
   }
 
   /**
-   * Enumerates Windows Displays from graphics subsystem
+   * 10. GET /api/displays
    */
   public async getDisplays(): Promise<{ displays: WindowsDisplayInfo[]; isExtended: boolean }> {
     try {
-      const res = await this.request<any>('/displays');
+      const res = await this.request<any>('/api/displays');
       return {
         displays: res.displays || [],
-        isExtended: Boolean(res.isExtended ?? true),
+        isExtended: Boolean(res.isExtended ?? (res.displays?.length > 1)),
       };
     } catch {
       return { displays: [], isExtended: false };
@@ -279,29 +324,19 @@ export class BridgeClient {
   }
 
   /**
-   * Tests secondary display window
+   * 11. POST /api/displays/{displayId}/test
    */
-  public async testDisplay(displayId: string): Promise<{ success: boolean; message: string }> {
+  public async testDisplay(displayId: string): Promise<{ success: boolean; message: string; displayId?: string }> {
     try {
-      return await this.request<{ success: boolean; message: string }>(`/displays/${encodeURIComponent(displayId)}/test`, {
-        method: 'POST',
-      });
+      return await this.request<{ success: boolean; message: string; displayId?: string }>(
+        `/api/displays/${encodeURIComponent(displayId)}/test`,
+        { method: 'POST' }
+      );
     } catch (err: any) {
       return {
         success: false,
         message: `Display test failed: ${err.message}`,
       };
-    }
-  }
-
-  /**
-   * Queries full diagnostics matrix
-   */
-  public async getDiagnostics(): Promise<MasterDiagnosticsReport | null> {
-    try {
-      return await this.request<MasterDiagnosticsReport>('/diagnostics');
-    } catch {
-      return null;
     }
   }
 }

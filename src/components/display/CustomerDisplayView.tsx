@@ -21,7 +21,7 @@ import {
 import { CustomerDisplayState, CustomerReceiptPreference } from '../../types';
 import { KabiraEmblem } from '../common/KabiraLogo';
 import { IdentifyDisplaysOverlay } from './IdentifyDisplaysOverlay';
-import { webview2Bridge } from '../../services/webview2Bridge';
+import { hardwareStore } from '../../hardware/HardwareStore';
 import { playBeep } from '../../utils/audio';
 
 export const CustomerDisplayView: React.FC = () => {
@@ -124,7 +124,7 @@ export const CustomerDisplayView: React.FC = () => {
 
     if (newState.screenState === 'thank_you') {
       // Auto-return to welcome after 8 seconds (or configured timeout)
-      const timeoutSec = webview2Bridge.getHostConfig().returnToWelcomeTimeoutSec || 8;
+      const timeoutSec = 8;
       autoReturnTimerRef.current = window.setTimeout(() => {
         setDisplayState(prev => ({
           ...prev,
@@ -178,7 +178,7 @@ export const CustomerDisplayView: React.FC = () => {
     if (customerPhone.length >= 7) {
       playBeep('success');
       setPhoneSubmitted(true);
-      webview2Bridge.broadcastCustomerTouchAction({
+      hardwareStore.broadcastCustomerTouchAction({
         type: 'LOYALTY_PHONE_ENTERED',
         timestamp: new Date().toISOString(),
         data: { phone: customerPhone },
@@ -190,7 +190,7 @@ export const CustomerDisplayView: React.FC = () => {
   const handleReceiptSelection = (pref: CustomerReceiptPreference) => {
     playBeep('click');
     setReceiptSelected(pref);
-    webview2Bridge.broadcastCustomerTouchAction({
+    hardwareStore.broadcastCustomerTouchAction({
       type: 'RECEIPT_PREFERENCE',
       timestamp: new Date().toISOString(),
       data: { preference: pref },
@@ -200,7 +200,7 @@ export const CustomerDisplayView: React.FC = () => {
   const handleTipSelection = (amount: number) => {
     playBeep('click');
     setSelectedTip(amount);
-    webview2Bridge.broadcastCustomerTouchAction({
+    hardwareStore.broadcastCustomerTouchAction({
       type: 'TIP_SELECTED',
       timestamp: new Date().toISOString(),
       data: { tipAmount: amount },

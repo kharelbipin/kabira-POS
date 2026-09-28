@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { DollarSign, X, CheckCircle2, AlertTriangle, Key, Receipt } from 'lucide-react';
 import { Product, User } from '../../types';
 import { playBeep } from '../../utils/audio';
-import { posBridge } from '../../services/posBridge';
+import { hardwareStore } from '../../hardware';
 
 interface LottoPayoutModalProps {
   isOpen: boolean;
@@ -117,10 +117,7 @@ export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
 
     // If kick drawer enabled, trigger POS bridge pulse
     if (kickDrawer) {
-      posBridge.kickCashDrawer({
-        type: 'lotto_payout',
-        user: currentUser || undefined,
-        amount: payoutAmount,
+      hardwareStore.openCashDrawer({
         reason: `Texas Lotto Winning Ticket Payout: $${payoutAmount.toFixed(2)}`,
         orderNumber: ticketNumber ? `TKT-${ticketNumber}` : undefined,
       }).catch(console.error);

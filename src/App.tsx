@@ -32,8 +32,7 @@ import { MobileFastCameraView } from './components/mobile/MobileFastCameraView';
 import { MobileQueueBusterView } from './components/mobile/MobileQueueBusterView';
 import { PosBridgeHubModal } from './components/bridge/PosBridgeHubModal';
 import { CustomerDisplayView } from './components/display/CustomerDisplayView';
-import { posBridge } from './services/posBridge';
-import { webview2Bridge } from './services/webview2Bridge';
+import { hardwareStore, bridgeClient } from './hardware';
 import { IdentifyDisplaysOverlay } from './components/display/IdentifyDisplaysOverlay';
 import { StartupHealthModal } from './components/startup/StartupHealthModal';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
@@ -50,7 +49,6 @@ import { MobileInvoiceCaptureView } from './components/invoice/MobileInvoiceCapt
 import { StandalonePaymentFallbackModal } from './components/payment/StandalonePaymentFallbackModal';
 import { AllFunctionsMenuModal } from './components/AllFunctionsMenuModal';
 import { CustomerDisplayAutoBanner } from './components/display/CustomerDisplayAutoBanner';
-import { deviceDiscovery } from './services/deviceDiscoveryService';
 import { ProducePluScaleModal } from './components/grocery/ProducePluScaleModal';
 import { KitchenKdsModal } from './components/restaurant/KitchenKdsModal';
 import { RestaurantTablesView } from './components/restaurant/RestaurantTablesView';
@@ -169,7 +167,7 @@ export default function App() {
   const [showDesignerModal, setShowDesignerModal] = useState<boolean>(false);
   const [showStoreFeatureModal, setShowStoreFeatureModal] = useState<boolean>(false);
 
-  // Standalone Customer-Facing Display Detection (WV-012, PB-018)
+  // Standalone Customer-Facing Display Detection (WV-012, PB-018, Requirement 8)
   const isCustomerDisplayMode = useMemo(() => {
     try {
       const path = window.location.pathname;
@@ -177,6 +175,7 @@ export default function App() {
       return (
         path === '/customer-display' ||
         path.endsWith('/customer-display') ||
+        params.get('mode') === 'customer-display' ||
         params.get('view') === 'customer-display' ||
         params.get('display') === 'customer' ||
         window.location.hash === '#customer-display'
@@ -271,8 +270,8 @@ export default function App() {
       return;
     }
     loadAllData();
-    // Auto-open second display screen in webform version (BR-DSP-001 - BR-DSP-007)
-    deviceDiscovery.initCustomerDisplayAutoOpen();
+    // Auto-open second display screen if configured (Requirement 8)
+    hardwareStore.openCustomerDisplayWindow(true);
   }, [loadAllData, isCustomerDisplayMode, checkUploadSession, shelfCameraSession, mobileSessionParam]);
 
   // Cart Operations (CA-01, CA-02, CA-03)
@@ -394,7 +393,7 @@ export default function App() {
         });
 
         // 4. Synchronize with Secondary Customer Display
-        posBridge.broadcastCustomerDisplay({
+        hardwareStore.broadcastCustomerDisplay({
           lastScannedItem: `${product.name} (${product.size || ''})`,
         });
 
@@ -544,7 +543,7 @@ export default function App() {
     if (isCustomerDisplayMode) return;
     if (cartItems.length === 0) {
       if (!lastCompletedOrder) {
-        posBridge.broadcastCustomerDisplay({
+        hardwareStore.broadcastCustomerDisplay({
           screenState: 'welcome',
           items: [],
           subtotal: 0,
@@ -555,7 +554,7 @@ export default function App() {
       }
     } else {
       const lastItem = cartItems[cartItems.length - 1];
-      posBridge.broadcastCustomerDisplay({
+      hardwareStore.broadcastCustomerDisplay({
         screenState: 'active_cart',
         items: cartItems.map(it => ({
           name: it.product.name,
@@ -576,26 +575,17 @@ export default function App() {
   // Global Barcode Scanner Listeners (Hardware Keyboard Wedge + POS Bridge Pipeline)
   useEffect(() => {
     if (isCustomerDisplayMode) return;
-    const unregWv = webview2Bridge.registerBarcodeScannerListener((scannedBarcode) => {
-      handleBarcodeScanned(scannedBarcode, 'Hardware USB Keyboard Wedge');
+    const unsubHardware = hardwareStore.subscribeBarcodeScan((scannedBarcode, source) => {
+      handleBarcodeScanned(scannedBarcode, source || 'POS Bridge Scanner');
     });
 
-    const unregBridge = posBridge.subscribeBarcodeScan((event) => {
-      if (event && event.barcode) {
-        handleBarcodeScanned(event.barcode, event.source || 'POS Bridge Scanner');
-      }
-    });
-
-    return () => {
-      unregWv();
-      unregBridge();
-    };
+    return unsubHardware;
   }, [handleBarcodeScanned, isCustomerDisplayMode]);
 
   // Customer Display Touch Action Listener (WV-050)
   useEffect(() => {
     if (isCustomerDisplayMode) return;
-    const unregTouch = webview2Bridge.listenCustomerTouchActions((event) => {
+    const unregTouch = hardwareStore.subscribeCustomerTouchAction((event) => {
       if (event.type === 'LOYALTY_PHONE_ENTERED' && event.data?.phone) {
         const rawPhone = event.data.phone.replace(/\D/g, '');
         const foundCust = customers.find(c => c.phone.replace(/\D/g, '').includes(rawPhone));
@@ -652,30 +642,16 @@ export default function App() {
 
     const completed = await api.createOrder(orderPayload);
 
-    // POS Bridge & WebView2 Hardware Integration (PB-009, WV-036, WV-037)
+    // Canonical Hardware Integration (Requirement 1 & 5: Single Authoritative Path)
     if (paymentDetails.method === 'cash' || paymentDetails.method === 'split') {
-      posBridge.kickCashDrawer({
-        type: paymentDetails.method === 'cash' ? 'sale_cash' : 'sale_split',
-        reason: 'Cash sale transaction tender',
-        orderNumber: completed.orderNumber,
-        amount: paymentDetails.amountPaid,
-        user: currentUser || undefined,
-      });
-      webview2Bridge.sendCommand('OPEN_DRAWER', {
-        reason: `Sale ${completed.orderNumber} cash tender`,
-        orderNumber: completed.orderNumber,
-      }).catch(() => {});
+      hardwareStore.openCashDrawer().catch(() => {});
     }
 
     if (settings?.autoPrintReceipt ?? true) {
-      posBridge.printReceipt(completed, settings);
-      webview2Bridge.sendCommand('PRINT_RECEIPT', {
-        orderId: completed.id,
-        orderNumber: completed.orderNumber,
-      }).catch(() => {});
+      hardwareStore.printReceipt(completed, settings).catch(() => {});
     }
 
-    posBridge.broadcastCustomerDisplay({
+    hardwareStore.broadcastCustomerDisplay({
       screenState: 'thank_you',
       tenderedAmount: paymentDetails.amountPaid,
       changeDue: paymentDetails.changeGiven || 0,
@@ -703,7 +679,7 @@ export default function App() {
     setShowReceiptModal(false);
     setLastCompletedOrder(null);
     setCurrentTab('pos');
-    posBridge.broadcastCustomerDisplay({
+    hardwareStore.broadcastCustomerDisplay({
       screenState: 'welcome',
       items: [],
       subtotal: 0,
@@ -718,7 +694,7 @@ export default function App() {
   const handleReprintReceipt = (order: Order) => {
     setLastCompletedOrder(order);
     setShowReceiptModal(true);
-    posBridge.printReceipt(order, settings);
+    hardwareStore.printReceipt(order, settings).catch(() => {});
   };
 
   const handleToggleOffline = () => {

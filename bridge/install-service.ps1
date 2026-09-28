@@ -56,17 +56,29 @@ netsh advfirewall firewall add rule name="KaBiRa POS Hardware Bridge 5055" dir=i
 Write-Host "[5/5] Starting KaBiRa POS Hardware Bridge service..." -ForegroundColor Green
 Start-Service -Name $serviceName
 
-# 7. Verification Probe
-Start-Sleep -Seconds 2
-try {
-    $probe = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/bridge/health" -Method Get -TimeoutSec 3
-    if ($probe.status -eq "running") {
-        Write-Host "==========================================================" -ForegroundColor Green
-        Write-Host "SUCCESS: KaBiRa POS Hardware Bridge is RUNNING on http://127.0.0.1:$Port" -ForegroundColor Green
-        Write-Host "Status: $($probe.status) | Version: $($probe.version)" -ForegroundColor Green
-        Write-Host "==========================================================" -ForegroundColor Green
-        exit 0
+# 7. Verification Probe: Only report Bridge installation successful when health returns successfully
+Write-Host "Verifying Bridge service startup and health at http://127.0.0.1:$Port/api/bridge/health..." -ForegroundColor Yellow
+$maxRetries = 10
+$healthy = $false
+
+for ($i = 1; $i -le $maxRetries; $i++) {
+    Start-Sleep -Seconds 1
+    try {
+        $probe = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/bridge/health" -Method Get -TimeoutSec 2
+        if ($probe.status -eq "running" -or $probe.serviceRunning -eq $true) {
+            $healthy = $true
+            Write-Host "==========================================================" -ForegroundColor Green
+            Write-Host "SUCCESS: KaBiRa POS Hardware Bridge is RUNNING on http://127.0.0.1:$Port" -ForegroundColor Green
+            Write-Host "Status: $($probe.status) | Version: $($probe.version)" -ForegroundColor Green
+            Write-Host "==========================================================" -ForegroundColor Green
+            exit 0
+        }
+    } catch {
+        Write-Host "Waiting for Bridge listener on port $Port (attempt $i/$maxRetries)..." -ForegroundColor Gray
     }
-} catch {
-    Write-Warning "Service was registered, but port $Port did not respond immediately. Check $InstallPath\logs."
+}
+
+if (-not $healthy) {
+    Write-Error "FATAL: KaBiRa POS Hardware Bridge service started but health probe failed on port $Port."
+    exit 1
 }

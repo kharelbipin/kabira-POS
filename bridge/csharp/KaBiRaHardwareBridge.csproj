@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-KaBiRaHardwareBridge-7894a8f1-0b29-4e76-88b9</UserSecretsId>
     <OutputType>Exe</OutputType>
+    <AssemblyName>KaBiRaPosBridge</AssemblyName>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

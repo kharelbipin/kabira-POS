@@ -567,7 +567,7 @@ export const HardwareDeviceManager: React.FC<HardwareDeviceManagerProps> = ({
                   {cat === 'customer_display' && (
                     <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-[11px] space-y-1">
                       <div className="text-slate-400 font-mono">
-                        Display Screen: <strong className="text-slate-200">{item.displayId || 'DISPLAY2'} (Extended Desktop)</strong>
+                        Display Screen: <strong className="text-slate-200">{item.displayId || item.deviceName || 'Auto-Detect'} (Extended Desktop)</strong>
                       </div>
                       <div className="text-slate-500 text-[10px]">
                         Windows requirement: Displays must be configured as <em>Extend these displays</em>.
@@ -670,7 +670,7 @@ export const HardwareDeviceManager: React.FC<HardwareDeviceManagerProps> = ({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Displays:</span>
-                  <span className="text-emerald-400 font-bold">2 Extended</span>
+                  <span className="text-white font-bold">{(discoveredDevices || []).filter(d => d.category === 'customer_display').length} Connected</span>
                 </div>
               </div>
             </div>
@@ -710,7 +710,7 @@ export const HardwareDeviceManager: React.FC<HardwareDeviceManagerProps> = ({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Display:</span>
-                  <span className="text-slate-200">{configuredHardware.customer_display.displayId || 'DISPLAY2'}</span>
+                  <span className="text-slate-200">{configuredHardware.customer_display.displayId || configuredHardware.customer_display.deviceName}</span>
                 </div>
               </div>
             </div>

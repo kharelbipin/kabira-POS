@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Order, StoreSettings } from '../types';
 import { playBeep } from '../utils/audio';
-import { posBridge } from '../services/posBridge';
+import { hardwareStore, bridgeClient, DiscoveredHardwareDevice } from '../hardware';
 import {
   Printer,
   Mail,
@@ -51,31 +51,57 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const [showSelectPrinter, setShowSelectPrinter] = useState<boolean>(false);
   const [isRetryingBridge, setIsRetryingBridge] = useState<boolean>(false);
   const [isScanningPrinters, setIsScanningPrinters] = useState<boolean>(false);
+  const [discoveredPrinters, setDiscoveredPrinters] = useState<DiscoveredHardwareDevice[]>(() =>
+    hardwareStore.getDiscoveredDevices().filter(d => d.category === 'receipt_printer')
+  );
   const [configuredPrinter, setConfiguredPrinter] = useState<{
     name: string;
     connection: string;
     windowsDetected: boolean;
     bridgeDetected: boolean;
   }>(() => {
-    const asg = posBridge.getRegisterPrinterAssignment();
+    const p = hardwareStore.getConfiguredHardware().receipt_printer;
+    const isBridgeOnline = hardwareStore.getHealth().status === 'running';
     return {
-      name: asg?.windowsQueue || asg?.model || 'EPSON TM-T88VI',
-      connection: asg?.connectionType === 'network' ? 'Network' : (asg?.connectionType === 'windows_spooler' ? 'Windows Spooler' : 'USB'),
-      windowsDetected: true,
-      bridgeDetected: false,
+      name: p.deviceId ? p.deviceName : 'No Printer Configured',
+      connection: p.connectionType === 'network' ? 'Network' : (p.connectionType === 'windows_spooler' ? 'Windows Spooler' : 'USB'),
+      windowsDetected: Boolean(p.deviceId),
+      bridgeDetected: isBridgeOnline && Boolean(p.deviceId),
     };
   });
+  const [isTestPrinting, setIsTestPrinting] = useState<boolean>(false);
+  const [testPrintMessage, setTestPrintMessage] = useState<string | null>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
+
+  // Sync configured printer with HardwareStore
+  useEffect(() => {
+    const updatePrinter = () => {
+      const p = hardwareStore.getConfiguredHardware().receipt_printer;
+      const isBridgeOnline = hardwareStore.getHealth().status === 'running';
+      setConfiguredPrinter({
+        name: p.deviceId ? p.deviceName : 'No Printer Configured',
+        connection: p.connectionType === 'network' ? 'Network' : (p.connectionType === 'windows_spooler' ? 'Windows Spooler' : 'USB'),
+        windowsDetected: Boolean(p.deviceId),
+        bridgeDetected: isBridgeOnline && Boolean(p.deviceId),
+      });
+      setDiscoveredPrinters(hardwareStore.getDiscoveredDevices().filter(d => d.category === 'receipt_printer'));
+    };
+
+    updatePrinter();
+    const unsub = hardwareStore.subscribe(updatePrinter);
+    return () => unsub();
+  }, []);
 
   // Direct Hardware Receipt Print (Bypasses window.print popup)
   const handleDirectPrint = async (asReprint: boolean = false) => {
     if (!order) return;
     playBeep('click');
 
-    if (!posBridge.isPrinterConnected()) {
+    const printer = hardwareStore.getConfiguredHardware().receipt_printer;
+    if (!printer.deviceId) {
       playBeep('error');
       setPrintStatus('offline');
-      setPrintError('No physical receipt printer connected in the system. Connect hardware or use Windows Print Dialog.');
+      setPrintError('No receipt printer configured for this register. Please select an installed Windows printer below.');
       return;
     }
 
@@ -84,7 +110,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     if (asReprint) setIsReprint(true);
 
     try {
-      const res = await posBridge.printReceipt(order, {
+      const res = await hardwareStore.printReceipt(order, {
         isReprint: asReprint,
         reason: asReprint ? 'Cashier reprint request' : 'Customer checkout receipt',
       });
@@ -92,18 +118,38 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       if (res.success) {
         playBeep('success');
         setPrintStatus('printed');
-        setPrintJobId(res.printJobId);
-        setPrinterUsed(res.printerUsed);
+        setPrintJobId(res.jobId || `JOB-${Date.now().toString().slice(-6)}`);
+        setPrinterUsed(res.printerUsed || printer.deviceName);
       } else {
         playBeep('error');
         setPrintStatus('offline');
-        setPrintError(res.error || 'Receipt printer is unreachable or offline.');
+        setPrintError(
+          res.windowsDetected
+            ? 'WINDOWS DETECTED - PRINT COMMUNICATION FAILED'
+            : res.error || 'Receipt printer is unreachable or offline.'
+        );
       }
     } catch (err: any) {
       playBeep('error');
       setPrintStatus('offline');
-      setPrintError(err?.message || 'Failed to communicate with POS Local Bridge.');
+      setPrintError(
+        configuredPrinter.windowsDetected
+          ? 'WINDOWS DETECTED - PRINT COMMUNICATION FAILED'
+          : err?.message || 'Failed to communicate with POS Local Bridge.'
+      );
     }
+  };
+
+  // Physical Test Print
+  const handleTestPrint = async () => {
+    setIsTestPrinting(true);
+    setTestPrintMessage(null);
+    playBeep('click');
+
+    const res = await hardwareStore.testDevice('receipt_printer');
+    setIsTestPrinting(false);
+    setTestPrintMessage(res.message);
+    playBeep(res.success ? 'success' : 'error');
   };
 
   // Optional manual fallback: only trigger browser print dialog if user explicitly requests
@@ -116,8 +162,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     setIsRetryingBridge(true);
     playBeep('click');
     try {
-      await fetch('/api/hardware/bridge/status');
-      await posBridge.discoverPrinters();
+      await hardwareStore.refreshHealth();
+      await hardwareStore.scanHardware();
       await handleDirectPrint(false);
     } catch {}
     setIsRetryingBridge(false);
@@ -127,57 +173,32 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     setIsScanningPrinters(true);
     playBeep('click');
     try {
-      const res = await fetch('/api/hardware/windows/printers');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.printers && data.printers.length > 0) {
-          const ep = data.printers.find((p: any) => p.name.includes('EPSON') || p.name.includes('TM-T88')) || data.printers[0];
-          setConfiguredPrinter({
-            name: ep.name,
-            connection: ep.connection || 'USB',
-            windowsDetected: ep.windowsDetected ?? true,
-            bridgeDetected: ep.bridgeDetected ?? false,
-          });
-        }
-      }
-      await posBridge.discoverPrinters();
+      await hardwareStore.scanHardware();
+      setDiscoveredPrinters(hardwareStore.getDiscoveredDevices().filter(d => d.category === 'receipt_printer'));
     } catch {}
     setIsScanningPrinters(false);
   };
 
-  const handleSelectPrinterChange = (printerId: string) => {
+  const handleSelectPrinterChange = (printer: DiscoveredHardwareDevice) => {
     playBeep('click');
-    if (printerId === 'win_spooler_system_dialog') {
-      setConfiguredPrinter({
-        name: 'Windows Print Dialog (System Spooler)',
-        connection: 'Windows Spooler',
-        windowsDetected: true,
-        bridgeDetected: true,
-      });
-      posBridge.setRegisterPrinterAssignment({
-        bridgeDeviceId: 'win_spooler_system_dialog',
-        windowsQueue: 'Microsoft Print to PDF',
-        connectionType: 'windows_spooler',
-        status: 'ready',
-        enabled: true,
-      });
-      setShowSelectPrinter(false);
-      handleDirectPrint(false);
-    } else {
-      setConfiguredPrinter({
-        name: 'EPSON TM-T88VI',
-        connection: 'USB',
-        windowsDetected: true,
-        bridgeDetected: false,
-      });
-      setShowSelectPrinter(false);
-    }
+    hardwareStore.assignDevice('receipt_printer', {
+      deviceId: printer.deviceId,
+      deviceName: printer.name,
+      manufacturer: printer.manufacturer,
+      connectionType: printer.connectionType,
+      address: printer.address,
+      isDefault: true,
+    });
+    setShowSelectPrinter(false);
+    playBeep('success');
   };
 
   // Auto-print on order completion if enabled in settings and printer is connected
   useEffect(() => {
     if (isOpen && order && !autoPrintedOnce) {
-      const isConnected = posBridge.isPrinterConnected();
+      const isConnected =
+        hardwareStore.getHealth().status === 'running' &&
+        Boolean(hardwareStore.getConfiguredHardware().receipt_printer.deviceId);
       const autoPrintEnabled = settings?.directReceiptPrinting?.autoPrintOnSale !== false;
       if (isConnected && autoPrintEnabled) {
         setAutoPrintedOnce(true);
@@ -536,7 +557,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               {showSelectPrinter && (
                 <div className="bg-black/70 border border-amber-500/40 rounded-lg p-2.5 space-y-2 animate-in fade-in">
                   <div className="text-[11px] font-bold text-amber-300 flex items-center justify-between">
-                    <span>Choose Alternate Output Printer</span>
+                    <span>Discovered Windows Printers</span>
                     <button
                       type="button"
                       onClick={() => setShowSelectPrinter(false)}
@@ -545,34 +566,36 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                       ✕
                     </button>
                   </div>
-                  <div className="space-y-1.5 text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectPrinterChange('win_spooler_system_dialog')}
-                      className="w-full text-left p-2 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white flex items-center justify-between cursor-pointer"
-                    >
-                      <div>
-                        <div className="font-bold text-emerald-400">Windows Print Dialog (PDF / System Spooler)</div>
-                        <div className="text-[10px] text-zinc-400">Universal OS Spooler &bull; Always Available</div>
+                  <div className="space-y-1.5 text-[11px] max-h-48 overflow-y-auto">
+                    {discoveredPrinters.length === 0 ? (
+                      <div className="text-zinc-400 text-center py-2 text-[10px]">
+                        No physical Windows printers found. Click &quot;Scan Printers&quot; to query Windows Spooler.
                       </div>
-                      <span className="text-[10px] bg-emerald-950 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-800">
-                        READY
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectPrinterChange('win_spooler_epson_t88vi')}
-                      className="w-full text-left p-2 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white flex items-center justify-between cursor-pointer"
-                    >
-                      <div>
-                        <div className="font-bold text-zinc-200">EPSON TM-T88VI (USB001)</div>
-                        <div className="text-[10px] text-zinc-400">Direct ESC/POS &bull; Hardware Driver</div>
-                      </div>
-                      <span className="text-[10px] bg-amber-950 text-amber-300 px-1.5 py-0.5 rounded border border-amber-800">
-                        CONFIGURED
-                      </span>
-                    </button>
+                    ) : (
+                      discoveredPrinters.map(p => (
+                        <button
+                          key={p.deviceId}
+                          type="button"
+                          onClick={() => handleSelectPrinterChange(p)}
+                          className="w-full text-left p-2 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white flex items-center justify-between cursor-pointer"
+                        >
+                          <div>
+                            <div className="font-bold text-zinc-200">{p.name} ({p.address})</div>
+                            <div className="text-[10px] text-zinc-400">{p.manufacturer} &bull; {p.connectionType.toUpperCase()}</div>
+                          </div>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${p.isResponding ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-amber-950 text-amber-300 border-amber-800'}`}>
+                            {p.isResponding ? 'READY' : 'DETECTED'}
+                          </span>
+                        </button>
+                      ))
+                    )}
                   </div>
+                </div>
+              )}
+
+              {testPrintMessage && (
+                <div className="text-[11px] font-mono p-2 rounded bg-slate-900 border border-slate-700 text-slate-200">
+                  {testPrintMessage}
                 </div>
               )}
 
@@ -584,6 +607,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                   className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-500 text-black font-bold text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-50 transition-colors"
                 >
                   {isRetryingBridge ? 'Retrying...' : 'Retry Bridge'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTestPrint}
+                  disabled={isTestPrinting}
+                  className="px-2.5 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  {isTestPrinting ? 'Testing...' : 'Test Print'}
                 </button>
                 <button
                   type="button"

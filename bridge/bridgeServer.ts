@@ -455,15 +455,39 @@ export async function performMasterHardwareScan(): Promise<DiscoveredPeripherals
 // HTTP Request Dispatcher for Bridge Service on Port 5055
 // ==============================================================================
 export function handleBridgeHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-  // CORS Headers allowing KaBiRa POS frontend origins
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  // Security: Strict CORS origin validation (Requirement 13: Remove Access-Control-Allow-Origin: *)
+  const origin = (req.headers.origin as string) || '';
+  const allowedOrigins = [
+    'http://127.0.0.1:3000',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    'http://localhost:5173',
+    'http://127.0.0.1:5055',
+    'http://localhost:5055',
+  ];
+  const isAllowed =
+    !origin ||
+    allowedOrigins.includes(origin) ||
+    origin.startsWith('http://127.0.0.1:') ||
+    origin.startsWith('http://localhost:');
+
+  if (origin && isAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Bridge-Token, X-Client');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') {
-    res.writeHead(204);
+    res.writeHead(isAllowed ? 204 : 403);
     res.end();
+    return;
+  }
+
+  if (!isAllowed) {
+    res.writeHead(403);
+    res.end(JSON.stringify({ error: 'Forbidden: Origin not authorized for hardware access.' }));
     return;
   }
 

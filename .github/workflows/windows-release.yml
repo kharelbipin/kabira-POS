@@ -1,0 +1,103 @@
+name: Windows Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build & Package Windows Installer
+    runs-on: windows-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # 1. npm ci
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Lint Web Application
+        run: npm run lint
+
+      # 2. build web/client
+      - name: Build Web Application & Backend
+        run: npm run build
+
+      - name: Prepare Web Client Artifacts
+        shell: pwsh
+        run: |
+          $distWeb = "dist\web"
+          if (-not (Test-Path $distWeb)) { New-Item -ItemType Directory -Path $distWeb -Force | Out-Null }
+          Get-ChildItem -Path "dist" -Exclude "web", "bridge", "installer" | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination $distWeb -Recurse -Force
+          }
+
+      # 3. dotnet restore Bridge
+      - name: Restore .NET Bridge Dependencies
+        run: dotnet restore bridge/csharp/KaBiRaHardwareBridge.csproj
+
+      # 4. dotnet build Bridge
+      - name: Build .NET Bridge
+        run: dotnet build bridge/csharp/KaBiRaHardwareBridge.csproj -c Release
+
+      # 5. dotnet publish Bridge for win-x64
+      - name: Publish .NET Bridge for win-x64
+        run: |
+          dotnet publish bridge/csharp/KaBiRaHardwareBridge.csproj -c Release -r win-x64 --self-contained true -o dist/bridge
+
+      # 6. compile Inno Setup installer
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress
+
+      - name: Compile Windows Installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" bridge\installer\KabiraPOS-Setup.iss
+
+      # 7. verify KabiraPOS-Setup.exe exists
+      - name: Verify Installer Artifact
+        shell: pwsh
+        run: |
+          $installer = "dist\installer\KabiraPOS-Setup.exe"
+          if (-not (Test-Path $installer)) {
+            Write-Error "Verification failed: $installer was not created."
+            exit 1
+          }
+          $item = Get-Item $installer
+          Write-Host "Verified: $($item.FullName) ($([math]::Round($item.Length / 1MB, 2)) MB)"
+
+      # 8. upload installer as GitHub Actions artifact
+      - name: Upload Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KabiraPOS-Windows-Setup
+          path: dist/installer/KabiraPOS-Setup.exe
+          if-no-files-found: error
+
+      # 9. optionally attach installer to tagged GitHub Release
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/installer/KabiraPOS-Setup.exe
+          name: KaBiRa POS ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true

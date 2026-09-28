@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { posBridge } from '../../services/posBridge';
-import { deviceDiscovery } from '../../services/deviceDiscoveryService';
+import { hardwareStore } from '../../hardware/HardwareStore';
 import { playBeep } from '../../utils/audio';
 import { CustomerDisplayView } from './CustomerDisplayView';
-import { ConfiguredCustomerDisplay } from '../../types';
 import {
   Monitor,
   ExternalLink,
@@ -14,6 +12,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Sliders,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface CustomerDisplayAutoBannerProps {
@@ -23,51 +22,65 @@ interface CustomerDisplayAutoBannerProps {
 export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps> = ({
   onOpenCustomerDisplayModal,
 }) => {
-  const [isOpen, setIsOpen] = useState<boolean>(posBridge.isCustomerDisplayWindowOpen());
-  const [displayConfig, setDisplayConfig] = useState<ConfiguredCustomerDisplay>(
-    posBridge.getCustomerDisplayConfig()
+  const [isWindowOpen, setIsWindowOpen] = useState<boolean>(
+    hardwareStore.isCustomerDisplayWindowOpen()
+  );
+  const [health, setHealth] = useState(hardwareStore.getHealth());
+  const [configuredHardware, setConfiguredHardware] = useState(
+    hardwareStore.getConfiguredHardware()
+  );
+  const [discoveredDevices, setDiscoveredDevices] = useState(
+    hardwareStore.getDiscoveredDevices()
   );
   const [showDockedPreview, setShowDockedPreview] = useState<boolean>(false);
-  const [isDismissed, setIsDismissed] = useState<boolean>(false);
+  const [isDismissed, setIsDismissed] = useState<boolean>(
+    hardwareStore.isCustomerDisplayWarningDismissed()
+  );
   const [isRetrying, setIsRetrying] = useState<boolean>(false);
   const hasAttemptedGesture = useRef<boolean>(false);
 
+  // Distinct hardware states (Requirement 8)
+  // Customer window: OPEN / CLOSED
+  // Physical display: DETECTED / NOT DETECTED
+  // Bridge: CONNECTED / OFFLINE
+  const isBridgeConnected = health.status === 'running';
+  const physicalDisplays = (discoveredDevices || []).filter(
+    (d) => d.category === 'customer_display'
+  );
+  const isPhysicalDisplayDetected =
+    physicalDisplays.length > 0 || Boolean(configuredHardware.customer_display.deviceId);
+
   useEffect(() => {
-    // 1. Subscribe to Customer Display Config changes
-    const unsub = posBridge.subscribeCustomerDisplayConfig((cfg) => {
-      setDisplayConfig(cfg);
+    // 1. Subscribe to HardwareStore changes
+    const unsub = hardwareStore.subscribe(() => {
+      setHealth(hardwareStore.getHealth());
+      setConfiguredHardware(hardwareStore.getConfiguredHardware());
+      setDiscoveredDevices(hardwareStore.getDiscoveredDevices());
+      setIsDismissed(hardwareStore.isCustomerDisplayWarningDismissed());
     });
 
     // 2. Initial attempt on component mount
-    if (deviceDiscovery.isAutoOpenCustomerDisplayEnabled()) {
-      posBridge.openCustomerDisplayWindow(true).then((res) => {
-        setIsOpen(!res.blocked && posBridge.isCustomerDisplayWindowOpen());
-      });
-    }
+    const initialRes = hardwareStore.openCustomerDisplayWindow(true);
+    setIsWindowOpen(initialRes.success && hardwareStore.isCustomerDisplayWindowOpen());
 
-    // 3. Browser popup shield bypass: attach a one-time gesture listener on first click/key
+    // 3. User gesture listener for browsers that block initial unprompted popup
     const handleFirstGesture = () => {
       if (hasAttemptedGesture.current) return;
       hasAttemptedGesture.current = true;
 
-      if (
-        deviceDiscovery.isAutoOpenCustomerDisplayEnabled() &&
-        !posBridge.isCustomerDisplayWindowOpen() &&
-        posBridge.getCustomerDisplayConfig().status !== 'WARNING'
-      ) {
-        posBridge.openCustomerDisplayWindow(false).then((res) => {
-          setIsOpen(!res.blocked && posBridge.isCustomerDisplayWindowOpen());
-        });
+      if (!hardwareStore.isCustomerDisplayWindowOpen()) {
+        const res = hardwareStore.openCustomerDisplayWindow(false);
+        setIsWindowOpen(res.success && hardwareStore.isCustomerDisplayWindowOpen());
       }
     };
 
     window.addEventListener('click', handleFirstGesture, { once: true, capture: true });
     window.addEventListener('keydown', handleFirstGesture, { once: true, capture: true });
 
-    // 4. Periodic health heartbeat to check if window is closed or alive
+    // 4. Periodic heartbeat to verify window state (open vs closed)
     const interval = setInterval(() => {
-      const current = posBridge.isCustomerDisplayWindowOpen();
-      setIsOpen(current);
+      const current = hardwareStore.isCustomerDisplayWindowOpen();
+      setIsWindowOpen(current);
     }, 2000);
 
     return () => {
@@ -78,19 +91,19 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
     };
   }, []);
 
-  const handleManualOpen = async () => {
+  const handleManualOpen = () => {
     playBeep('click');
-    const res = await posBridge.openCustomerDisplayWindow(false);
+    const res = hardwareStore.openCustomerDisplayWindow(false);
     if (res.blocked) {
       if (onOpenCustomerDisplayModal) {
         onOpenCustomerDisplayModal();
       } else {
         alert(
-          'Customer Display Window pop-up was blocked by your browser.\nPlease allow popups for this site in your browser URL bar or use the Live Docked Preview.'
+          'Customer Display Window pop-up was blocked by your browser.\nPlease allow popups for this site in your browser URL bar or use the Live Docked Preview below.'
         );
       }
     } else {
-      setIsOpen(posBridge.isCustomerDisplayWindowOpen());
+      setIsWindowOpen(hardwareStore.isCustomerDisplayWindowOpen());
       playBeep('success');
     }
   };
@@ -98,33 +111,40 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
   const handleRetry = async () => {
     playBeep('click');
     setIsRetrying(true);
-    const res = await posBridge.openCustomerDisplayWindow(false);
+    try {
+      await hardwareStore.scanHardware();
+    } catch {}
+    const res = hardwareStore.openCustomerDisplayWindow(false);
     setIsRetrying(false);
     if (res.success) {
-      setIsOpen(true);
+      setIsWindowOpen(true);
       playBeep('success');
     }
   };
 
-  const handleRestart = async () => {
+  const handleRestart = () => {
     playBeep('click');
-    await posBridge.restartCustomerDisplay();
-    setIsOpen(posBridge.isCustomerDisplayWindowOpen());
+    hardwareStore.restartCustomerDisplay();
+    setIsWindowOpen(hardwareStore.isCustomerDisplayWindowOpen());
   };
 
-  // If customer monitor is missing or in warning state:
-  // Show required non-intrusive warning with RETRY | SELECT DISPLAY
-  const isWarningOrDisconnected =
-    displayConfig.status === 'WARNING' || displayConfig.status === 'DISCONNECTED';
+  const handleDismissWarning = () => {
+    playBeep('click');
+    hardwareStore.dismissCustomerDisplayWarning();
+    setIsDismissed(true);
+  };
 
-  if (isDismissed && isOpen) {
-    return null;
-  }
+  // If dismissed or window is already open, do not render warning banner
+  const showWarningBanner =
+    !isDismissed &&
+    !isWindowOpen &&
+    isBridgeConnected &&
+    !isPhysicalDisplayDetected;
 
   return (
     <>
-      {/* If configured monitor is unavailable, show required non-blocking alert */}
-      {isWarningOrDisconnected && !isOpen && (
+      {/* Dismissible Warning Banner (Requirement 8: Never continuously recreated after dismissal) */}
+      {showWarningBanner && (
         <div
           id="customer-display-warning-banner"
           className="fixed top-14 right-4 z-40 max-w-md bg-amber-950/90 text-amber-100 border-2 border-amber-500/80 rounded-xl shadow-2xl p-3 backdrop-blur-md animate-in fade-in slide-in-from-top-2"
@@ -136,7 +156,7 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
                 Customer Display Not Available
               </div>
               <p className="text-xs text-amber-200/90 mt-0.5 leading-relaxed">
-                {displayConfig.warningMessage || 'Configured customer monitor could not be found.'}
+                Secondary physical monitor was not detected by Windows graphics subsystem. You can open a browser customer window or use docked preview.
               </p>
               <div className="flex items-center gap-2 mt-2">
                 <button
@@ -163,8 +183,8 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
                 )}
                 <button
                   type="button"
-                  onClick={() => setIsDismissed(true)}
-                  className="ml-auto text-amber-300 hover:text-white text-xs p-1"
+                  onClick={handleDismissWarning}
+                  className="ml-auto text-amber-300 hover:text-white text-xs p-1 cursor-pointer"
                   title="Dismiss warning"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -175,22 +195,22 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
         </div>
       )}
 
-      {/* Floating Bottom Status Pill */}
+      {/* Floating Bottom Status Pill with 3 distinct hardware states */}
       <div
         id="customer-display-auto-pill"
         className="fixed bottom-3 right-3 z-40 flex items-center gap-2 bg-slate-900/95 text-white backdrop-blur-md px-3 py-2 rounded-2xl shadow-xl border border-slate-700/80 text-xs animate-in fade-in slide-in-from-bottom-2"
       >
         <div className="flex items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
-            {isOpen ? (
+            {isWindowOpen ? (
               <>
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
               </>
-            ) : isWarningOrDisconnected ? (
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 animate-pulse" />
-            ) : (
+            ) : isPhysicalDisplayDetected ? (
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-400 animate-pulse" />
+            ) : (
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
             )}
           </span>
 
@@ -198,25 +218,35 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
           <span className="font-semibold text-slate-200 hidden sm:inline">
             Customer Display:
           </span>
-          <span
-            className={`font-bold ${
-              isOpen
-                ? 'text-emerald-400'
-                : isWarningOrDisconnected
-                ? 'text-rose-400'
-                : 'text-amber-400'
-            }`}
-          >
-            {isOpen
-              ? 'CONNECTED / SYNCED'
-              : isWarningOrDisconnected
-              ? 'NOT DETECTED'
-              : 'READY TO OPEN'}
-          </span>
+
+          {/* Three Truthful Hardware States */}
+          <div className="flex items-center space-x-1 font-mono text-[11px]">
+            <span
+              className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
+                isWindowOpen ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              WINDOW: {isWindowOpen ? 'OPEN' : 'CLOSED'}
+            </span>
+            <span
+              className={`font-bold px-1.5 py-0.5 rounded text-[10px] hidden md:inline ${
+                isPhysicalDisplayDetected ? 'bg-sky-950 text-sky-300 border border-sky-800' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              MONITOR: {isPhysicalDisplayDetected ? 'DETECTED' : 'NOT DETECTED'}
+            </span>
+            <span
+              className={`font-bold px-1.5 py-0.5 rounded text-[10px] hidden lg:inline ${
+                isBridgeConnected ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-rose-950 text-rose-300 border border-rose-800'
+              }`}
+            >
+              BRIDGE: {isBridgeConnected ? 'CONNECTED' : 'OFFLINE'}
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-1 pl-1 border-l border-slate-700">
-          {!isOpen ? (
+          {!isWindowOpen ? (
             <button
               type="button"
               onClick={handleManualOpen}
@@ -249,54 +279,32 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
                 : 'text-slate-300 hover:bg-slate-800'
             }`}
           >
-            {showDockedPreview ? (
-              <EyeOff className="w-3.5 h-3.5 text-indigo-200" />
-            ) : (
-              <Eye className="w-3.5 h-3.5 text-slate-300" />
-            )}
-            <span className="hidden md:inline">Preview</span>
+            {showDockedPreview ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            <span className="hidden sm:inline">Preview</span>
           </button>
-
-          {isOpen && (
-            <button
-              type="button"
-              onClick={() => setIsDismissed(true)}
-              className="p-1 text-slate-400 hover:text-slate-200 cursor-pointer"
-              title="Dismiss pill"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Docked Picture-in-Picture Live Preview Window for single-monitor cashiers */}
+      {/* Docked Picture-in-Picture Preview Container */}
       {showDockedPreview && (
-        <div className="fixed bottom-14 right-3 z-50 w-96 max-w-[95vw] h-64 bg-slate-950 rounded-2xl shadow-2xl border-2 border-indigo-500/60 overflow-hidden flex flex-col animate-in zoom-in-95">
-          <div className="bg-slate-900 px-3 py-1.5 flex items-center justify-between border-b border-slate-800 text-xs">
-            <span className="text-slate-200 font-bold flex items-center gap-1.5">
+        <div
+          id="customer-display-docked-preview"
+          className="fixed bottom-14 right-3 z-40 w-96 max-w-[calc(100vw-24px)] h-64 bg-slate-950 border-2 border-indigo-500/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-3"
+        >
+          <div className="px-3 py-1.5 bg-indigo-950/80 border-b border-indigo-500/30 flex items-center justify-between text-xs text-indigo-200">
+            <span className="font-bold flex items-center gap-1.5">
               <Monitor className="w-3.5 h-3.5 text-indigo-400" />
-              Live Customer Screen (Display Mirror)
+              Live Secondary Monitor Docked Preview
             </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={handleManualOpen}
-                title="Pop out to secondary monitor"
-                className="text-slate-400 hover:text-white p-1 cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowDockedPreview(false)}
-                className="text-slate-400 hover:text-white p-1 cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowDockedPreview(false)}
+              className="text-slate-400 hover:text-white p-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <div className="flex-1 overflow-hidden relative scale-75 origin-top-left w-[133.33%] h-[133.33%] pointer-events-none">
+          <div className="flex-1 overflow-auto bg-slate-900 scale-90 origin-top-left w-[111%] h-[111%] pointer-events-auto">
             <CustomerDisplayView />
           </div>
         </div>

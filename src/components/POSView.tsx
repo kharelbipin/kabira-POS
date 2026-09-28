@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Product, Category, CartItem, Customer, StoreSettings, User } from '../types';
 import { playBeep } from '../utils/audio';
-import { posBridge } from '../services/posBridge';
+import { hardwareStore } from '../hardware';
 import { CartPanel } from './CartPanel';
 import { AddManualItemModal } from './AddManualItemModal';
 import { LottoSaleModal } from './pos/LottoSaleModal';
@@ -165,7 +165,7 @@ export const POSView: React.FC<POSViewProps> = ({
     }, 0);
     const grandTotal = Math.max(0, discountedSubtotal + taxableAmount);
 
-    posBridge.syncCartToCustomerDisplay(
+    hardwareStore.syncCartToCustomerDisplay(
       cartItems,
       {
         subtotal: rawSubtotal,
@@ -174,7 +174,7 @@ export const POSView: React.FC<POSViewProps> = ({
         grandTotal,
       },
       {
-        storeName: settings?.storeName || 'KABIRA POS',
+        storeName: settings?.storeName || 'KABIRA POS • 377 SPIRITS',
         tagline: settings?.tagline || 'Fine Liquors, Craft Spirits, Wine & Beer',
       }
     );

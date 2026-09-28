@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, StoreSettings, PosBridgeStatus } from '../types';
-import { posBridge } from '../services/posBridge';
+import { User, StoreSettings } from '../types';
+import { hardwareStore } from '../hardware/HardwareStore';
 import { KabiraEmblem } from './common/KabiraLogo';
 import { PWAInstallButton } from './pwa/PWAInstallButton';
 import {
@@ -98,10 +98,12 @@ export const Navbar: React.FC<NavbarProps> = ({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  // Live POS Bridge Status (PB-004, PB-036)
-  const [bridgeStatus, setBridgeStatus] = useState<PosBridgeStatus>(posBridge.getStatus());
+  // Live POS Bridge Health
+  const [bridgeHealth, setBridgeHealth] = useState(hardwareStore.getHealth());
   useEffect(() => {
-    return posBridge.subscribeStatus(setBridgeStatus);
+    return hardwareStore.subscribe(() => {
+      setBridgeHealth(hardwareStore.getHealth());
+    });
   }, []);
 
   // Live Clock
@@ -216,14 +218,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             onClick={() => setCurrentTab('hardware-manager')}
             className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-2xs ${
-              currentTab === 'hardware-manager'
-                ? 'bg-sky-500 text-slate-950 border-sky-400'
-                : 'bg-sky-500/15 border-sky-500/30 text-sky-300 hover:bg-sky-500/25'
+              bridgeHealth.status === 'running'
+                ? currentTab === 'hardware-manager'
+                  ? 'bg-sky-500 text-slate-950 border-sky-400'
+                  : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25'
+                : 'bg-rose-500/15 border-rose-500/30 text-rose-300 hover:bg-rose-500/25'
             }`}
-            title="POS Hardware Bridge & Device Manager (127.0.0.1:5055)"
+            title={`POS Hardware Bridge (127.0.0.1:5055): ${bridgeHealth.status === 'running' ? 'Running' : 'Offline'}`}
           >
-            <Cpu className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden lg:inline">Bridge Online</span>
+            <Cpu className={`w-3.5 h-3.5 ${bridgeHealth.status === 'running' ? 'text-emerald-400' : 'text-rose-400'}`} />
+            <span className="hidden lg:inline">{bridgeHealth.status === 'running' ? 'Bridge Online' : 'Bridge Offline'}</span>
           </button>
 
           {/* Online status indicator matching fin.png */}

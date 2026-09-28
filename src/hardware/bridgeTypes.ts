@@ -55,7 +55,7 @@ export interface DiscoveredHardwareDevice {
   model?: string;
   category: HardwareCategory;
   connectionType: HardwareConnectionType;
-  address: string; // e.g. 'USB001', 'COM3', '192.168.1.150:9100', 'DISPLAY2'
+  address: string; // e.g. 'USB001', 'COM3', '192.168.1.150:9100'
   isConfigured: boolean;
   isWindowsDetected: boolean;
   isNetworkReachable: boolean;
@@ -104,7 +104,7 @@ export interface AssignedDeviceConfig {
 export type ConfiguredHardwareMapping = Record<HardwareCategory, AssignedDeviceConfig>;
 
 export interface WindowsDisplayInfo {
-  id: string; // e.g. 'DISPLAY1', 'DISPLAY2'
+  id: string; // Windows screen device identifier
   name: string;
   primary: boolean;
   width: number;
