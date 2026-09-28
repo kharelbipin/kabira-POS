@@ -23,7 +23,6 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\..\dist\installer
 OutputBaseFilename=KabiraPOS-Setup
-SetupIconFile=..\..\public\favicon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
