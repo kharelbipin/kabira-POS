@@ -317,10 +317,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
               {/* Items Table */}
               <div>
                 <h4 className="text-xs font-bold text-[#737373] uppercase tracking-wider mb-2">
-                  Line Items ({selectedOrder.items.length})
+                  Line Items ({selectedOrder.items?.length || 0})
                 </h4>
                 <div className="bg-[#141414] rounded-lg border border-[#262626] divide-y divide-[#1F1F1F]">
-                  {selectedOrder.items.map((item, idx) => (
+                  {(selectedOrder.items || []).map((item, idx) => (
                     <div key={idx} className="p-3 flex items-center justify-between text-xs">
                       <div>
                         <div className="font-medium text-[#E5E5E5]">{item.product.name}</div>

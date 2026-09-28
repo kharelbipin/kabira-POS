@@ -193,7 +193,7 @@ export const InvoiceHistoryView: React.FC<InvoiceHistoryViewProps> = ({
                     <span>•</span>
                     <span className="font-mono">{inv.invoiceDate}</span>
                     <span>•</span>
-                    <span>{inv.lineItems.length} line items</span>
+                    <span>{inv.lineItems?.length || 0} line items</span>
                     {inv.receivingLocation && (
                       <>
                         <span>•</span>
@@ -292,7 +292,7 @@ export const InvoiceHistoryView: React.FC<InvoiceHistoryViewProps> = ({
               {/* Line Items Table */}
               <div>
                 <span className="text-xs font-semibold text-[#888888] uppercase tracking-wider block mb-2">
-                  Line Items ({selectedInvoice.lineItems.length})
+                  Line Items ({selectedInvoice.lineItems?.length || 0})
                 </span>
                 <div className="border border-[#262626] rounded-lg overflow-x-auto">
                   <table className="w-full text-left text-xs text-[#CCCCCC] divide-y divide-[#262626]">
@@ -305,7 +305,7 @@ export const InvoiceHistoryView: React.FC<InvoiceHistoryViewProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#1F1F1F]">
-                      {selectedInvoice.lineItems.map(l => (
+                      {(selectedInvoice.lineItems || []).map(l => (
                         <tr key={l.id}>
                           <td className="px-3 py-2">
                             <div className="font-medium text-white">{l.description}</div>

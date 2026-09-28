@@ -210,12 +210,12 @@ export class DeviceState {
 
     // 1. RECEIPT PRINTER
     const printerMapping = mapping.receipt_printer;
-    const isPrinterConfigured = Boolean(printerMapping && printerMapping.deviceKey && printerMapping.status !== 'Offline');
+    const isPrinterConfigured = Boolean(printerMapping && (printerMapping.deviceKey || printerMapping.deviceName));
     // Check if printer has a communication issue or is fully working
     const printerDiag = diagnosticsReport?.configuredHardware?.receiptPrinter;
     const isPrinterWindowsDetected = printerDiag ? Boolean(printerDiag.windowsDetected) : true;
     const isPrinterNetwork = printerMapping?.connectionType === 'network';
-    const isPrinterReachable = isPrinterNetwork ? true : (isPrinterWindowsDetected || true);
+    const isPrinterReachable = isPrinterNetwork ? Boolean(printerDiag?.reachable ?? true) : false;
     // In our scenario: EPSON TM-T88VI is Windows detected: true, Bridge detected: false (communication problem)
     const isPrinterResponding = printerDiag ? Boolean(printerDiag.responding) : (printerMapping?.status === 'Ready');
 
@@ -227,7 +227,7 @@ export class DeviceState {
         categoryLabel: 'Receipt Printer',
         isConfigured: isPrinterConfigured,
         isWindowsDetected: isPrinterWindowsDetected,
-        isNetworkReachable: isPrinterNetwork,
+        isNetworkReachable: isPrinterReachable,
         isResponding: isPrinterResponding,
         connectionType: printerMapping?.connectionType === 'network' ? 'Network' : 'USB',
         portOrEndpoint: printerMapping?.portOrEndpoint || 'USB001',
@@ -248,9 +248,8 @@ export class DeviceState {
 
     // 2. BARCODE SCANNER
     const scannerMapping = mapping.barcode_scanner;
-    const isScannerConfigured = Boolean(scannerMapping && scannerMapping.deviceKey);
+    const isScannerConfigured = Boolean(scannerMapping && (scannerMapping.deviceKey || scannerMapping.deviceName));
     const isScannerWindowsDetected = true; // Zebra DS2208 HID Wedge detected
-    const isScannerReachable = true;
     const isScannerResponding = scannerMapping?.status !== 'Offline';
 
     list.push(
@@ -279,11 +278,10 @@ export class DeviceState {
 
     // 3. CASH DRAWER
     const drawerMapping = mapping.cash_drawer;
-    const isDrawerConfigured = Boolean(drawerMapping && drawerMapping.deviceKey);
+    const isDrawerConfigured = Boolean(drawerMapping && (drawerMapping.deviceKey || drawerMapping.deviceName));
     const isDrawerThroughPrinter = drawerMapping?.connectionType === 'software_service' || !drawerMapping?.connectionType || drawerMapping?.connectionType === 'usb';
     // If through receipt printer, Windows detection is linked to the printer
     const isDrawerWindowsDetected = isDrawerThroughPrinter ? isPrinterWindowsDetected : true;
-    const isDrawerReachable = isDrawerThroughPrinter ? isPrinterReachable : false;
     const isDrawerResponding = isDrawerConfigured && isPrinterResponding && drawerMapping?.status === 'Ready';
 
     list.push(
@@ -316,9 +314,8 @@ export class DeviceState {
 
     // 4. CUSTOMER DISPLAY
     const displayMapping = mapping.customer_display;
-    const isDisplayConfigured = Boolean(displayMapping && displayMapping.deviceKey && displayMapping.status !== 'Offline');
+    const isDisplayConfigured = Boolean(displayMapping && (displayMapping.deviceKey || displayMapping.deviceName));
     const isDisplayWindowsDetected = true; // 2 screens enumerated
-    const isDisplayReachable = true;
     const isDisplayResponding = isDisplayConfigured && displayMapping?.status === 'Ready';
 
     list.push(

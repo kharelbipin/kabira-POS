@@ -2,7 +2,7 @@
   "_metadata": {
     "version": "1.0.0",
     "system": "KABIRA POS Core DB",
-    "lastSavedAt": "2026-09-26T20:32:24.439Z"
+    "lastSavedAt": "2026-09-27T23:44:02.485Z"
   },
   "users": [
     {
@@ -446,13 +446,13 @@
       "cost": 19,
       "taxRate": 0.0825,
       "size": "750 mL",
-      "stockQuantity": 4,
+      "stockQuantity": 2,
       "lowStockThreshold": 5,
       "imageUrl": "https://images.unsplash.com/photo-1527281400683-1aae777175f8?w=500&auto=format&fit=crop&q=60",
       "description": "Meticulously blended with 50 full-bodied whiskies aged to perfection.",
       "active": true,
       "createdAt": "2026-01-01T00:00:00Z",
-      "updatedAt": "2026-01-01T00:00:00Z"
+      "updatedAt": "2026-09-27T16:50:16.712Z"
     },
     {
       "id": "prod-10",
@@ -641,13 +641,13 @@
       "costPrice": 95,
       "taxRate": 0.0825,
       "size": "750ml",
-      "stockQuantity": 5,
+      "stockQuantity": 3,
       "lowStockThreshold": 3,
       "imageUrl": "https://images.unsplash.com/photo-1569529465841-dfecdab7503b?w=500&auto=format&fit=crop&q=60",
       "description": "Rare 13-year single barrel bourbon offering rich vanilla, toasted oak, dried fruit, and a long warming finish.",
       "active": true,
       "createdAt": "2026-01-01T00:00:00Z",
-      "updatedAt": "2026-01-01T00:00:00Z"
+      "updatedAt": "2026-09-27T17:13:49.066Z"
     }
   ],
   "customers": [
@@ -692,6 +692,211 @@
     }
   ],
   "orders": [
+    {
+      "id": "ord-1790529229066",
+      "orderNumber": "ORD-1006",
+      "cashierId": "usr-3",
+      "cashierName": "Elena Rostova (Cashier)",
+      "items": [
+        {
+          "product": {
+            "id": "prod-19",
+            "name": "Baker's 13 Year",
+            "sku": "BAK-13Y-750",
+            "barcode": "080244010303",
+            "categoryId": "cat-1",
+            "categoryName": "Whiskey & Bourbon",
+            "price": 149.99,
+            "cost": 95,
+            "costPrice": 95,
+            "taxRate": 0.0825,
+            "size": "750ml",
+            "stockQuantity": 5,
+            "lowStockThreshold": 3,
+            "imageUrl": "https://images.unsplash.com/photo-1569529465841-dfecdab7503b?w=500&auto=format&fit=crop&q=60",
+            "description": "Rare 13-year single barrel bourbon offering rich vanilla, toasted oak, dried fruit, and a long warming finish.",
+            "active": true,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-01-01T00:00:00Z"
+          },
+          "quantity": 1,
+          "unitPrice": 149.99,
+          "discountAmount": 0,
+          "taxAmount": 12.37,
+          "lineTotal": 162.36
+        }
+      ],
+      "subtotal": 149.99,
+      "discountTotal": 0,
+      "taxTotal": 12.37,
+      "grandTotal": 162.36,
+      "payment": {
+        "method": "cash",
+        "amount": 162.36,
+        "cashTendered": 162.36,
+        "changeDue": 0,
+        "cardLast4": "8392",
+        "cardBrand": "Visa",
+        "authCode": "AUTH-362545",
+        "splitDetails": {
+          "splitType": "multiple",
+          "payments": [
+            {
+              "id": "pay-1790529223818-cash-x6d9",
+              "method": "cash",
+              "amount": 162.36,
+              "status": "completed",
+              "timestamp": "2026-09-27T17:13:43.818Z",
+              "cashierId": "usr-3",
+              "cashierName": "Elena Rostova (Cashier)",
+              "registerId": "reg-01",
+              "paymentReference": "Cash Tendered",
+              "cashTendered": 162.36,
+              "changeDue": 0
+            }
+          ],
+          "totalPaid": 162.36
+        },
+        "payments": [
+          {
+            "id": "pay-1790529223818-cash-x6d9",
+            "method": "cash",
+            "amount": 162.36,
+            "status": "completed",
+            "timestamp": "2026-09-27T17:13:43.818Z",
+            "cashierId": "usr-3",
+            "cashierName": "Elena Rostova (Cashier)",
+            "registerId": "reg-01",
+            "paymentReference": "Cash Tendered",
+            "cashTendered": 162.36,
+            "changeDue": 0
+          }
+        ]
+      },
+      "payments": [
+        {
+          "id": "pay-1790529223818-cash-x6d9",
+          "method": "cash",
+          "amount": 162.36,
+          "status": "completed",
+          "timestamp": "2026-09-27T17:13:43.818Z",
+          "cashierId": "usr-3",
+          "cashierName": "Elena Rostova (Cashier)",
+          "registerId": "reg-01",
+          "paymentReference": "Cash Tendered",
+          "cashTendered": 162.36,
+          "changeDue": 0
+        }
+      ],
+      "status": "completed",
+      "pointsEarned": 0,
+      "pointsRedeemed": 0,
+      "pointsDiscountAmount": 0,
+      "createdAt": "2026-09-27T17:13:49.066Z",
+      "updatedAt": "2026-09-27T17:13:49.066Z"
+    },
+    {
+      "id": "ord-1790527816712",
+      "orderNumber": "ORD-1005",
+      "cashierId": "usr-3",
+      "cashierName": "Elena Rostova (Cashier)",
+      "items": [
+        {
+          "product": {
+            "id": "prod-9",
+            "name": "Crown Royal Canadian Whisky",
+            "sku": "CR-ROY-750",
+            "barcode": "082000000109",
+            "categoryId": "cat-1",
+            "categoryName": "Whiskey & Bourbon",
+            "price": 29.99,
+            "cost": 19,
+            "taxRate": 0.0825,
+            "size": "750 mL",
+            "stockQuantity": 4,
+            "lowStockThreshold": 5,
+            "imageUrl": "https://images.unsplash.com/photo-1527281400683-1aae777175f8?w=500&auto=format&fit=crop&q=60",
+            "description": "Meticulously blended with 50 full-bodied whiskies aged to perfection.",
+            "active": true,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-01-01T00:00:00Z"
+          },
+          "quantity": 1,
+          "unitPrice": 29.99,
+          "discountAmount": 0,
+          "taxAmount": 2.47,
+          "lineTotal": 32.46
+        }
+      ],
+      "subtotal": 29.99,
+      "discountTotal": 0,
+      "taxTotal": 2.47,
+      "grandTotal": 32.46,
+      "payment": {
+        "method": "cash",
+        "amount": 32.46,
+        "cashTendered": 32.46,
+        "changeDue": 0,
+        "cardLast4": "8392",
+        "cardBrand": "Visa",
+        "authCode": "AUTH-872531",
+        "splitDetails": {
+          "splitType": "multiple",
+          "payments": [
+            {
+              "id": "pay-1790527813298-cash-acc4",
+              "method": "cash",
+              "amount": 32.46,
+              "status": "completed",
+              "timestamp": "2026-09-27T16:50:13.298Z",
+              "cashierId": "usr-3",
+              "cashierName": "Elena Rostova (Cashier)",
+              "registerId": "reg-01",
+              "paymentReference": "Cash Tendered",
+              "cashTendered": 32.46,
+              "changeDue": 0
+            }
+          ],
+          "totalPaid": 32.46
+        },
+        "payments": [
+          {
+            "id": "pay-1790527813298-cash-acc4",
+            "method": "cash",
+            "amount": 32.46,
+            "status": "completed",
+            "timestamp": "2026-09-27T16:50:13.298Z",
+            "cashierId": "usr-3",
+            "cashierName": "Elena Rostova (Cashier)",
+            "registerId": "reg-01",
+            "paymentReference": "Cash Tendered",
+            "cashTendered": 32.46,
+            "changeDue": 0
+          }
+        ]
+      },
+      "payments": [
+        {
+          "id": "pay-1790527813298-cash-acc4",
+          "method": "cash",
+          "amount": 32.46,
+          "status": "completed",
+          "timestamp": "2026-09-27T16:50:13.298Z",
+          "cashierId": "usr-3",
+          "cashierName": "Elena Rostova (Cashier)",
+          "registerId": "reg-01",
+          "paymentReference": "Cash Tendered",
+          "cashTendered": 32.46,
+          "changeDue": 0
+        }
+      ],
+      "status": "completed",
+      "pointsEarned": 0,
+      "pointsRedeemed": 0,
+      "pointsDiscountAmount": 0,
+      "createdAt": "2026-09-27T16:50:16.711Z",
+      "updatedAt": "2026-09-27T16:50:16.711Z"
+    },
     {
       "id": "ord-1790445729525",
       "orderNumber": "ORD-1004",
@@ -966,6 +1171,34 @@
   "heldOrders": [],
   "inventoryAdjustments": [
     {
+      "id": "adj-1790529229066-prod-19",
+      "productId": "prod-19",
+      "productName": "Baker's 13 Year",
+      "sku": "BAK-13Y-750",
+      "oldQuantity": 5,
+      "newQuantity": 4,
+      "changeAmount": -1,
+      "type": "sale",
+      "reason": "Sold on Order #ORD-1006",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "createdAt": "2026-09-27T17:13:49.066Z"
+    },
+    {
+      "id": "adj-1790527816712-prod-9",
+      "productId": "prod-9",
+      "productName": "Crown Royal Canadian Whisky",
+      "sku": "CR-ROY-750",
+      "oldQuantity": 4,
+      "newQuantity": 3,
+      "changeAmount": -1,
+      "type": "sale",
+      "reason": "Sold on Order #ORD-1005",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "createdAt": "2026-09-27T16:50:16.711Z"
+    },
+    {
       "id": "adj-1790445729525-prod-15",
       "productId": "prod-15",
       "productName": "Buffalo Trace",
@@ -1057,6 +1290,50 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "log-1790529463718-23",
+      "userId": "usr-1",
+      "userName": "Sarah Connor (Admin)",
+      "userRole": "Admin",
+      "action": "LOGIN",
+      "targetType": "user",
+      "targetId": "usr-1",
+      "details": "User logged in via PIN",
+      "timestamp": "2026-09-27T17:17:43.718Z"
+    },
+    {
+      "id": "log-1790529253985-710",
+      "userId": "usr-1",
+      "userName": "POS System",
+      "userRole": "Cashier",
+      "action": "RECEIPT_DISPATCH",
+      "targetType": "receipts",
+      "targetId": "ORD-1006",
+      "details": "Dispatched digital receipt via SMS to 6823611799 (Delivery ID: DEL-1790529253985-710)",
+      "timestamp": "2026-09-27T17:14:13.985Z"
+    },
+    {
+      "id": "log-1790529229066-368",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "userRole": "Cashier",
+      "action": "ORDER_CREATE",
+      "targetType": "order",
+      "targetId": "ord-1790529229066",
+      "details": "Completed Order ORD-1006 ($162.36) via cash",
+      "timestamp": "2026-09-27T17:13:49.066Z"
+    },
+    {
+      "id": "log-1790527816712-224",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "userRole": "Cashier",
+      "action": "ORDER_CREATE",
+      "targetType": "order",
+      "targetId": "ord-1790527816712",
+      "details": "Completed Order ORD-1005 ($32.46) via cash",
+      "timestamp": "2026-09-27T16:50:16.712Z"
+    },
     {
       "id": "log-1790453977067-61",
       "userId": "usr-3",
@@ -2384,6 +2661,36 @@
     }
   ],
   "inventoryLedger": [
+    {
+      "id": "led-1790529229066-254",
+      "productId": "prod-19",
+      "productName": "Baker's 13 Year",
+      "sku": "BAK-13Y-750",
+      "timestamp": "2026-09-27T17:13:49.066Z",
+      "channel": "pos",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "quantityDelta": -1,
+      "balanceAfter": 3,
+      "reason": "pos_sale",
+      "referenceId": "ORD-1006",
+      "notes": "POS checkout sale on register"
+    },
+    {
+      "id": "led-1790527816712-536",
+      "productId": "prod-9",
+      "productName": "Crown Royal Canadian Whisky",
+      "sku": "CR-ROY-750",
+      "timestamp": "2026-09-27T16:50:16.712Z",
+      "channel": "pos",
+      "userId": "usr-3",
+      "userName": "Elena Rostova (Cashier)",
+      "quantityDelta": -1,
+      "balanceAfter": 2,
+      "reason": "pos_sale",
+      "referenceId": "ORD-1005",
+      "notes": "POS checkout sale on register"
+    },
     {
       "id": "led-1790445729525-485",
       "productId": "prod-15",

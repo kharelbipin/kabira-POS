@@ -742,9 +742,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 <span className="uppercase font-bold">
                   {order.payments && order.payments.length > 1
                     ? `MULTI-TENDER (${order.payments.length} PAYMENTS)`
-                    : order.payment.method === 'split'
-                    ? (order.payment.splitDetails?.splitType === 'two_cards' ? 'SPLIT (2 CARDS)' : 'SPLIT (CASH + CARD)')
-                    : order.payment.method}
+                    : order.payment?.method === 'split'
+                    ? (order.payment?.splitDetails?.splitType === 'two_cards' ? 'SPLIT (2 CARDS)' : 'SPLIT (CASH + CARD)')
+                    : order.payment?.method || 'CASH'}
                 </span>
               </div>
 
@@ -783,9 +783,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                     <span>${order.payments.reduce((s, p) => s + p.amount, 0).toFixed(2)}</span>
                   </div>
                 </div>
-              ) : order.payment.method === 'cash' ? (
+              ) : order.payment?.method === 'cash' ? (
                 <>
-                  {order.payment.cashEntries && order.payment.cashEntries.length > 1 ? (
+                  {order.payment?.cashEntries && order.payment.cashEntries.length > 1 ? (
                     <div className="py-1 border-y border-dashed border-slate-300 my-1 space-y-0.5">
                       <div className="font-bold text-[9px] text-slate-600 uppercase">Cash Tenders ({order.payment.cashEntries.length})</div>
                       {order.payment.cashEntries.map((c, i) => (
@@ -798,15 +798,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                   ) : null}
                   <div className="flex justify-between">
                     <span>CASH TENDERED:</span>
-                    <span>${((order.payment.cashTendered || order.grandTotal || 0)).toFixed(2)}</span>
+                    <span>${((order.payment?.cashTendered || order.grandTotal || 0)).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between font-bold">
                     <span>CHANGE DUE:</span>
-                    <span>${((order.payment.changeDue || 0)).toFixed(2)}</span>
+                    <span>${((order.payment?.changeDue || 0)).toFixed(2)}</span>
                   </div>
                 </>
-              ) : order.payment.method === 'split' ? (
-                order.payment.splitDetails?.splitType === 'two_cards' ? (
+              ) : order.payment?.method === 'split' ? (
+                order.payment?.splitDetails?.splitType === 'two_cards' ? (
                   <>
                     <div className="flex justify-between">
                       <span>CARD 1 ({order.payment.splitDetails?.card1Brand || 'Card'} ****{order.payment.splitDetails?.card1Last4 || '1029'}):</span>
