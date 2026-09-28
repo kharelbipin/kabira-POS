@@ -120,11 +120,8 @@ namespace KaBiRa.HardwareBridge
             try
             {
                 _listener = new HttpListener();
-                _listener.Prefixes.Add($"http://127.0.0.1:{Port}/");
-                _listener.Start();
-                _logger.LogInformation("KaBiRa POS Hardware Bridge listening on http://127.0.0.1:{Port}/", Port);
-
-                // Initial scan of actual physical peripherals
+_listener.Prefixes.Add($"http://+:{Port}/");                _listener.Start();
+                _logger.LogInformation("KaBiRa POS Hardware Bridge listening on port {Port}", Port);                // Initial scan of actual physical peripherals
                 RefreshDiscoveredPeripherals();
 
                 while (!stoppingToken.IsCancellationRequested && _listener.IsListening)
