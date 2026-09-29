@@ -36,9 +36,31 @@ jobs:
       - name: Lint Web Application
         run: npm run lint
 
-      # 2. build web/client
+            # 2. build web/client
       - name: Build Web Application & Backend
         run: npm run build
+
+      - name: Package Backend Runtime Dependencies
+        shell: pwsh
+        run: |
+          Write-Host "Packaging production Node dependencies..."
+
+          $target = "dist\node_modules"
+
+          if (Test-Path $target) {
+            Remove-Item $target -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+
+          Copy-Item "node_modules\*" $target -Recurse -Force
+
+          if (-not (Test-Path "dist\node_modules\express")) {
+            Write-Error "Express was not packaged into dist\node_modules"
+            exit 1
+          }
+
+          Write-Host "Backend dependencies packaged successfully."
 
       - name: Prepare Web Client Artifacts
         shell: pwsh
