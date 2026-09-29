@@ -23,7 +23,7 @@ powershell.exe -NoProfile -Command "if (Get-NetTCPConnection -LocalPort 3000 -St
 
 if errorlevel 1 (
     REM Start backend using the Client directory as its working directory
-    powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process -FilePath '%NODE%' -ArgumentList '""%SERVER%""' -WorkingDirectory '%CLIENT%' -WindowStyle Hidden"
+    powershell.exe -NoProfile -Command "Start-Process -FilePath '%NODE%' -ArgumentList '""%SERVER%""' -WorkingDirectory '%CLIENT%'"
 )
 
 REM Wait up to 20 seconds for port 3000
