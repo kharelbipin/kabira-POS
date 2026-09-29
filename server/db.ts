@@ -2254,7 +2254,12 @@ class Database {
   }
 
   // --- DATABASE PERSISTENCE LAYER ---
-  private dbFilePath = path.join(process.cwd(), 'data', 'pos_database.json');
+  private dbFilePath = path.join(
+  process.env.LOCALAPPDATA || process.env.APPDATA || process.cwd(),
+  'KaBiRa POS',
+  'data',
+  'pos_database.json'
+);
   private saveTimeout: NodeJS.Timeout | null = null;
   public lastSavedAt: string | null = null;
 
