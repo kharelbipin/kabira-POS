@@ -889,28 +889,38 @@ _listener.Prefixes.Add($"http://+:{Port}/");                _listener.Start();
         }
 
         public static bool SendTestPrint(string printerName, out string errorMessage)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("\x1B\x40"); // ESC @ (Initialize printer)
-            sb.AppendLine("\x1B\x61\x01"); // ESC a 1 (Center alignment)
-            sb.AppendLine("================================");
-            sb.AppendLine("   KABIRA POS HARDWARE BRIDGE   ");
-            sb.AppendLine("      TEST RECEIPT PRINT        ");
-            sb.AppendLine("================================");
-            sb.AppendLine("\x1B\x61\x00"); // Left alignment
-            sb.AppendLine($"Date/Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-            sb.AppendLine($"Host Machine: {Environment.MachineName}");
-            sb.AppendLine($"Target Spooler: {printerName}");
-            sb.AppendLine("Status: WINDOWS DETECTED & PRINTED");
-            sb.AppendLine("================================");
-            sb.AppendLine("\x1B\x61\x01"); // Center
-            sb.AppendLine("Thank you for choosing KaBiRa POS");
-            sb.AppendLine("\n\n\n");
-            sb.AppendLine("\x1D\x56\x41\x00"); // GS V 65 0 (Cut paper)
+{
+    var bytes = new List<byte>();
 
-            byte[] bytes = Encoding.ASCII.GetBytes(sb.ToString());
-            return SendRawBytes(printerName, bytes, out errorMessage);
-        }
+    // Initialize printer: ESC @
+    bytes.AddRange(new byte[] { 0x1B, 0x40 });
+
+    // Center alignment
+    bytes.AddRange(new byte[] { 0x1B, 0x61, 0x01 });
+
+    bytes.AddRange(Encoding.ASCII.GetBytes(
+        "================================\n" +
+        "        KABIRA POS\n" +
+        "       PRINTER TEST\n" +
+        "================================\n"
+    ));
+
+    // Left alignment
+    bytes.AddRange(new byte[] { 0x1B, 0x61, 0x00 });
+
+    bytes.AddRange(Encoding.ASCII.GetBytes(
+        $"Printer: {printerName}\n" +
+        $"Date: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
+        "Status: TEST SUCCESSFUL\n" +
+        "================================\n" +
+        "Thank you for using KaBiRa POS\n\n\n"
+    ));
+
+    // Full paper cut: GS V 0
+    bytes.AddRange(new byte[] { 0x1D, 0x56, 0x00 });
+
+    return SendRawBytes(printerName, bytes.ToArray(), out errorMessage);
+}
 
         public static bool SendReceipt(string printerName, string receiptPayload, out string errorMessage)
         {
