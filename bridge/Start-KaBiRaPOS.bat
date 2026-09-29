@@ -37,6 +37,5 @@ if errorlevel 1 (
 )
 
 REM Backend is ready - launch POS
-start "" "%CLIENT%\index.html"
-
+start "" "http://127.0.0.1:3000"
 exit /b 0
