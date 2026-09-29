@@ -45,7 +45,7 @@ jobs:
         run: |
           Write-Host "Packaging production Node dependencies..."
 
-          $target = "dist\node_modules"
+          $target = "dist\web\node_modules"
 
           if (Test-Path $target) {
             Remove-Item $target -Recurse -Force
@@ -55,7 +55,7 @@ jobs:
 
           Copy-Item "node_modules\*" $target -Recurse -Force
 
-          if (-not (Test-Path "dist\node_modules\express")) {
+          if (-not (Test-Path "dist\web\node_modules\express")) {
             Write-Error "Express was not packaged into dist\node_modules"
             exit 1
           }
