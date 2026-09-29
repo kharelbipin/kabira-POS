@@ -2,8 +2,9 @@
 setlocal
 
 set "APPDIR=C:\Program Files\KaBiRa POS"
+set "CLIENT=%APPDIR%\Client"
 set "NODE=%APPDIR%\Runtime\node.exe"
-set "SERVER=%APPDIR%\Client\server.cjs"
+set "SERVER=%CLIENT%\server.cjs"
 
 if not exist "%NODE%" (
     echo ERROR: KaBiRa POS Node runtime was not found.
@@ -17,19 +18,25 @@ if not exist "%SERVER%" (
     exit /b 1
 )
 
-REM Start backend only if port 3000 is not already listening
-powershell.exe -NoProfile -Command "if (-not (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)) { Start-Process -FilePath '%NODE%' -ArgumentList '""%SERVER%""' -WindowStyle Hidden }"
-
-REM Wait up to 20 seconds for backend
-powershell.exe -NoProfile -Command "$ok=$false; 1..20 | ForEach-Object { if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue) { $ok=$true; break }; Start-Sleep -Seconds 1 }; if (-not $ok) { exit 1 }"
+REM Check whether backend is already running
+powershell.exe -NoProfile -Command "if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"
 
 if errorlevel 1 (
-    echo ERROR: KaBiRa POS backend failed to start on port 3000.
+    REM Start backend using the Client directory as its working directory
+    start "KaBiRa POS Backend" /min /D "%CLIENT%" "%NODE%" "%SERVER%"
+)
+
+REM Wait up to 20 seconds for port 3000
+powershell.exe -NoProfile -Command "$ready=$false; for($i=0;$i -lt 20;$i++){ if(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue){$ready=$true;break}; Start-Sleep -Seconds 1 }; if($ready){exit 0}else{exit 1}"
+
+if errorlevel 1 (
+    echo ERROR: KaBiRa POS backend failed to start.
+    echo Please contact KaBiRa POS support.
     pause
     exit /b 1
 )
 
-REM Open KaBiRa POS after backend is ready
-start "" "%APPDIR%\Client\index.html"
+REM Backend is ready - launch POS
+start "" "%CLIENT%\index.html"
 
 exit /b 0
