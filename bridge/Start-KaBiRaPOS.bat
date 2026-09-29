@@ -23,7 +23,7 @@ powershell.exe -NoProfile -Command "if (Get-NetTCPConnection -LocalPort 3000 -St
 
 if errorlevel 1 (
     REM Start backend using the Client directory as its working directory
-    start "KaBiRa POS Backend" /min /D "%CLIENT%" "%NODE%" "%SERVER%"
+    powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process -FilePath '%NODE%' -ArgumentList '""%SERVER%""' -WorkingDirectory '%CLIENT%' -WindowStyle Hidden"
 )
 
 REM Wait up to 20 seconds for port 3000
