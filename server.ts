@@ -47,9 +47,9 @@ async function startServer() {
     }
   });
 
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[POS Server] Running on http://0.0.0.0:${PORT}`);
-  });
+  const server = app.listen(PORT, '127.0.0.1', () => {
+  console.log(`[POS Server] Running on http://127.0.0.1:${PORT}`);
+});
 
   server.on('upgrade', (req, socket) => {
     socket.destroy();
