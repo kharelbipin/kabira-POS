@@ -51,8 +51,7 @@ Source: "..\install-service.ps1"; DestDir: "{app}\Bridge"; Flags: ignoreversion
 [Icons]
 Name: "{group}\{#MyAppName} Bridge Service"; Filename: "{app}\Bridge\{#MyAppExeName}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\Client\index.html"; Tasks: desktopicon
-
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\Start-KaBiRaPOS.bat"; WorkingDir: "{app}"; Tasks: desktopicon
 [Run]
 ; 1. Register, start, and verify Windows Background Service automatically
 Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\Bridge\install-service.ps1"" -InstallPath ""{app}\Bridge"""; Flags: runhidden waituntilterminated
