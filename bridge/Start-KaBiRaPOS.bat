@@ -18,8 +18,8 @@ if not exist "%SERVER%" (
     exit /b 1
 )
 
-REM Check whether backend is already running
-powershell.exe -NoProfile -Command "if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"
+REM Check whether the actual KaBiRa POS backend is already healthy
+powershell.exe -NoProfile -Command "try { $r = Invoke-RestMethod -Uri 'http://127.0.0.1:3000/api/health' -TimeoutSec 2; if ($r.status -eq 'ok') { exit 0 } else { exit 1 } } catch { exit 1 }"
 
 if errorlevel 1 (
     REM Start backend using the Client directory as its working directory
