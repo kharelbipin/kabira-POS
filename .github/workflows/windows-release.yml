@@ -23,41 +23,47 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-      - name: Package Node.js Runtime
-        shell: pwsh
-        run: |
-          $nodePath = (Get-Command node.exe).Source
-
-          New-Item -ItemType Directory -Path "dist\runtime" -Force | Out-Null
-          Copy-Item $nodePath "dist\runtime\node.exe" -Force
-
-          if (-not (Test-Path "dist\runtime\node.exe")) {
-            Write-Error "Node.js runtime was not packaged."
-            exit 1
-          }
-
-          Write-Host "Node.js runtime packaged successfully."
 
       - name: Set up .NET 8 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      # 1. npm ci
       - name: Install Node Dependencies
         run: npm ci
 
       - name: Lint Web Application
         run: npm run lint
 
-            # 2. build web/client
       - name: Build Web Application & Backend
         run: npm run build
+
+      - name: Prepare Web Client Artifacts
+        shell: pwsh
+        run: |
+          Write-Host "Preparing KaBiRa POS web client artifacts..."
+
+          $distWeb = "dist\web"
+
+          if (-not (Test-Path $distWeb)) {
+            New-Item -ItemType Directory -Path $distWeb -Force | Out-Null
+          }
+
+          Get-ChildItem -Path "dist" -Exclude "web", "bridge", "installer", "runtime" | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination $distWeb -Recurse -Force
+          }
+
+          if (-not (Test-Path "dist\web\server.cjs")) {
+            Write-Error "server.cjs was not found in dist\web"
+            exit 1
+          }
+
+          Write-Host "Web client artifacts prepared successfully."
 
       - name: Package Backend Runtime Dependencies
         shell: pwsh
         run: |
-          Write-Host "Packaging production Node dependencies..."
+          Write-Host "Packaging backend Node dependencies..."
 
           $target = "dist\web\node_modules"
 
@@ -70,56 +76,108 @@ jobs:
           Copy-Item "node_modules\*" $target -Recurse -Force
 
           if (-not (Test-Path "dist\web\node_modules\express")) {
-            Write-Error "Express was not packaged into dist\node_modules"
+            Write-Error "Express was not packaged into dist\web\node_modules"
             exit 1
           }
 
           Write-Host "Backend dependencies packaged successfully."
 
-      - name: Prepare Web Client Artifacts
+      - name: Package Node.js Runtime
         shell: pwsh
         run: |
-          $distWeb = "dist\web"
-          if (-not (Test-Path $distWeb)) { New-Item -ItemType Directory -Path $distWeb -Force | Out-Null }
-          Get-ChildItem -Path "dist" -Exclude "web", "bridge", "installer" | ForEach-Object {
-            Copy-Item -Path $_.FullName -Destination $distWeb -Recurse -Force
+          Write-Host "Packaging Node.js runtime..."
+
+          $nodePath = (Get-Command node.exe).Source
+          $runtime = "dist\runtime"
+
+          if (Test-Path $runtime) {
+            Remove-Item $runtime -Recurse -Force
           }
 
-      # 3. dotnet restore Bridge
+          New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+
+          Copy-Item $nodePath "$runtime\node.exe" -Force
+
+          if (-not (Test-Path "dist\runtime\node.exe")) {
+            Write-Error "Node.js runtime was not packaged."
+            exit 1
+          }
+
+          Write-Host "Node.js runtime packaged successfully."
+          Get-Item "dist\runtime\node.exe" | Select-Object FullName, Length
+
+      - name: Verify POS Runtime Files
+        shell: pwsh
+        run: |
+          Write-Host "Verifying required KaBiRa POS runtime files..."
+
+          $requiredFiles = @(
+            "dist\web\server.cjs",
+            "dist\web\node_modules\express",
+            "dist\runtime\node.exe",
+            "bridge\Start-KaBiRaPOS.bat"
+          )
+
+          foreach ($file in $requiredFiles) {
+            if (-not (Test-Path $file)) {
+              Write-Error "Required file missing: $file"
+              exit 1
+            }
+
+            Write-Host "FOUND: $file"
+          }
+
+          Write-Host "All required POS runtime files verified."
+
       - name: Restore .NET Bridge Dependencies
         run: dotnet restore bridge/csharp/KaBiRaHardwareBridge.csproj
 
-      # 4. dotnet build Bridge
       - name: Build .NET Bridge
         run: dotnet build bridge/csharp/KaBiRaHardwareBridge.csproj -c Release
 
-      # 5. dotnet publish Bridge for win-x64
       - name: Publish .NET Bridge for win-x64
         run: |
           dotnet publish bridge/csharp/KaBiRaHardwareBridge.csproj -c Release -r win-x64 --self-contained true -o dist/bridge
 
-      # 6. compile Inno Setup installer
+      - name: Verify Bridge Artifact
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist\bridge\KaBiRaPosBridge.exe")) {
+            Write-Error "KaBiRaPosBridge.exe was not created."
+            exit 1
+          }
+
+          Write-Host "KaBiRa POS Bridge verified."
+
       - name: Install Inno Setup
         run: choco install innosetup --no-progress
 
       - name: Compile Windows Installer
         shell: pwsh
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" bridge\installer\KabiraPOS-Setup.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "bridge\installer\KabiraPOS-Setup.iss"
 
-      # 7. verify KabiraPOS-Setup.exe exists
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Inno Setup compilation failed."
+            exit $LASTEXITCODE
+          }
+
       - name: Verify Installer Artifact
         shell: pwsh
         run: |
           $installer = "dist\installer\KabiraPOS-Setup.exe"
+
           if (-not (Test-Path $installer)) {
             Write-Error "Verification failed: $installer was not created."
             exit 1
           }
-          $item = Get-Item $installer
-          Write-Host "Verified: $($item.FullName) ($([math]::Round($item.Length / 1MB, 2)) MB)"
 
-      # 8. upload installer as GitHub Actions artifact
+          $item = Get-Item $installer
+
+          Write-Host "Installer verified successfully."
+          Write-Host "Path: $($item.FullName)"
+          Write-Host "Size: $([math]::Round($item.Length / 1MB, 2)) MB"
+
       - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -127,7 +185,6 @@ jobs:
           path: dist/installer/KabiraPOS-Setup.exe
           if-no-files-found: error
 
-      # 9. optionally attach installer to tagged GitHub Release
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
