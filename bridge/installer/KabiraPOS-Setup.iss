@@ -39,10 +39,12 @@ Name: "autostart"; Description: "Launch KaBiRa POS Bridge automatically when Win
 [Files]
 ; 1. KaBiRa POS Web Client Application Artifacts
 Source: "..\..\dist\web\*"; DestDir: "{app}\Client"; Flags: ignoreversion recursesubdirs createallsubdirs
-
+; Node.js runtime required by the local POS backend
+Source: "..\..\dist\runtime\node.exe"; DestDir: "{app}\Runtime"; Flags: ignoreversion
 ; 2. KaBiRa Local Hardware Bridge (.NET 8 Native Windows Service)
 Source: "..\..\dist\bridge\*"; DestDir: "{app}\Bridge"; Flags: ignoreversion recursesubdirs createallsubdirs
-
+; Node.js runtime required by the local POS backend
+Source: "..\..\dist\runtime\node.exe"; DestDir: "{app}\Runtime"; Flags: ignoreversion
 ; 3. Service Management Scripts
 Source: "..\install-service.ps1"; DestDir: "{app}\Bridge"; Flags: ignoreversion
 
