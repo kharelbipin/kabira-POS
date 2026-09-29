@@ -1,5 +1,6 @@
 // Canonical Authoritative Bridge Client for Kabira POS
-// Connects directly to the local Windows Hardware Bridge: http://127.0.0.1:5055
+// Connects through the local POS backend proxy: http://127.0.0.1:3000/bridge
+// The browser never reads, stores, or sends the Windows Bridge security token.
 // Strict Canonical API Contract:
 //   GET  /api/bridge/health
 //   GET  /api/bridge/version
@@ -23,19 +24,14 @@ import { BridgeConnectionError, BridgeTimeoutError, BridgeDeviceError } from './
 
 export class BridgeClient {
   private static instance: BridgeClient;
-  private bridgeBaseUrl: string = 'http://127.0.0.1:5055';
+  private bridgeBaseUrl: string = 'http://127.0.0.1:3000/bridge';
   private requestTimeoutMs: number = 3500;
-  private bridgeToken: string = '';
 
   private constructor() {
     try {
       const customUrl = localStorage.getItem('pos_bridge_endpoint_v1');
       if (customUrl) {
         this.bridgeBaseUrl = customUrl;
-      }
-      const savedToken = localStorage.getItem('pos_bridge_token_v1');
-      if (savedToken) {
-        this.bridgeToken = savedToken;
       }
     } catch {}
   }
@@ -56,17 +52,6 @@ export class BridgeClient {
 
   public getEndpoint(): string {
     return this.bridgeBaseUrl;
-  }
-
-  public setToken(token: string) {
-    this.bridgeToken = token;
-    try {
-      localStorage.setItem('pos_bridge_token_v1', token);
-    } catch {}
-  }
-
-  public getToken(): string {
-    return this.bridgeToken;
   }
 
   /**
@@ -93,3 +78,19 @@ export class BridgeClient {
     const url = `${this.bridgeBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Client': 'Kabira-POS-React',
+          ...(options.headers || {}),
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown server error');
