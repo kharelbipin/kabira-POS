@@ -1,6 +1,6 @@
 @echo off
 setlocal
-
+set "NODE_ENV=production"
 set "APPDIR=C:\Program Files\KaBiRa POS"
 set "CLIENT=%APPDIR%\Client"
 set "NODE=%APPDIR%\Runtime\node.exe"
