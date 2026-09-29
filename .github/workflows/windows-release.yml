@@ -23,6 +23,20 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+      - name: Package Node.js Runtime
+        shell: pwsh
+        run: |
+          $nodePath = (Get-Command node.exe).Source
+
+          New-Item -ItemType Directory -Path "dist\runtime" -Force | Out-Null
+          Copy-Item $nodePath "dist\runtime\node.exe" -Force
+
+          if (-not (Test-Path "dist\runtime\node.exe")) {
+            Write-Error "Node.js runtime was not packaged."
+            exit 1
+          }
+
+          Write-Host "Node.js runtime packaged successfully."
 
       - name: Set up .NET 8 SDK
         uses: actions/setup-dotnet@v4
