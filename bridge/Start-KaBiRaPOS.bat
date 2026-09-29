@@ -26,16 +26,24 @@ if errorlevel 1 (
     powershell.exe -NoProfile -Command "Start-Process -FilePath '%NODE%' -ArgumentList '""%SERVER%""' -WorkingDirectory '%CLIENT%'"
 )
 
-REM Wait up to 20 seconds for port 3000
-powershell.exe -NoProfile -Command "$ready=$false; for($i=0;$i -lt 20;$i++){ if(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue){$ready=$true;break}; Start-Sleep -Seconds 1 }; if($ready){exit 0}else{exit 1}"
+REM Create writable KaBiRa log directory
+set "LOGDIR=%LOCALAPPDATA%\KaBiRa POS\logs"
+if not exist "%LOGDIR%" mkdir "%LOGDIR%"
+
+REM Wait up to 30 seconds for the actual KaBiRa backend health endpoint
+powershell.exe -NoProfile -Command "$ready=$false; for($i=0;$i -lt 30;$i++){ try { $r=Invoke-RestMethod -Uri 'http://127.0.0.1:3000/api/health' -TimeoutSec 2; if($r.status -eq 'ok'){ $ready=$true; break } } catch {}; Start-Sleep -Seconds 1 }; if($ready){exit 0}else{exit 1}"
 
 if errorlevel 1 (
-    echo ERROR: KaBiRa POS backend failed to start.
-    echo Please contact KaBiRa POS support.
+    echo [%date% %time%] ERROR: KaBiRa POS backend failed health check.>>"%LOGDIR%\launcher.log"
+    echo ERROR: KaBiRa POS could not start.
+    echo Startup information was saved to:
+    echo %LOGDIR%\launcher.log
     pause
     exit /b 1
 )
 
+echo [%date% %time%] KaBiRa POS backend health check passed.>>"%LOGDIR%\launcher.log"
 REM Backend is ready - launch POS
 start "" "http://127.0.0.1:3000"
+
 exit /b 0
