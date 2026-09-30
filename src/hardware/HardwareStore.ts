@@ -27,8 +27,10 @@ export class HardwareStore {
     private barcodeListeners: Set<BarcodeScanListener> = new Set();
     private touchListeners: Set<CustomerTouchListener> = new Set();
 
-    // Customer Display Window & BroadcastChannel Reference
-    private customerWindow: Window | null = null;
+    // Customer Display launcher state & BroadcastChannel reference
+    // The customer display is launched by the local Node/PowerShell backend,
+    // so there is no browser Window reference to track here.
+    private customerDisplayLaunchActive: boolean = false;
     private broadcastChannel: BroadcastChannel | null = null;
 
     private health: BridgeHealth = {
@@ -722,11 +724,11 @@ export class HardwareStore {
     // ==============================================================================
 
     public isCustomerDisplayWindowOpen(): boolean {
-        return Boolean(this.customerWindow && !this.customerWindow.closed);
+        return this.customerDisplayLaunchActive;
     }
 
     public async openCustomerDisplayWindow(
-        isAutoAttempt: boolean = false
+        _isAutoAttempt: boolean = false
     ): Promise<{
         success: boolean;
         blocked?: boolean;
@@ -743,6 +745,9 @@ export class HardwareStore {
             const result = await response.json();
 
             if (!response.ok || !result.success) {
+                this.customerDisplayLaunchActive = false;
+                this.notify();
+
                 return {
                     success: false,
                     message:
@@ -751,6 +756,9 @@ export class HardwareStore {
                 };
             }
 
+            this.customerDisplayLaunchActive = true;
+            this.notify();
+
             return {
                 success: true,
                 message:
@@ -758,6 +766,9 @@ export class HardwareStore {
                     'Customer display opened on the secondary Windows display.',
             };
         } catch (e: any) {
+            this.customerDisplayLaunchActive = false;
+            this.notify();
+
             return {
                 success: false,
                 message:
@@ -783,14 +794,7 @@ export class HardwareStore {
             }
         } catch { }
 
-        // 2. Post to direct window reference if available
-        if (this.customerWindow && !this.customerWindow.closed) {
-            try {
-                this.customerWindow.postMessage(payload, window.location.origin);
-            } catch { }
-        }
-
-        // 3. Persist to localStorage for cross-tab sync
+        // 2. Persist to localStorage for cross-window sync
         try {
             localStorage.setItem('pos_customer_display_state', JSON.stringify(payload));
         } catch { }
