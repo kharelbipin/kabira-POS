@@ -114,7 +114,7 @@ powershell.exe -NoProfile -Command ^
 "$env:NODE_ENV='production'; ^
 Start-Process ^
 -FilePath '%NODE%' ^
--ArgumentList '""%SERVER%""' ^
+-ArgumentList 'server.cjs' ^
 -WorkingDirectory '%CLIENT%' ^
 -RedirectStandardOutput '%BACKENDLOG%' ^
 -RedirectStandardError '%BACKENDERR%'"
