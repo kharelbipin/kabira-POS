@@ -756,36 +756,96 @@ namespace KaBiRa.HardwareBridge
         }
 
         private static List<WindowsMonitorDto> GetWindowsMonitors()
-        {
-            var list = new List<WindowsMonitorDto>();
-            try
+{
+    var list = new List<WindowsMonitorDto>();
+
+    try
+    {
+        EnumDisplayMonitors(
+            IntPtr.Zero,
+            IntPtr.Zero,
+            (IntPtr hMonitor, IntPtr hdcMonitor, ref RECT monitorRect, IntPtr data) =>
             {
-                using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_DesktopMonitor");
-                int idx = 1;
-                foreach (ManagementObject mon in searcher.Get())
+                var info = new MONITORINFOEX();
+                info.cbSize = Marshal.SizeOf<MONITORINFOEX>();
+
+                if (GetMonitorInfo(hMonitor, ref info))
                 {
-                    string id = $"DISPLAY{idx}";
-                    string name = mon["Name"]?.ToString() ?? $"Display {idx}";
-                    int width = Convert.ToInt32(mon["ScreenWidth"] ?? 0);
-                    int height = Convert.ToInt32(mon["ScreenHeight"] ?? 0);
+                    bool primary = (info.dwFlags & MONITORINFOF_PRIMARY) != 0;
 
                     list.Add(new WindowsMonitorDto
                     {
-                        Id = id,
-                        Name = name,
-                        Primary = idx == 1,
-                        Width = width,
-                        Height = height,
-                        Online = true
+                        Id = info.szDevice,
+                        Name = info.szDevice,
+                        Primary = primary,
+                        Width = info.rcMonitor.Right - info.rcMonitor.Left,
+                        Height = info.rcMonitor.Bottom - info.rcMonitor.Top,
+                        Left = info.rcMonitor.Left,
+                        Top = info.rcMonitor.Top,
+                        Right = info.rcMonitor.Right,
+                        Bottom = info.rcMonitor.Bottom,
+                        Online = true,
+                        IsExtended = !primary
                     });
-                    idx++;
                 }
-            }
-            catch { }
 
+                return true;
+            },
+            IntPtr.Zero
+        );
+    }
+    catch
+    {
+        // Do not create fake displays if Windows enumeration fails.
+    }
 
-            return list;
-        }
+    return list;
+}
+    private const uint MONITORINFOF_PRIMARY = 0x00000001;
+
+[StructLayout(LayoutKind.Sequential)]
+private struct RECT
+{
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
+}
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+private struct MONITORINFOEX
+{
+    public int cbSize;
+    public RECT rcMonitor;
+    public RECT rcWork;
+    public uint dwFlags;
+
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+    public string szDevice;
+}
+
+private delegate bool MonitorEnumProc(
+    IntPtr hMonitor,
+    IntPtr hdcMonitor,
+    ref RECT lprcMonitor,
+    IntPtr dwData
+);
+
+[DllImport("user32.dll")]
+[return: MarshalAs(UnmanagedType.Bool)]
+private static extern bool EnumDisplayMonitors(
+    IntPtr hdc,
+    IntPtr lprcClip,
+    MonitorEnumProc lpfnEnum,
+    IntPtr dwData
+);
+
+[DllImport("user32.dll", CharSet = CharSet.Auto)]
+[return: MarshalAs(UnmanagedType.Bool)]
+private static extern bool GetMonitorInfo(
+    IntPtr hMonitor,
+    ref MONITORINFOEX lpmi
+);
     }
 
     // ==============================================================================
