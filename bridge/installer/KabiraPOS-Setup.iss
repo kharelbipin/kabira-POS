@@ -64,9 +64,14 @@ GroupDescription: "{cm:AdditionalIcons}"
 ; --------------------------------------------------------------------------
 ; KaBiRa POS Web Client + Backend
 ; --------------------------------------------------------------------------
+; Current Vite/Node production build is written directly into dist.
+; Runtime, Bridge, and installer output are excluded because they are
+; installed separately below.
+; --------------------------------------------------------------------------
 
-Source: "..\..\dist\web\*"; \
+Source: "..\..\dist\*"; \
 DestDir: "{app}\Client"; \
+Excludes: "runtime\*,bridge\*,installer\*"; \
 Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; --------------------------------------------------------------------------
@@ -151,10 +156,11 @@ Filename: "powershell.exe"; \
 Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Stop-Service -Name 'KaBiRaPOSBridge' -Force -ErrorAction SilentlyContinue; sc.exe delete KaBiRaPOSBridge | Out-Null"""; \
 Flags: runhidden waituntilterminated
 
-; Stop only the KaBiRa Node backend.
+; Stop only the KaBiRa POS Node backend.
+; Double braces are required so Inno Setup passes literal PowerShell braces.
 ; Do NOT terminate unrelated node.exe processes.
 Filename: "powershell.exe"; \
-Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-CimInstance Win32_Process -Filter 'Name=''node.exe''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*KaBiRa POS*server.cjs*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"""; \
+Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-CimInstance Win32_Process -Filter 'Name=''node.exe''' -ErrorAction SilentlyContinue | Where-Object {{ $_.CommandLine -like '*KaBiRa POS*server.cjs*' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}"""; \
 Flags: runhidden waituntilterminated
 
 ; ==============================================================================
@@ -169,7 +175,7 @@ var
 begin
 
   { -------------------------------------------------------------- }
-  { Stop existing Hardware Bridge service before replacing files.  }
+  { Stop existing Hardware Bridge service before replacing files. }
   { -------------------------------------------------------------- }
 
   Exec(
@@ -182,13 +188,14 @@ begin
   );
 
   { -------------------------------------------------------------- }
-  { Stop ONLY KaBiRa POS Node backend processes.                    }
-  { Never kill every node.exe process on the machine.              }
+  { Stop ONLY KaBiRa POS Node backend processes.                   }
+  { Never kill every node.exe process on the machine.             }
+  { Double braces pass literal PowerShell script-block braces.     }
   { -------------------------------------------------------------- }
 
   Exec(
     'powershell.exe',
-    '-NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter ''Name=''''node.exe'''''' -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like ''*KaBiRa POS*server.cjs*'' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"',
+    '-NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter ''Name=''''node.exe'''''' -ErrorAction SilentlyContinue | Where-Object {{ $_.CommandLine -like ''*KaBiRa POS*server.cjs*'' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}"',
     '',
     SW_HIDE,
     ewWaitUntilTerminated,
