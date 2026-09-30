@@ -5,16 +5,13 @@ import React from 'react';
 import { HardwareDeviceManager } from '../admin/HardwareDeviceManager';
 
 interface WindowsPosManagerTabProps {
-  onOpenCustomerDisplayWindow?: () => void;
   activeCartCount?: number;
 }
 
-export const WindowsPosManagerTab: React.FC<WindowsPosManagerTabProps> = ({
-  onOpenCustomerDisplayWindow,
-}) => {
+export const WindowsPosManagerTab: React.FC<WindowsPosManagerTabProps> = () => {
   return (
     <div className="space-y-6">
-      <HardwareDeviceManager onOpenCustomerDisplay={onOpenCustomerDisplayWindow} />
+      <HardwareDeviceManager />
     </div>
   );
 };
