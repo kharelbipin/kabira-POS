@@ -115,26 +115,41 @@ export const HardwareDeviceManager: React.FC<HardwareDeviceManagerProps> = ({
   const handleTestDevice = async (category: HardwareCategory) => {
     playBeep('click');
     setTestingCategory(category);
+
     try {
-      if (category === 'customer_display' && onOpenCustomerDisplay) {
-        onOpenCustomerDisplay();
+      if (category === 'customer_display') {
+        const launchResult =
+          await hardwareStore.openCustomerDisplayWindow(false);
+
+        setTestResult({
+          category,
+          success: launchResult.success,
+          message: launchResult.message,
+          timestamp: new Date().toLocaleTimeString(),
+        });
+
+        playBeep(launchResult.success ? 'success' : 'error');
+        return;
       }
 
       const res = await hardwareStore.testDevice(category);
+
       setTestResult({
         category,
         success: res.success,
         message: res.message,
         timestamp: new Date().toLocaleTimeString(),
       });
+
       playBeep(res.success ? 'success' : 'error');
     } catch (e: any) {
       setTestResult({
         category,
         success: false,
-        message: e.message || 'Direct device test failed',
+        message: e?.message || 'Direct device test failed',
         timestamp: new Date().toLocaleTimeString(),
       });
+
       playBeep('error');
     } finally {
       setTestingCategory(null);
