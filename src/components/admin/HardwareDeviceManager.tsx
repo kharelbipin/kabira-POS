@@ -35,12 +35,10 @@ import { bridgeClient } from '../../hardware/BridgeClient';
 import { playBeep } from '../../utils/audio';
 
 interface HardwareDeviceManagerProps {
-  onOpenCustomerDisplay?: () => void;
   initialTab?: 'devices' | 'configuration' | 'diagnostics';
 }
 
 export const HardwareDeviceManager: React.FC<HardwareDeviceManagerProps> = ({
-  onOpenCustomerDisplay,
   initialTab = 'devices',
 }) => {
   // 3-tab consolidated architecture: Devices | Configuration | Diagnostics
