@@ -159,10 +159,34 @@ async function startServer() {
     } else {
         // Installer places index.html and assets directly in the Client working directory.
         const distPath = process.cwd();
-        app.use(express.static(distPath));
-        app.get('*', (_req, res) => {
-            res.sendFile(path.join(distPath, 'index.html'));
-        });
+const assetsPath = path.join(distPath, 'assets');
+
+// Serve Vite CSS/JS assets before the SPA fallback
+app.use(
+  '/assets',
+  express.static(assetsPath, {
+    fallthrough: false,
+    index: false,
+    maxAge: '1y',
+    immutable: true,
+  })
+);
+
+// Serve remaining static files
+app.use(express.static(distPath, { index: false }));
+
+// SPA fallback only for application routes
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/assets/')) {
+    return res.status(404).type('text/plain').send('Asset not found');
+  }
+
+  if (path.extname(req.path)) {
+    return next();
+  }
+
+  return res.sendFile(path.join(distPath, 'index.html'));
+});
     }
 
     // Global error handler middleware
