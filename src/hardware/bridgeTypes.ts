@@ -94,7 +94,7 @@ export interface AssignedDeviceConfig {
   drawerConnectionMethod?: 'through_printer' | 'usb' | 'serial' | 'network';
   hostPrinterId?: string;
   drawerPort?: 'Drawer 1' | 'Drawer 2';
-  vendorProtocol?: 'epson' | 'star' | 'citizen';
+  vendorProtocol?: 'escpos' | 'epson' | 'star' | 'citizen';
   // Specific to customer display
   displayId?: string;
   isExtended?: boolean;
