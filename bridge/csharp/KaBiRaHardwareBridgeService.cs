@@ -679,27 +679,18 @@ namespace KaBiRa.HardwareBridge
                     });
                 }
 
-                // 3. Cash drawer role through an explicitly detected default receipt printer.
-                // This is a capability/configuration role, not proof that a physical drawer exists.
-                var primaryPrinter = printers.FirstOrDefault(p => p.IsDefault);
-                if (primaryPrinter != null)
-                {
-                    list.Add(new DiscoveredDeviceDto
-                    {
-                        DeviceId = $"drawer_via_{primaryPrinter.DeviceId}",
-                        Name = $"Cash Drawer Relay via {primaryPrinter.Name}",
-                        Manufacturer = "ESC/POS printer-controlled drawer",
-                        Category = "cash_drawer",
-                        ConnectionType = "through_printer",
-                        Address = primaryPrinter.Port,
-                        IsConfigured = true,
-                        IsWindowsDetected = true,
-                        IsNetworkReachable = false,
-                        IsResponding = false,
-                        LastSeen = DateTime.UtcNow.ToString("o")
-                    });
-                }
-
+                // 3. Cash drawers are NOT auto-discovered from the Windows default printer.
+                //
+               // A printer being the Windows default does not prove that a physical
+               // cash drawer is connected to it. KaBiRa POS explicitly links the
+               // cash-drawer role to the receipt printer selected for this register.
+               //
+               // The selected receipt-printer deviceId is sent to /api/drawer/open,
+               // where it is resolved to the actual Windows queue before the
+               // ESC/POS drawer-kick command is transmitted.
+               //
+              // Therefore no synthetic/default-printer cash-drawer device is
+               // created during hardware discovery.
                 // Barcode scanners are NOT fabricated here.
                 // HID keyboard-wedge scanners require real Windows HID/PnP enumeration before
                 // they may be returned as detected/responding devices.
