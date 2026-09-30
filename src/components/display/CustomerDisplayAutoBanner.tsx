@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { hardwareStore } from '../../hardware/HardwareStore';
 import { playBeep } from '../../utils/audio';
 import { CustomerDisplayView } from './CustomerDisplayView';
@@ -37,7 +37,6 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
     hardwareStore.isCustomerDisplayWarningDismissed()
   );
   const [isRetrying, setIsRetrying] = useState<boolean>(false);
-  const hasAttemptedGesture = useRef<boolean>(false);
 
   // Distinct hardware states (Requirement 8)
   // Customer window: OPEN / CLOSED
@@ -51,7 +50,7 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
     physicalDisplays.length > 0 || Boolean(configuredHardware.customer_display.deviceId);
 
   useEffect(() => {
-    // 1. Subscribe to HardwareStore changes
+    // Subscribe to HardwareStore changes.
     const unsub = hardwareStore.subscribe(() => {
       setHealth(hardwareStore.getHealth());
       setConfiguredHardware(hardwareStore.getConfiguredHardware());
@@ -59,73 +58,71 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
       setIsDismissed(hardwareStore.isCustomerDisplayWarningDismissed());
     });
 
-    // 2. Initial attempt on component mount
-    const initialRes = hardwareStore.openCustomerDisplayWindow(true);
-    setIsWindowOpen(initialRes.success && hardwareStore.isCustomerDisplayWindowOpen());
+    let cancelled = false;
 
-    // 3. User gesture listener for browsers that block initial unprompted popup
-    const handleFirstGesture = () => {
-      if (hasAttemptedGesture.current) return;
-      hasAttemptedGesture.current = true;
-
-      if (!hardwareStore.isCustomerDisplayWindowOpen()) {
-        const res = hardwareStore.openCustomerDisplayWindow(false);
-        setIsWindowOpen(res.success && hardwareStore.isCustomerDisplayWindowOpen());
+    // The customer display is now launched by the local Windows backend.
+    // We cannot use window.open/window.closed to track that external Edge window.
+    const openInitialDisplay = async () => {
+      const result = await hardwareStore.openCustomerDisplayWindow(true);
+      if (!cancelled) {
+        setIsWindowOpen(result.success);
       }
     };
 
-    window.addEventListener('click', handleFirstGesture, { once: true, capture: true });
-    window.addEventListener('keydown', handleFirstGesture, { once: true, capture: true });
-
-    // 4. Periodic heartbeat to verify window state (open vs closed)
-    const interval = setInterval(() => {
-      const current = hardwareStore.isCustomerDisplayWindowOpen();
-      setIsWindowOpen(current);
-    }, 2000);
+    void openInitialDisplay();
 
     return () => {
+      cancelled = true;
       unsub();
-      window.removeEventListener('click', handleFirstGesture, { capture: true });
-      window.removeEventListener('keydown', handleFirstGesture, { capture: true });
-      clearInterval(interval);
     };
   }, []);
 
-  const handleManualOpen = () => {
+  const handleManualOpen = async () => {
     playBeep('click');
-    const res = hardwareStore.openCustomerDisplayWindow(false);
-    if (res.blocked) {
-      if (onOpenCustomerDisplayModal) {
-        onOpenCustomerDisplayModal();
-      } else {
-        alert(
-          'Customer Display Window pop-up was blocked by your browser.\nPlease allow popups for this site in your browser URL bar or use the Live Docked Preview below.'
-        );
-      }
-    } else {
-      setIsWindowOpen(hardwareStore.isCustomerDisplayWindowOpen());
+
+    const res = await hardwareStore.openCustomerDisplayWindow(false);
+    setIsWindowOpen(res.success);
+
+    if (res.success) {
       playBeep('success');
+      return;
+    }
+
+    if (onOpenCustomerDisplayModal) {
+      onOpenCustomerDisplayModal();
+    } else {
+      alert(res.message || 'Customer display could not be opened.');
     }
   };
 
   const handleRetry = async () => {
     playBeep('click');
     setIsRetrying(true);
+
     try {
       await hardwareStore.scanHardware();
-    } catch {}
-    const res = hardwareStore.openCustomerDisplayWindow(false);
-    setIsRetrying(false);
-    if (res.success) {
-      setIsWindowOpen(true);
-      playBeep('success');
+      const res = await hardwareStore.openCustomerDisplayWindow(false);
+      setIsWindowOpen(res.success);
+
+      if (res.success) {
+        playBeep('success');
+      }
+    } catch {
+      setIsWindowOpen(false);
+    } finally {
+      setIsRetrying(false);
     }
   };
 
-  const handleRestart = () => {
+  const handleRestart = async () => {
     playBeep('click');
-    hardwareStore.restartCustomerDisplay();
-    setIsWindowOpen(hardwareStore.isCustomerDisplayWindowOpen());
+
+    const res = await hardwareStore.restartCustomerDisplay();
+    setIsWindowOpen(res.success);
+
+    if (res.success) {
+      playBeep('success');
+    }
   };
 
   const handleDismissWarning = () => {
