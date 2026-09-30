@@ -975,14 +975,19 @@ namespace KaBiRa.HardwareBridge
     }
 
     public class WindowsMonitorDto
-    {
-        public string Id { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public bool Primary { get; set; }
-        public int Width { get; set; }
-        public int Height { get; set; }
-        public bool Online { get; set; }
-    }
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public bool Primary { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public int Left { get; set; }
+    public int Top { get; set; }
+    public int Right { get; set; }
+    public int Bottom { get; set; }
+    public bool Online { get; set; }
+    public bool IsExtended { get; set; }
+}
 
     public class DrawerOpenRequestDto
     {
