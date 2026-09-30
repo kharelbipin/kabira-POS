@@ -49,23 +49,23 @@ jobs:
       - name: Verify Web Build
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist\web")) {
-            Write-Error "dist\web was not created."
+          if (-not (Test-Path "dist")) {
+            Write-Error "dist was not created."
             exit 1
           }
 
-          if (-not (Test-Path "dist\web\index.html")) {
-            Write-Error "dist\web\index.html was not created."
+          if (-not (Test-Path "dist\index.html")) {
+            Write-Error "dist\index.html was not created."
             exit 1
           }
 
-          if (-not (Test-Path "dist\web\server.cjs")) {
-            Write-Error "dist\web\server.cjs was not created."
+          if (-not (Test-Path "dist\server.cjs")) {
+            Write-Error "dist\server.cjs was not created."
             exit 1
           }
 
-          if (-not (Test-Path "dist\web\assets")) {
-            Write-Error "dist\web\assets was not created."
+          if (-not (Test-Path "dist\assets")) {
+            Write-Error "dist\assets was not created."
             exit 1
           }
 
@@ -78,7 +78,7 @@ jobs:
       - name: Package Backend Runtime Dependencies
         shell: pwsh
         run: |
-          $target = "dist\web\node_modules"
+          $target = "dist\node_modules"
 
           if (Test-Path $target) {
             Remove-Item $target -Recurse -Force
@@ -88,356 +88,9 @@ jobs:
 
           Copy-Item "node_modules\*" $target -Recurse -Force
 
-          if (-not (Test-Path "dist\web\node_modules\express")) {
+          if (-not (Test-Path "dist\node_modules\express")) {
             Write-Error "Express was not packaged."
             exit 1
           }
 
           Write-Host "Backend dependencies packaged."
-
-      # ==========================================================
-      # PRIVATE NODE RUNTIME
-      # ==========================================================
-
-      - name: Package Node.js Runtime
-        shell: pwsh
-        run: |
-          $nodePath = (Get-Command node.exe).Source
-
-          New-Item -ItemType Directory -Path "dist\runtime" -Force | Out-Null
-
-          Copy-Item $nodePath "dist\runtime\node.exe" -Force
-
-          if (-not (Test-Path "dist\runtime\node.exe")) {
-            Write-Error "Node.js runtime was not packaged."
-            exit 1
-          }
-
-          Write-Host "Node runtime packaged."
-
-      # ==========================================================
-      # PRODUCTION BACKEND SMOKE TEST
-      # ==========================================================
-
-      - name: Test Packaged Production POS
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $client = (Resolve-Path "dist\web").Path
-          $node = (Resolve-Path "dist\runtime\node.exe").Path
-          $server = Join-Path $client "server.cjs"
-
-          $stdout = Join-Path $env:RUNNER_TEMP "kabira-server.log"
-          $stderr = Join-Path $env:RUNNER_TEMP "kabira-server-error.log"
-
-          $env:NODE_ENV = "production"
-
-          Write-Host "Starting packaged KaBiRa POS backend..."
-
-          $process = Start-Process `
-            -FilePath $node `
-            -ArgumentList "`"$server`"" `
-            -WorkingDirectory $client `
-            -RedirectStandardOutput $stdout `
-            -RedirectStandardError $stderr `
-            -PassThru
-
-          try {
-
-            $healthy = $false
-
-            for ($i = 0; $i -lt 30; $i++) {
-
-              if ($process.HasExited) {
-                Write-Host "Backend exited unexpectedly."
-
-                if (Test-Path $stdout) {
-                  Get-Content $stdout
-                }
-
-                if (Test-Path $stderr) {
-                  Get-Content $stderr
-                }
-
-                throw "Packaged backend exited before becoming healthy."
-              }
-
-              try {
-
-                $health = Invoke-RestMethod `
-                  -Uri "http://127.0.0.1:3000/api/health" `
-                  -TimeoutSec 2
-
-                if ($health.status -eq "ok") {
-                  $healthy = $true
-                  break
-                }
-
-              }
-              catch {
-                Start-Sleep -Seconds 1
-              }
-            }
-
-            if (-not $healthy) {
-
-              if (Test-Path $stdout) {
-                Get-Content $stdout
-              }
-
-              if (Test-Path $stderr) {
-                Get-Content $stderr
-              }
-
-              throw "KaBiRa POS production health check failed."
-            }
-
-            Write-Host "Health endpoint PASSED."
-
-            # ----------------------------------------------------
-            # Verify root HTML
-            # ----------------------------------------------------
-
-            $root = Invoke-WebRequest `
-              -Uri "http://127.0.0.1:3000/" `
-              -TimeoutSec 10
-
-            if ($root.StatusCode -ne 200) {
-              throw "POS root returned HTTP $($root.StatusCode)."
-            }
-
-            if ($root.Content -notmatch "<html") {
-              throw "POS root did not return HTML."
-            }
-
-            Write-Host "Root HTML PASSED."
-
-            # ----------------------------------------------------
-            # Read the actual generated CSS/JS filenames
-            # ----------------------------------------------------
-
-            $htmlPath = Join-Path $client "index.html"
-            $html = Get-Content $htmlPath -Raw
-
-            $cssMatch = [regex]::Match(
-              $html,
-              'href="(?<asset>/assets/[^"]+\.css)"'
-            )
-
-            $jsMatch = [regex]::Match(
-              $html,
-              'src="(?<asset>/assets/[^"]+\.js)"'
-            )
-
-            if (-not $cssMatch.Success) {
-              throw "Unable to locate generated CSS reference in index.html."
-            }
-
-            if (-not $jsMatch.Success) {
-              throw "Unable to locate generated JavaScript reference in index.html."
-            }
-
-            $cssPath = $cssMatch.Groups["asset"].Value
-            $jsPath = $jsMatch.Groups["asset"].Value
-
-            Write-Host "CSS: $cssPath"
-            Write-Host "JS : $jsPath"
-
-            # ----------------------------------------------------
-            # Verify CSS
-            # ----------------------------------------------------
-
-            $cssResponse = Invoke-WebRequest `
-              -Uri ("http://127.0.0.1:3000" + $cssPath) `
-              -TimeoutSec 10
-
-            if ($cssResponse.StatusCode -ne 200) {
-              throw "CSS returned HTTP $($cssResponse.StatusCode)."
-            }
-
-            if ($cssResponse.Content.Length -lt 100) {
-              throw "CSS response appears empty or invalid."
-            }
-
-            Write-Host "CSS asset PASSED."
-
-            # ----------------------------------------------------
-            # Verify JavaScript
-            # ----------------------------------------------------
-
-            $jsResponse = Invoke-WebRequest `
-              -Uri ("http://127.0.0.1:3000" + $jsPath) `
-              -TimeoutSec 10
-
-            if ($jsResponse.StatusCode -ne 200) {
-              throw "JavaScript returned HTTP $($jsResponse.StatusCode)."
-            }
-
-            if ($jsResponse.Content.Length -lt 100) {
-              throw "JavaScript response appears empty or invalid."
-            }
-
-            Write-Host "JavaScript asset PASSED."
-
-            Write-Host ""
-            Write-Host "========================================="
-            Write-Host "KaBiRa production web smoke test PASSED."
-            Write-Host "========================================="
-
-          }
-          finally {
-
-            if ($process -and -not $process.HasExited) {
-              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            }
-          }
-
-      # ==========================================================
-      # .NET 8
-      # ==========================================================
-
-      - name: Set up .NET 8 SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      # ==========================================================
-      # HARDWARE BRIDGE
-      # ==========================================================
-
-      - name: Restore Hardware Bridge
-        run: dotnet restore bridge/csharp/KaBiRaHardwareBridge.csproj
-
-      - name: Build Hardware Bridge
-        run: >
-          dotnet build
-          bridge/csharp/KaBiRaHardwareBridge.csproj
-          -c Release
-          --no-restore
-
-      - name: Publish Hardware Bridge
-        run: >
-          dotnet publish
-          bridge/csharp/KaBiRaHardwareBridge.csproj
-          -c Release
-          -r win-x64
-          --self-contained true
-          -o dist/bridge
-
-      - name: Verify Hardware Bridge
-        shell: pwsh
-        run: |
-          $bridge = "dist\bridge\KaBiRaPosBridge.exe"
-
-          if (-not (Test-Path $bridge)) {
-            Write-Error "KaBiRa Hardware Bridge executable was not created."
-            exit 1
-          }
-
-          $item = Get-Item $bridge
-
-          if ($item.Length -lt 100KB) {
-            Write-Error "Bridge executable appears invalid."
-            exit 1
-          }
-
-          Write-Host "Bridge verified:"
-          Write-Host $item.FullName
-
-      # ==========================================================
-      # VERIFY INSTALLER INPUTS
-      # ==========================================================
-
-      - name: Verify Installer Inputs
-        shell: pwsh
-        run: |
-          $required = @(
-            "dist\web\index.html",
-            "dist\web\server.cjs",
-            "dist\runtime\node.exe",
-            "dist\bridge\KaBiRaPosBridge.exe",
-            "bridge\Start-KaBiRaPOS.bat",
-            "bridge\install-service.ps1",
-            "bridge\installer\KabiraPOS-Setup.iss"
-          )
-
-          foreach ($file in $required) {
-
-            if (-not (Test-Path $file)) {
-              Write-Error "Missing installer input: $file"
-              exit 1
-            }
-
-            Write-Host "FOUND: $file"
-          }
-
-      # ==========================================================
-      # INNO SETUP
-      # ==========================================================
-
-      - name: Install Inno Setup
-        run: choco install innosetup --no-progress -y
-
-      - name: Compile Windows Installer
-        shell: pwsh
-        run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
-            "bridge\installer\KabiraPOS-Setup.iss"
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "Inno Setup compilation failed."
-          }
-
-      # ==========================================================
-      # FINAL INSTALLER VERIFICATION
-      # ==========================================================
-
-      - name: Verify Installer Artifact
-        shell: pwsh
-        run: |
-          $installer = "dist\installer\KabiraPOS-Setup.exe"
-
-          if (-not (Test-Path $installer)) {
-            Write-Error "$installer was not created."
-            exit 1
-          }
-
-          $item = Get-Item $installer
-
-          if ($item.Length -lt 1MB) {
-            Write-Error "Installer appears unexpectedly small."
-            exit 1
-          }
-
-          Write-Host ""
-          Write-Host "========================================="
-          Write-Host "KaBiRa Windows Installer VERIFIED"
-          Write-Host "========================================="
-          Write-Host "Path: $($item.FullName)"
-          Write-Host "Size: $([math]::Round($item.Length / 1MB, 2)) MB"
-
-      # ==========================================================
-      # ARTIFACT
-      # ==========================================================
-
-      - name: Upload Installer Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: KabiraPOS-Windows-Setup
-          path: dist/installer/KabiraPOS-Setup.exe
-          if-no-files-found: error
-
-      # ==========================================================
-      # GITHUB RELEASE - TAG BUILDS ONLY
-      # ==========================================================
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/installer/KabiraPOS-Setup.exe
-          name: KaBiRa POS ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
