@@ -263,17 +263,13 @@ export default function App() {
       setIsAuthenticating(false);
     }
   }, []);
-
   useEffect(() => {
     if (isCustomerDisplayMode || checkUploadSession || shelfCameraSession || mobileSessionParam) {
       setIsAuthenticating(false);
       return;
     }
     loadAllData();
-    // Auto-open second display screen if configured (Requirement 8)
-    hardwareStore.openCustomerDisplayWindow(true);
   }, [loadAllData, isCustomerDisplayMode, checkUploadSession, shelfCameraSession, mobileSessionParam]);
-
   // Cart Operations (CA-01, CA-02, CA-03)
   const handleAddToCart = (product: Product) => {
     setCartItems(prev => {
