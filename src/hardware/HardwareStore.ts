@@ -73,7 +73,7 @@ export class HardwareStore {
             drawerConnectionMethod: 'through_printer',
             hostPrinterId: '',
             drawerPort: 'Drawer 1',
-            vendorProtocol: 'epson',
+            vendorProtocol: 'escpos',
         },
         barcode_scanner: {
             category: 'barcode_scanner',
@@ -183,7 +183,7 @@ export class HardwareStore {
                         isDefault: false,
                         hostPrinterId: '',
                         drawerPort: 'Drawer 1',
-                        vendorProtocol: 'epson',
+                        vendorProtocol: 'escpos',
                     };
                 }
 
@@ -318,16 +318,54 @@ export class HardwareStore {
      * Updates register hardware configuration
      */
     public assignDevice(category: HardwareCategory, config: Partial<AssignedDeviceConfig>) {
-        this.configured[category] = {
-            ...this.configured[category],
-            ...config,
-        };
-        if (category === 'receipt_printer' && config.deviceId) {
-            this.configured.cash_drawer.hostPrinterId = config.deviceId;
+    this.configured[category] = {
+        ...this.configured[category],
+        ...config,
+    };
+
+    // A cash drawer connected through an ESC/POS receipt printer is a
+    // printer-controlled capability, not a separately discovered device.
+    //
+    // Whenever the register's receipt printer is selected, automatically
+    // link the drawer to that exact printer. This avoids using the Windows
+    // default printer or any hardcoded Epson/XP-80C printer name.
+    if (category === 'receipt_printer') {
+        const selectedPrinter = this.configured.receipt_printer;
+
+        if (selectedPrinter?.deviceId) {
+            this.configured.cash_drawer = {
+                ...this.configured.cash_drawer,
+                deviceId: `drawer_via_${selectedPrinter.deviceId}`,
+                deviceName: `Cash Drawer via ${selectedPrinter.deviceName}`,
+                manufacturer: 'ESC/POS printer-controlled drawer',
+                connectionType: 'through_printer',
+                address: selectedPrinter.address || '',
+                isDefault: false,
+                drawerConnectionMethod: 'through_printer',
+                hostPrinterId: selectedPrinter.deviceId,
+                drawerPort: 'Drawer 1',
+                vendorProtocol: 'escpos',
+            };
+        } else {
+            // If the receipt printer is removed, remove its drawer mapping too.
+            this.configured.cash_drawer = {
+                ...this.configured.cash_drawer,
+                deviceId: '',
+                deviceName: 'Not Configured',
+                manufacturer: '',
+                address: '',
+                isDefault: false,
+                hostPrinterId: '',
+                drawerConnectionMethod: 'through_printer',
+                drawerPort: 'Drawer 1',
+                vendorProtocol: 'escpos',
+            };
         }
-        this.savePersistedConfig();
-        this.notify();
     }
+
+    this.savePersistedConfig();
+    this.notify();
+}
 
     /**
      * Direct hardware test using selected device ID
@@ -757,7 +795,7 @@ export class HardwareStore {
 
         const payload = {
             screenState: cart.length === 0 ? 'welcome' : 'cart',
-            storeName: storeMeta?.storeName || 'KABIRA POS • 377 SPIRITS',
+            storeName: storeMeta?.storeName || 'KABIRA POS Â• 377 SPIRITS',
             tagline: storeMeta?.tagline || 'Fine Liquors, Craft Spirits, Wine & Beer',
             items: cart.map((it: any) => ({
                 id: it.product?.id || it.id,
