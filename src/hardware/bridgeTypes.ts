@@ -109,10 +109,13 @@ export interface WindowsDisplayInfo {
   primary: boolean;
   width: number;
   height: number;
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
   online: boolean;
   isExtended: boolean;
 }
-
 export interface DiagnosticTestResult {
   id: number;
   name: string;
