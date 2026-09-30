@@ -5,21 +5,19 @@ import { HardwareDeviceManager } from '../admin/HardwareDeviceManager';
 interface PosBridgeHubModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenCustomerDisplayWindow?: () => void;
   onOpenHardwareManager?: () => void;
 }
 
 export const PosBridgeHubModal: React.FC<PosBridgeHubModalProps> = ({
   isOpen,
   onClose,
-  onOpenCustomerDisplayWindow,
 }) => {
   if (!isOpen) return null;
 
   return (
     <div
       id="pos-bridge-hub-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 select-none animate-in fade-in duration-150"
+      className="fixed inset-inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 select-none animate-in fade-in duration-150"
     >
       <div className="bg-[#0B0F19] border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden text-slate-100 flex flex-col max-h-[92vh]">
         {/* Modal Header */}
@@ -32,6 +30,7 @@ export const PosBridgeHubModal: React.FC<PosBridgeHubModalProps> = ({
               Direct connection to KaBiRa Local Hardware Bridge on 127.0.0.1:5055
             </p>
           </div>
+
           <button
             type="button"
             onClick={onClose}
@@ -43,7 +42,7 @@ export const PosBridgeHubModal: React.FC<PosBridgeHubModalProps> = ({
 
         {/* Consolidated Hardware Device Manager Body */}
         <div className="flex-1 overflow-y-auto p-6">
-          <HardwareDeviceManager onOpenCustomerDisplay={onOpenCustomerDisplayWindow} />
+          <HardwareDeviceManager />
         </div>
       </div>
     </div>
