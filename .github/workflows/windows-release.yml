@@ -43,7 +43,7 @@ jobs:
         run: npm run build
 
       # ==========================================================
-      # VERIFY BUILD OUTPUT
+      # VERIFY WEB BUILD
       # ==========================================================
 
       - name: Verify Web Build
@@ -85,7 +85,6 @@ jobs:
           }
 
           New-Item -ItemType Directory -Path $target -Force | Out-Null
-
           Copy-Item "node_modules\*" $target -Recurse -Force
 
           if (-not (Test-Path "dist\node_modules\express")) {
@@ -94,3 +93,287 @@ jobs:
           }
 
           Write-Host "Backend dependencies packaged."
+
+      # ==========================================================
+      # PACKAGE NODE RUNTIME
+      # ==========================================================
+
+      - name: Package Node.js Runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "dist\runtime" -Force | Out-Null
+
+          $nodePath = (Get-Command node).Source
+
+          if (-not (Test-Path $nodePath)) {
+            Write-Error "Node executable could not be located."
+            exit 1
+          }
+
+          Copy-Item $nodePath "dist\runtime\node.exe" -Force
+
+          if (-not (Test-Path "dist\runtime\node.exe")) {
+            Write-Error "node.exe was not packaged."
+            exit 1
+          }
+
+          Write-Host "Node runtime packaged."
+
+      # ==========================================================
+      # PRODUCTION SMOKE TEST
+      # ==========================================================
+
+      - name: Test Packaged Production POS
+        shell: pwsh
+        run: |
+          $env:NODE_ENV = "production"
+
+          $dist = (Resolve-Path "dist").Path
+          $node = Join-Path $dist "runtime\node.exe"
+          $server = Join-Path $dist "server.cjs"
+
+          $process = Start-Process `
+            -FilePath $node `
+            -ArgumentList "`"$server`"" `
+            -WorkingDirectory $dist `
+            -PassThru
+
+          try {
+            $healthy = $false
+
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+
+              try {
+                $response = Invoke-WebRequest `
+                  -Uri "http://127.0.0.1:3000/api/health" `
+                  -UseBasicParsing `
+                  -TimeoutSec 2
+
+                if ($response.StatusCode -eq 200) {
+                  $healthy = $true
+                  break
+                }
+              }
+              catch {
+              }
+            }
+
+            if (-not $healthy) {
+              Write-Error "Packaged POS backend failed health check."
+              exit 1
+            }
+
+            $home = Invoke-WebRequest `
+              -Uri "http://127.0.0.1:3000/" `
+              -UseBasicParsing `
+              -TimeoutSec 5
+
+            if ($home.StatusCode -ne 200) {
+              Write-Error "POS home page did not return HTTP 200."
+              exit 1
+            }
+
+            $html = $home.Content
+
+            $cssMatch = [regex]::Match(
+              $html,
+              'href=["''](?<path>/assets/[^"'']+\.css)["'']'
+            )
+
+            $jsMatch = [regex]::Match(
+              $html,
+              'src=["''](?<path>/assets/[^"'']+\.js)["'']'
+            )
+
+            if (-not $cssMatch.Success) {
+              Write-Error "Generated CSS asset was not found in index.html."
+              exit 1
+            }
+
+            if (-not $jsMatch.Success) {
+              Write-Error "Generated JavaScript asset was not found in index.html."
+              exit 1
+            }
+
+            $cssUrl = "http://127.0.0.1:3000" + $cssMatch.Groups["path"].Value
+            $jsUrl = "http://127.0.0.1:3000" + $jsMatch.Groups["path"].Value
+
+            $css = Invoke-WebRequest `
+              -Uri $cssUrl `
+              -UseBasicParsing `
+              -TimeoutSec 5
+
+            $js = Invoke-WebRequest `
+              -Uri $jsUrl `
+              -UseBasicParsing `
+              -TimeoutSec 5
+
+            if ($css.StatusCode -ne 200) {
+              Write-Error "Generated CSS asset could not be served."
+              exit 1
+            }
+
+            if ($js.StatusCode -ne 200) {
+              Write-Error "Generated JavaScript asset could not be served."
+              exit 1
+            }
+
+            Write-Host "Production POS smoke test passed."
+          }
+          finally {
+            if ($process -and -not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+      # ==========================================================
+      # .NET HARDWARE BRIDGE
+      # ==========================================================
+
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore Hardware Bridge
+        run: dotnet restore "bridge\csharp\KaBiRaHardwareBridge.csproj"
+
+      - name: Build Hardware Bridge
+        run: >
+          dotnet build
+          "bridge\csharp\KaBiRaHardwareBridge.csproj"
+          -c Release
+          --no-restore
+
+      - name: Publish Hardware Bridge
+        run: >
+          dotnet publish
+          "bridge\csharp\KaBiRaHardwareBridge.csproj"
+          -c Release
+          -r win-x64
+          --self-contained true
+          -o "dist\bridge"
+
+      - name: Verify Hardware Bridge
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist\bridge\KaBiRaPosBridge.exe")) {
+            Write-Error "KaBiRaPosBridge.exe was not created."
+            exit 1
+          }
+
+          Write-Host "Hardware Bridge verified."
+
+      # ==========================================================
+      # PREPARE INSTALLER FILES
+      # ==========================================================
+
+      - name: Verify Installer Inputs
+        shell: pwsh
+        run: |
+          $required = @(
+            "dist\index.html",
+            "dist\server.cjs",
+            "dist\assets",
+            "dist\node_modules",
+            "dist\runtime\node.exe",
+            "dist\bridge\KaBiRaPosBridge.exe",
+            "bridge\Start-KaBiRaPOS.bat",
+            "bridge\installer\KabiraPOS-Setup.iss"
+          )
+
+          foreach ($item in $required) {
+            if (-not (Test-Path $item)) {
+              Write-Error "Required installer input missing: $item"
+              exit 1
+            }
+          }
+
+          Write-Host "All installer inputs verified."
+
+      # ==========================================================
+      # INNO SETUP
+      # ==========================================================
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+
+      - name: Build Windows Installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+
+          if (-not (Test-Path $iscc)) {
+            $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+
+          if (-not (Test-Path $iscc)) {
+            Write-Error "Inno Setup compiler was not found."
+            exit 1
+          }
+
+          & $iscc "bridge\installer\KabiraPOS-Setup.iss"
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Inno Setup compilation failed."
+            exit $LASTEXITCODE
+          }
+
+      # ==========================================================
+      # FIND / VERIFY INSTALLER
+      # ==========================================================
+
+      - name: Locate Windows Installer
+        id: installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem `
+            -Path . `
+            -Filter "KabiraPOS-Setup.exe" `
+            -Recurse `
+            -File |
+            Select-Object -First 1
+
+          if (-not $installer) {
+            Write-Error "KabiraPOS-Setup.exe was not found after Inno Setup compilation."
+            exit 1
+          }
+
+          $sizeMB = [math]::Round($installer.Length / 1MB, 2)
+
+          Write-Host "Installer found:"
+          Write-Host $installer.FullName
+          Write-Host "Installer size: $sizeMB MB"
+
+          if ($installer.Length -lt 1MB) {
+            Write-Error "Installer is unexpectedly small."
+            exit 1
+          }
+
+          "installer_path=$($installer.FullName)" >> $env:GITHUB_OUTPUT
+
+      # ==========================================================
+      # UPLOAD DOWNLOADABLE INSTALLER
+      # ==========================================================
+
+      - name: Upload Kabira POS Windows Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: KabiraPOS-Windows-Installer
+          path: ${{ steps.installer.outputs.installer_path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      # ==========================================================
+      # RELEASE FOR VERSION TAGS
+      # ==========================================================
+
+      - name: Publish Installer to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.installer.outputs.installer_path }}
+          generate_release_notes: true
