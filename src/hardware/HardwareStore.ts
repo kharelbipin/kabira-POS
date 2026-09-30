@@ -725,45 +725,54 @@ export class HardwareStore {
         return Boolean(this.customerWindow && !this.customerWindow.closed);
     }
 
-    public openCustomerDisplayWindow(isAutoAttempt: boolean = false): {
+    public async openCustomerDisplayWindow(
+        isAutoAttempt: boolean = false
+    ): Promise<{
         success: boolean;
         blocked?: boolean;
         message: string;
-    } {
-        // Re-use single window without reloading or stealing focus
-        if (this.isCustomerDisplayWindowOpen()) {
-            return { success: true, message: 'Customer display window already active' };
-        }
-
+    }> {
         try {
-            const url = `${window.location.origin}?mode=customer-display`;
-            const w = window.open(
-                url,
-                'KabiraCustomerDisplay',
-                'width=1024,height=768,menubar=no,toolbar=no,location=no,status=no,resizable=yes'
-            );
-            if (w) {
-                this.customerWindow = w;
-                return { success: true, message: 'Customer display window opened' };
+            const response = await fetch('/api/customer-display/open', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                return {
+                    success: false,
+                    message:
+                        result.error ||
+                        'Customer display could not be opened on the secondary monitor.',
+                };
             }
+
             return {
-                success: false,
-                blocked: true,
-                message: 'Browser popup blocker prevented secondary display window from opening.',
+                success: true,
+                message:
+                    result.message ||
+                    'Customer display opened on the secondary Windows display.',
             };
         } catch (e: any) {
-            return { success: false, message: e.message || 'Customer display open failed' };
+            return {
+                success: false,
+                message:
+                    e?.message ||
+                    'Customer display launcher is unavailable.',
+            };
         }
     }
 
-    public restartCustomerDisplay(): { success: boolean; message: string; blocked?: boolean } {
-        if (this.customerWindow && !this.customerWindow.closed) {
-            try {
-                this.customerWindow.close();
-            } catch { }
-        }
-        this.customerWindow = null;
-        return this.openCustomerDisplayWindow(false);
+    public async restartCustomerDisplay(): Promise<{
+        success: boolean;
+        message: string;
+        blocked?: boolean;
+    }> {
+        return await this.openCustomerDisplayWindow(false);
     }
 
     public broadcastCustomerDisplay(payload: any) {
