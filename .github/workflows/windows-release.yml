@@ -164,17 +164,17 @@ jobs:
               exit 1
             }
 
-            $home = Invoke-WebRequest `
+            $homeResponse = Invoke-WebRequest `
               -Uri "http://127.0.0.1:3000/" `
               -UseBasicParsing `
               -TimeoutSec 5
 
-            if ($home.StatusCode -ne 200) {
+            if ($homeResponse.StatusCode -ne 200) {
               Write-Error "POS home page did not return HTTP 200."
               exit 1
             }
 
-            $html = $home.Content
+            $html = $homeResponse.Content
 
             $cssMatch = [regex]::Match(
               $html,
