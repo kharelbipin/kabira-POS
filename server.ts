@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { execFile } from 'child_process';
 import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/api.js';
 
@@ -137,7 +138,95 @@ async function startServer() {
             });
         }
     });
+    
+    // Launch the customer display in the logged-in Windows desktop session.
+// This runs in the local POS backend, not the Windows Bridge service,
+// so the browser can be positioned on the actual secondary monitor.
+app.post('/api/customer-display/open', (_req, res) => {
+    if (process.platform !== 'win32') {
+        return res.status(501).json({
+            success: false,
+            error: 'Customer display auto-placement requires Windows.',
+        });
+    }
 
+    const customerDisplayUrl =
+        'http://127.0.0.1:3000/?mode=customer-display';
+
+    const psScript = `
+Add-Type -AssemblyName System.Windows.Forms
+
+$screens = [System.Windows.Forms.Screen]::AllScreens
+$target = $screens |
+    Where-Object { -not $_.Primary } |
+    Select-Object -First 1
+
+if ($null -eq $target) {
+    throw "No secondary Windows display was detected."
+}
+
+$x = $target.Bounds.X
+$y = $target.Bounds.Y
+$width = $target.Bounds.Width
+$height = $target.Bounds.Height
+
+$edgeCandidates = @(
+    "\${env:ProgramFiles(x86)}\\Microsoft\\Edge\\Application\\msedge.exe",
+    "\${env:ProgramFiles}\\Microsoft\\Edge\\Application\\msedge.exe"
+)
+
+$edge = $edgeCandidates |
+    Where-Object { Test-Path $_ } |
+    Select-Object -First 1
+
+if (-not $edge) {
+    throw "Microsoft Edge was not found."
+}
+
+Start-Process -FilePath $edge -ArgumentList @(
+    "--app=${customerDisplayUrl}",
+    "--window-position=$x,$y",
+    "--window-size=$width,$height",
+    "--new-window"
+)
+`;
+
+    execFile(
+        'powershell.exe',
+        [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            psScript,
+        ],
+        { windowsHide: true },
+        (error, stdout, stderr) => {
+            if (error) {
+                console.error(
+                    '[Customer Display]',
+                    stderr || stdout || error.message
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error:
+                        stderr?.trim() ||
+                        stdout?.trim() ||
+                        error.message ||
+                        'Customer display could not be launched.',
+                });
+            }
+
+            return res.json({
+                success: true,
+                message:
+                    'Customer display launched on the secondary Windows display.',
+            });
+        }
+    );
+});
     // Mount POS Backend REST API
     app.use('/api', apiRouter);
 
