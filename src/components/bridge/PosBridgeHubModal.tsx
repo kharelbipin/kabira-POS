@@ -19,7 +19,7 @@ export const PosBridgeHubModal: React.FC<PosBridgeHubModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="pos-bridge-title"
-      className="fixed inset-0 z-50 flex items-center justify-center
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 select-none animate-in fade-in duration-150"
                  bg-black/80 backdrop-blur-sm p-4 select-none
                  animate-in fade-in duration-150"
     >
