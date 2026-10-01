@@ -129,7 +129,6 @@ export const POSView: React.FC<POSViewProps> = ({
 }) => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [barcodeInput, setBarcodeInput] = useState<string>('');
   const [unrecognizedBarcode, setUnrecognizedBarcode] = useState<string | undefined>(undefined);
   const [mobileCartOpen, setMobileCartOpen] = useState<boolean>(false);
   const [showAddManualModal, setShowAddManualModal] = useState<boolean>(false);
@@ -142,6 +141,7 @@ export const POSView: React.FC<POSViewProps> = ({
   const [priceCheckResult, setPriceCheckResult] = useState<Product | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'price-asc' | 'price-desc' | 'stock'>('name');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [productBrowserOpen, setProductBrowserOpen] = useState<boolean>(false);
 
   // Real-time synchronization to Customer Display (PB-018, PB-019)
   useEffect(() => {
@@ -584,7 +584,10 @@ export const POSView: React.FC<POSViewProps> = ({
           <div className="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1">
             {/* All Products */}
             <button
-              onClick={() => setSelectedCategoryId('all')}
+              onClick={() => {
+                setSelectedCategoryId('all');
+                setProductBrowserOpen(true);
+              }}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer ${
                 selectedCategoryId === 'all'
                   ? 'bg-amber-100 text-amber-950 font-black border border-amber-300 shadow-2xs'
@@ -602,7 +605,10 @@ export const POSView: React.FC<POSViewProps> = ({
               return (
                 <button
                   key={cat.id}
-                  onClick={() => setSelectedCategoryId(cat.id)}
+                  onClick={() => {
+                    setSelectedCategoryId(cat.id);
+                    setProductBrowserOpen(true);
+                  }}
                   className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-amber-100 text-amber-950 font-black border border-amber-300 shadow-2xs'
@@ -621,7 +627,10 @@ export const POSView: React.FC<POSViewProps> = ({
 
             {/* Favorites Filter */}
             <button
-              onClick={() => setSelectedCategoryId('favorites')}
+              onClick={() => {
+                setSelectedCategoryId('favorites');
+                setProductBrowserOpen(true);
+              }}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs transition-all cursor-pointer ${
                 selectedCategoryId === 'favorites'
                   ? 'bg-amber-100 text-amber-950 font-black border border-amber-300 shadow-2xs'
@@ -655,352 +664,251 @@ export const POSView: React.FC<POSViewProps> = ({
           </div>
         </div>
 
-        {/* MIDDLE COLUMN: Product Catalog Grid */}
-        <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-[#F8FAFC] h-full overflow-hidden">
-          {/* Cashier Barcode Scan HUD Toast (Shows real-time product, price, inventory availability, age restriction) */}
+        {/* MIDDLE COLUMN: Order-first workspace */}
+        <div className="flex-1 min-w-0 min-h-0 h-full overflow-hidden bg-[#F8FAFC] p-2 flex flex-col gap-2">
+          {/* Compact scan confirmation. Scanner hardware remains background-only. */}
           {scanNotification && (
-            <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-amber-950 border-b-2 border-emerald-500 text-white px-4 py-2.5 flex items-center justify-between shadow-md animate-in slide-in-from-top-2 duration-200 shrink-0">
-              <div className="flex items-center space-x-3 min-w-0">
-                {scanNotification.imageUrl ? (
-                  <img
-                    src={scanNotification.imageUrl}
-                    alt={scanNotification.productName}
-                    className="w-10 h-10 object-contain rounded-lg bg-black/40 border border-emerald-500/40 p-0.5 shrink-0"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
-                    <ScanBarcode className="w-5 h-5 text-emerald-400" />
-                  </div>
-                )}
+            <div className="shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                  <ScanBarcode className="w-4 h-4 text-emerald-700" />
+                </div>
                 <div className="min-w-0">
-                  <div className="flex items-center space-x-2 flex-wrap">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800">
-                      ✓ Barcode Scanned & Auto-Added
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-300">UPC: {scanNotification.barcode}</span>
-                    {scanNotification.ageRestriction ? (
-                      <span className="text-[9px] font-black bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/40">
-                        {scanNotification.ageRestriction}+ Required
-                      </span>
-                    ) : null}
+                  <div className="text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                    Added to Current Order
                   </div>
-                  <div className="flex items-baseline space-x-2 mt-0.5">
-                    <h4 className="text-xs font-black text-white truncate max-w-md">
-                      {scanNotification.productName} ({scanNotification.size || 'Standard'})
-                    </h4>
-                    <span className="text-xs font-bold text-amber-300 font-mono">
+                  <div className="text-xs font-bold text-slate-800 truncate">
+                    {scanNotification.productName}
+                    {scanNotification.size ? ` • ${scanNotification.size}` : ''}
+                    <span className="ml-2 font-mono text-slate-500">
                       ${scanNotification.price.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2.5 text-[10px] text-slate-300 font-mono mt-0.5 flex-wrap">
-                    <span className="text-emerald-300 font-bold">
-                      Qty in Cart: x{scanNotification.quantityInCart} (Incremented, no duplicate line)
-                    </span>
-                    <span>•</span>
-                    <span className="text-sky-300 font-bold">
-                      Inventory Remaining: {scanNotification.inventoryAvailable} / {scanNotification.stockQuantity}
-                    </span>
-                    <span>•</span>
-                    <span className="text-slate-400 text-[9px] hidden xl:inline">
-                      Pipeline: Scanner → POS Bridge → Barcode/UPC → Product API → Inventory Database → Cart
                     </span>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center space-x-2 shrink-0">
-                {onDismissScanNotification && (
-                  <button
-                    onClick={onDismissScanNotification}
-                    className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800/80 transition-colors"
-                    title="Dismiss notice"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+              {onDismissScanNotification && (
+                <button
+                  type="button"
+                  onClick={onDismissScanNotification}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-white cursor-pointer"
+                  title="Dismiss"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
           )}
 
-          {/* Quick Barcode Scanner & Search Bar */}
-          <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 flex-wrap">
-            <div className="flex items-center space-x-2 shrink-0">
-              <div className="flex items-center space-x-1.5 px-2 py-1 rounded-lg bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-[11px] font-mono font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>POS Bridge Scanner: Zebra DS2208 (USB HID Wedge Active)</span>
-              </div>
-            </div>
-
-            {/* Instant Scan / Barcode Input Form */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (barcodeInput.trim()) {
-                  handleDirectBarcodeScan(barcodeInput.trim());
-                  setBarcodeInput('');
-                }
-              }}
-              className="flex-1 min-w-[280px] max-w-xl flex items-center gap-1.5"
-            >
-              <div className="relative flex-1">
-                <ScanBarcode className="w-4 h-4 text-amber-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={barcodeInput}
-                  onChange={e => setBarcodeInput(e.target.value)}
-                  placeholder="Scan barcode or enter UPC (e.g. 012345678905) + Enter..."
-                  className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-amber-400 font-mono"
-                />
-              </div>
-              <button
-                type="submit"
-                className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black rounded-xl uppercase tracking-wider shrink-0 cursor-pointer shadow-xs"
-              >
-                Scan Gun
-              </button>
-            </form>
-
-            {/* Quick 1-Click Scan Chips matching User Story 3 */}
-            <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto">
-              <button
-                type="button"
-                id="quick-scan-sample-012345678905"
-                onClick={() => handleDirectBarcodeScan('012345678905')}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10.5px] font-bold font-mono transition-all flex items-center space-x-1 cursor-pointer"
-                title="Simulate scanning 012345678905 (Garrison Brothers TX Bourbon 750mL) through POS Bridge pipeline"
-              >
-                <ScanBarcode className="w-3 h-3 text-amber-400" />
-                <span>Scan 012345678905 (Garrison Brothers)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDirectBarcodeScan('080480015003')}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10.5px] font-bold font-mono transition-all flex items-center space-x-1 cursor-pointer hidden xl:flex"
-                title="Simulate scanning 080480015003 (Woodford Reserve Double Oaked)"
-              >
-                <ScanBarcode className="w-3 h-3 text-sky-400" />
-                <span>Scan 080480015003 (Woodford)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Header Row: Category Title, Count & Sort Controls */}
-          <div className="px-4 py-2 flex items-center justify-between border-b border-slate-200 bg-white shrink-0">
-            <div className="flex items-center space-x-2">
-              <h2 className="text-base font-black text-slate-900 tracking-tight">
-                {activeCategoryTitle}
-              </h2>
-              <span className="text-xs text-slate-400 font-semibold">
-                ({filteredProducts.length})
-              </span>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              {/* Sort Selector */}
-              <div className="flex items-center space-x-1 text-xs text-slate-500">
-                <span className="font-semibold text-[11px] text-slate-400">Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={e => setSortBy(e.target.value as any)}
-                  className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-400 cursor-pointer"
-                >
-                  <option value="name">Name A-Z</option>
-                  <option value="price-asc">Price: Low to High</option>
-                  <option value="price-desc">Price: High to Low</option>
-                  <option value="stock">Highest Stock</option>
-                </select>
-              </div>
-
-              {/* View Toggle */}
-              <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1 rounded-md cursor-pointer ${
-                    viewMode === 'grid' ? 'bg-amber-400 text-slate-950 shadow-2xs' : 'text-slate-500'
-                  }`}
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('list')}
-                  className={`p-1 rounded-md cursor-pointer ${
-                    viewMode === 'list' ? 'bg-amber-400 text-slate-950 shadow-2xs' : 'text-slate-500'
-                  }`}
-                >
-                  <List className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Product Cards Grid matching user mockup */}
-          <div className="flex-1 min-h-0 p-3.5 overflow-y-auto">
-            {filteredProducts.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-8 text-slate-400">
-                <ShoppingBag className="w-12 h-12 text-slate-300 mb-2" />
-                <p className="text-sm font-bold text-slate-700">No products match your filter</p>
-                <p className="text-xs text-slate-400 mt-1">
-                  Try selecting "All Products" or add the item manually.
-                </p>
-                <button
-                  onClick={() => {
-                    playBeep('click');
-                    setShowAddManualModal(true);
-                  }}
-                  className="mt-4 px-4 py-2 bg-amber-400 hover:bg-amber-500 text-slate-950 text-xs font-bold uppercase rounded-xl flex items-center space-x-1.5 cursor-pointer shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Item Manually</span>
-                </button>
-              </div>
-            ) : viewMode === 'grid' ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5">
-                {filteredProducts.map(prod => {
-                  const isOutOfStock = prod.stockQuantity <= 0;
-                  const isLowStock = prod.stockQuantity > 0 && prod.stockQuantity <= prod.lowStockThreshold;
-                  const isFav = favorites.has(prod.id);
-
-                  return (
-                    <div
-                      key={prod.id}
-                      id={`pos-product-${prod.id}`}
-                      onClick={() => {
-                        if (!isOutOfStock) {
-                          playBeep('scan', settings?.scannerSound);
-                          onAddToCart(prod);
-                        } else {
-                          playBeep('error', settings?.scannerSound);
-                        }
-                      }}
-                      className={`bg-white border border-slate-200/90 rounded-2xl p-3 flex flex-col justify-between hover:shadow-md hover:border-amber-300 transition-all cursor-pointer relative group ${
-                        isOutOfStock ? 'opacity-40 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      {/* Top Badges Row matching final ui.png */}
-                      <div className="flex items-center justify-between w-full mb-1 z-10">
-                        {/* Top Left Stock Badge */}
-                        <div>
-                          {isOutOfStock ? (
-                            <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold border border-rose-200">
-                              Out of Stock
-                            </span>
-                          ) : isLowStock ? (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black shadow-2xs">
-                              Low Stock {prod.stockQuantity}
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-black shadow-2xs">
-                              In Stock {prod.stockQuantity}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Top Right Heart Favorite Button */}
-                        <button
-                          type="button"
-                          onClick={(e) => toggleFavorite(prod.id, e)}
-                          className="p-1 rounded-full text-slate-300 hover:text-rose-500 hover:bg-slate-50 transition-colors cursor-pointer"
-                          title={isFav ? 'Remove Favorite' : 'Save Favorite'}
-                        >
-                          <Heart
-                            className={`w-4 h-4 ${
-                              isFav ? 'fill-rose-500 text-rose-500' : 'text-slate-300'
-                            }`}
-                          />
-                        </button>
-                      </div>
-
-                      {/* Bottle Graphic Image matching fin.png */}
-                      <div className="h-32 w-full flex items-center justify-center p-2 mb-1 overflow-hidden group-hover:scale-105 transition-transform duration-200">
-                        <BottleImage
-                          name={prod.name}
-                          imageUrl={prod.imageUrl}
-                          size={prod.size}
-                        />
-                      </div>
-
-                      {/* Details */}
-                      <div>
-                        <span className="text-[11px] text-slate-400 font-semibold block">
-                          {prod.size}
-                        </span>
-                        <h3 className="text-xs font-black text-slate-900 line-clamp-2 leading-snug mt-0.5">
-                          {prod.name}
-                        </h3>
-                      </div>
-
-                      {/* Bottom Price & Square Add Cart Button matching final ui.png */}
-                      <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
-                        <span className="text-base font-black text-slate-950 font-mono">
-                          ${(prod.price ?? 0).toFixed(2)}
-                        </span>
-                        <button
-                          type="button"
-                          className="w-8 h-8 rounded-xl bg-[#F3C067] hover:bg-[#F59E0B] text-slate-950 flex items-center justify-center shadow-xs transition-colors cursor-pointer"
-                          title="Add to order"
-                        >
-                          <ShoppingBag className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                        </button>
-                      </div>
+          {/* Category/Product browser opens only when the cashier intentionally browses. */}
+          {productBrowserOpen && (
+            <section className="h-[40%] min-h-[190px] max-h-[300px] bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col shrink-0">
+              <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                    <ShoppingBag className="w-4 h-4 text-amber-700" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                      Product Browser
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              /* List View Mode */
-              <div className="space-y-2">
-                {filteredProducts.map(prod => (
-                  <div
-                    key={prod.id}
-                    onClick={() => {
-                      playBeep('scan', settings?.scannerSound);
-                      onAddToCart(prod);
-                    }}
-                    className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between hover:border-amber-300 hover:shadow-2xs transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center space-x-3 min-w-0">
-                      <div className="w-10 h-10 flex items-center justify-center shrink-0">
-                        <BottleImage name={prod.name} imageUrl={prod.imageUrl} className="h-10 w-auto object-contain" />
-                      </div>
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-slate-900 truncate">{prod.name}</h4>
-                        <span className="text-[11px] text-slate-400 font-mono">{prod.size} • SKU: {prod.sku}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        {prod.stockQuantity} in stock
+                    <div className="text-sm font-black text-slate-900 truncate">
+                      {activeCategoryTitle}
+                      <span className="ml-1.5 text-xs text-slate-400 font-semibold">
+                        ({filteredProducts.length})
                       </span>
-                      <span className="text-sm font-black text-slate-950 font-mono">${(prod.price ?? 0).toFixed(2)}</span>
-                      <button className="p-1.5 rounded-lg bg-amber-400 text-slate-950 font-bold">
-                        <Plus className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
-                ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative hidden md:block">
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Search products..."
+                      className="w-48 xl:w-56 pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  <select
+                    value={sortBy}
+                    onChange={e => setSortBy(e.target.value as any)}
+                    className="hidden xl:block bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:border-amber-400"
+                  >
+                    <option value="name">Name A-Z</option>
+                    <option value="price-asc">Price ↑</option>
+                    <option value="price-desc">Price ↓</option>
+                    <option value="stock">Stock</option>
+                  </select>
+
+                  <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('grid')}
+                      className={`p-1.5 rounded-md cursor-pointer ${
+                        viewMode === 'grid'
+                          ? 'bg-amber-400 text-slate-950'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                      title="Grid view"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('list')}
+                      className={`p-1.5 rounded-md cursor-pointer ${
+                        viewMode === 'list'
+                          ? 'bg-amber-400 text-slate-950'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                      title="List view"
+                    >
+                      <List className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductBrowserOpen(false);
+                      setSearchQuery('');
+                    }}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 cursor-pointer"
+                    title="Close product browser"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* RIGHT COLUMN: Current Order Panel (Width ~360px on desktop) */}
-        <div
-          className={`w-full lg:w-88 xl:w-96 shrink-0 h-full ${
-            mobileCartOpen ? 'fixed inset-0 z-40 block' : 'hidden lg:flex'
-          }`}
-        >
-          <div className="relative h-full w-full flex flex-col">
-            {mobileCartOpen && (
-              <button
-                onClick={() => setMobileCartOpen(false)}
-                className="lg:hidden absolute top-2 right-2 z-50 p-2 text-slate-400 hover:text-slate-800"
-              >
-                <XCircle className="w-6 h-6" />
-              </button>
-            )}
+              <div className="flex-1 min-h-0 overflow-y-auto p-2.5 bg-slate-50/60">
+                {filteredProducts.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center text-slate-400">
+                    <ShoppingBag className="w-8 h-8 text-slate-300 mb-1.5" />
+                    <div className="text-xs font-bold text-slate-700">No matching products</div>
+                    <div className="text-[11px] mt-0.5">Try another category or search.</div>
+                  </div>
+                ) : viewMode === 'grid' ? (
+                  <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                    {filteredProducts.map(prod => {
+                      const isOutOfStock = prod.stockQuantity <= 0;
+                      const isLowStock =
+                        prod.stockQuantity > 0 &&
+                        prod.stockQuantity <= prod.lowStockThreshold;
 
+                      return (
+                        <button
+                          key={prod.id}
+                          id={`pos-product-${prod.id}`}
+                          type="button"
+                          disabled={isOutOfStock}
+                          onClick={() => {
+                            if (isOutOfStock) {
+                              playBeep('error', settings?.scannerSound);
+                              return;
+                            }
+
+                            playBeep('scan', settings?.scannerSound);
+                            onAddToCart(prod);
+                          }}
+                          className="min-w-0 bg-white border border-slate-200 rounded-xl p-2 text-left hover:border-amber-400 hover:shadow-sm disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-11 h-11 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
+                              <BottleImage
+                                name={prod.name}
+                                imageUrl={prod.imageUrl}
+                                size={prod.size}
+                                className="max-w-full max-h-10 object-contain"
+                              />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[11px] font-black text-slate-900 truncate">
+                                {prod.name}
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate">
+                                {prod.size || 'Standard'}
+                              </div>
+                              <div className="flex items-center justify-between gap-2 mt-1">
+                                <span className="text-xs font-black font-mono text-slate-950">
+                                  ${(prod.price ?? 0).toFixed(2)}
+                                </span>
+                                <span
+                                  className={`text-[9px] font-bold ${
+                                    isOutOfStock
+                                      ? 'text-rose-600'
+                                      : isLowStock
+                                        ? 'text-amber-700'
+                                        : 'text-emerald-700'
+                                  }`}
+                                >
+                                  {isOutOfStock ? 'Out' : `${prod.stockQuantity} stock`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {filteredProducts.map(prod => {
+                      const isOutOfStock = prod.stockQuantity <= 0;
+
+                      return (
+                        <button
+                          key={prod.id}
+                          type="button"
+                          disabled={isOutOfStock}
+                          onClick={() => {
+                            if (isOutOfStock) {
+                              playBeep('error', settings?.scannerSound);
+                              return;
+                            }
+
+                            playBeep('scan', settings?.scannerSound);
+                            onAddToCart(prod);
+                          }}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 flex items-center justify-between gap-3 hover:border-amber-400 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                              <BottleImage
+                                name={prod.name}
+                                imageUrl={prod.imageUrl}
+                                size={prod.size}
+                                className="max-w-full max-h-8 object-contain"
+                              />
+                            </div>
+                            <div className="min-w-0 text-left">
+                              <div className="text-[11px] font-black text-slate-900 truncate">
+                                {prod.name}
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate">
+                                {prod.size} • {prod.stockQuantity} in stock
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-xs font-black font-mono text-slate-950 shrink-0">
+                            ${(prod.price ?? 0).toFixed(2)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Current Order owns the center workspace and remains visible while browsing. */}
+          <section className="flex-1 min-h-0">
             <CartPanel
+              mode="items"
               items={cartItems}
               onUpdateQuantity={onUpdateQuantity}
               onSetQuantity={onSetQuantity}
@@ -1018,6 +926,47 @@ export const POSView: React.FC<POSViewProps> = ({
               heldOrdersCount={heldOrdersCount}
               onProceedToCheckout={onProceedToCheckout}
               settings={settings}
+            />
+          </section>
+        </div>
+
+        {/* RIGHT COLUMN: fixed Order Summary and actions */}
+        <div
+          className={`w-full lg:w-80 xl:w-88 shrink-0 h-full bg-white ${
+            mobileCartOpen ? 'fixed inset-0 z-40 block' : 'hidden lg:flex'
+          }`}
+        >
+          <div className="relative h-full w-full flex flex-col">
+            {mobileCartOpen && (
+              <button
+                type="button"
+                onClick={() => setMobileCartOpen(false)}
+                className="lg:hidden absolute top-2 right-2 z-50 p-2 text-slate-400 hover:text-slate-800"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            )}
+
+            <CartPanel
+              mode="summary"
+              items={cartItems}
+              onUpdateQuantity={onUpdateQuantity}
+              onSetQuantity={onSetQuantity}
+              onRemoveItem={onRemoveItem}
+              onClearCart={onClearCart}
+              selectedCustomer={selectedCustomer}
+              onOpenCustomerModal={onOpenCustomerModal}
+              onRemoveCustomer={onRemoveCustomer}
+              orderDiscountPercent={orderDiscountPercent}
+              orderDiscountAmount={orderDiscountAmount}
+              onApplyOrderDiscount={onApplyOrderDiscount}
+              onOpenItemDiscount={onOpenItemDiscount}
+              onHoldOrder={onHoldOrder}
+              onOpenHeldOrders={onOpenHeldOrders}
+              heldOrdersCount={heldOrdersCount}
+              onProceedToCheckout={onProceedToCheckout}
+              settings={settings}
+              onOpenDrawer={() => setShowManualDrawerModal(true)}
             />
           </div>
         </div>
