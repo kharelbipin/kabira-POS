@@ -140,20 +140,22 @@ async function startServer() {
     });
     
     // Launch the customer display in the logged-in Windows desktop session.
-// This runs in the local POS backend, not the Windows Bridge service,
-// so the browser can be positioned on the actual secondary monitor.
-app.post('/api/customer-display/open', (_req, res) => {
-    if (process.platform !== 'win32') {
-        return res.status(501).json({
-            success: false,
-            error: 'Customer display auto-placement requires Windows.',
-        });
-    }
+    // This runs in the local POS backend, not the Windows Bridge service,
+    // so the browser can be positioned on the actual secondary monitor.
+    app.post('/api/customer-display/open', (_req, res) => {
+        if (process.platform !== 'win32') {
+            return res.status(501).json({
+                success: false,
+                error: 'Customer display auto-placement requires Windows.',
+            });
+        }
 
-    const customerDisplayUrl =
-        'http://127.0.0.1:3000/?mode=customer-display';
+        // Use the dedicated SPA route. App.tsx recognizes /customer-display
+        // as standalone customer-display mode.
+        const customerDisplayUrl =
+            'http://127.0.0.1:3000/customer-display';
 
-    const psScript = `
+        const psScript = `
 Add-Type -AssemblyName System.Windows.Forms
 
 $screens = [System.Windows.Forms.Screen]::AllScreens
@@ -176,57 +178,84 @@ $edgeCandidates = @(
 )
 
 $edge = $edgeCandidates |
-    Where-Object { Test-Path $_ } |
+    Where-Object { $_ -and (Test-Path $_) } |
     Select-Object -First 1
 
 if (-not $edge) {
     throw "Microsoft Edge was not found."
 }
 
+# Give the customer display its own Edge profile. This prevents Edge from
+# reusing the cashier browser window and opening the display as another tab.
+$profileDir = Join-Path $env:LOCALAPPDATA "KaBiRaPOS-CustomerDisplay"
+New-Item -ItemType Directory -Force -Path $profileDir | Out-Null
+
+# Close only previous KaBiRa customer-display Edge processes before relaunching.
+# This prevents duplicate display windows and also makes the Restart button
+# actually reposition the window on the current secondary monitor.
+$existing = Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.CommandLine -and
+        $_.CommandLine -like "*KaBiRaPOS-CustomerDisplay*"
+    }
+
+foreach ($proc in $existing) {
+    Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+}
+
+if ($existing) {
+    Start-Sleep -Milliseconds 500
+}
+
 Start-Process -FilePath $edge -ArgumentList @(
+    ('--user-data-dir="' + $profileDir + '"'),
     "--app=${customerDisplayUrl}",
     "--window-position=$x,$y",
     "--window-size=$width,$height",
-    "--new-window"
+    "--new-window",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-session-crashed-bubble"
 )
 `;
 
-    execFile(
-        'powershell.exe',
-        [
-            '-NoProfile',
-            '-NonInteractive',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-Command',
-            psScript,
-        ],
-        { windowsHide: true },
-        (error, stdout, stderr) => {
-            if (error) {
-                console.error(
-                    '[Customer Display]',
-                    stderr || stdout || error.message
-                );
+        execFile(
+            'powershell.exe',
+            [
+                '-NoProfile',
+                '-NonInteractive',
+                '-ExecutionPolicy',
+                'Bypass',
+                '-Command',
+                psScript,
+            ],
+            { windowsHide: true },
+            (error, stdout, stderr) => {
+                if (error) {
+                    console.error(
+                        '[Customer Display]',
+                        stderr || stdout || error.message
+                    );
 
-                return res.status(500).json({
-                    success: false,
-                    error:
-                        stderr?.trim() ||
-                        stdout?.trim() ||
-                        error.message ||
-                        'Customer display could not be launched.',
+                    return res.status(500).json({
+                        success: false,
+                        error:
+                            stderr?.trim() ||
+                            stdout?.trim() ||
+                            error.message ||
+                            'Customer display could not be launched.',
+                    });
+                }
+
+                return res.json({
+                    success: true,
+                    message:
+                        'Customer display launched on the secondary Windows display.',
                 });
             }
+        );
+    });
 
-            return res.json({
-                success: true,
-                message:
-                    'Customer display launched on the secondary Windows display.',
-            });
-        }
-    );
-});
     // Mount POS Backend REST API
     app.use('/api', apiRouter);
 
