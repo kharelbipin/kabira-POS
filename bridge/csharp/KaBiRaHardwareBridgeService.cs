@@ -965,38 +965,98 @@ private static extern bool GetMonitorInfo(
             bytes.AddRange(new byte[] { 0x1B, 0x61, 0x01 });
 
             bytes.AddRange(Encoding.ASCII.GetBytes(
-                "================================\n" +
-                "        KABIRA POS\n" +
-                "       PRINTER TEST\n" +
-                "================================\n"
+                "================================\r\n" +
+                "        KABIRA POS\r\n" +
+                "       PRINTER TEST\r\n" +
+                "================================\r\n"
             ));
 
             // Left alignment
             bytes.AddRange(new byte[] { 0x1B, 0x61, 0x00 });
 
             bytes.AddRange(Encoding.ASCII.GetBytes(
-                $"Printer: {printerName}\n" +
-                $"Date: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
-                "Status: TEST SUCCESSFUL\n" +
-                "================================\n" +
-                "Thank you for using KaBiRa POS\n\n\n"
+                $"Printer: {printerName}\r\n" +
+                $"Date: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\r\n" +
+                "Status: TEST SUCCESSFUL\r\n" +
+                "================================\r\n" +
+                "Thank you for using KaBiRa POS\r\n"
             ));
 
-            // Full paper cut: GS V 0
-            bytes.AddRange(new byte[] { 0x1D, 0x56, 0x00 });
+            // Feed 4 lines AFTER all receipt text.
+            bytes.AddRange(new byte[] { 0x1B, 0x64, 0x04 });
 
-            return SendRawBytes(printerName, bytes.ToArray(), out errorMessage);
+            // Send the complete receipt first.
+            if (!SendRawBytes(
+                printerName,
+                bytes.ToArray(),
+                out errorMessage))
+            {
+                return false;
+            }
+
+            // Cut as a separate printer job only after the receipt job is complete.
+            byte[] cutCommand = new byte[]
+            {
+                0x1D, 0x56, 0x00
+            };
+
+            return SendRawBytes(
+                printerName,
+                cutCommand,
+                out errorMessage
+            );
         }
 
-        public static bool SendReceipt(string printerName, string receiptPayload, out string errorMessage)
+        public static bool SendReceipt(
+            string printerName,
+            string receiptPayload,
+            out string errorMessage)
         {
-            var sb = new StringBuilder();
-            sb.Append("\x1B\x40"); // ESC @
-            sb.Append(receiptPayload);
-            sb.Append("\n\n\n\x1D\x56\x41\x00"); // Feed and Cut
+            if (string.IsNullOrWhiteSpace(receiptPayload))
+            {
+                errorMessage = "Receipt payload is empty.";
+                return false;
+            }
 
-            byte[] bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            return SendRawBytes(printerName, bytes, out errorMessage);
+            var bytes = new List<byte>();
+
+            // Initialize printer: ESC @
+            bytes.AddRange(new byte[] { 0x1B, 0x40 });
+
+            // Normalize line endings for ESC/POS thermal printers.
+            string normalizedReceipt = receiptPayload
+                .Replace("\r\n", "\n")
+                .Replace("\r", "\n")
+                .Replace("\n", "\r\n");
+
+            // Send the complete receipt contents.
+            bytes.AddRange(
+                Encoding.UTF8.GetBytes(normalizedReceipt)
+            );
+
+            // Feed 4 lines before cutting.
+            bytes.AddRange(new byte[] { 0x1B, 0x64, 0x04 });
+
+            // Print everything first.
+            if (!SendRawBytes(
+                printerName,
+                bytes.ToArray(),
+                out errorMessage))
+            {
+                return false;
+            }
+
+            // Cut separately only after the receipt job is complete.
+            byte[] cutCommand = new byte[]
+            {
+                0x1D, 0x56, 0x00
+            };
+
+            return SendRawBytes(
+                printerName,
+                cutCommand,
+                out errorMessage
+            );
         }
     }
 
