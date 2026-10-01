@@ -262,9 +262,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       changeFromThisPayment = Math.round((amt - remainingBalance) * 100) / 100;
     }
 
-    // Hardware cash drawer kick
-    hardwareStore.openCashDrawer().catch(() => {});
-
     const newPaymentRecord: PaymentRecord = {
       id: `pay-${Date.now()}-cash-${Math.random().toString(36).substr(2, 4)}`,
       method: 'cash',
