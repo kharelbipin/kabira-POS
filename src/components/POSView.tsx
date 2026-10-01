@@ -93,6 +93,7 @@ interface POSViewProps {
     timestamp: string;
   } | null;
   onDismissScanNotification?: () => void;
+  onPrintLastReceipt?: () => void;
 }
 
 export const POSView: React.FC<POSViewProps> = ({
@@ -126,6 +127,7 @@ export const POSView: React.FC<POSViewProps> = ({
   onScanBarcode,
   scanNotification,
   onDismissScanNotification,
+  onPrintLastReceipt,
 }) => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -978,6 +980,7 @@ export const POSView: React.FC<POSViewProps> = ({
               onProceedToCheckout={onProceedToCheckout}
               settings={settings}
               onOpenDrawer={() => setShowManualDrawerModal(true)}
+              onPrintLastReceipt={onPrintLastReceipt}
             />
           </div>
         </div>
