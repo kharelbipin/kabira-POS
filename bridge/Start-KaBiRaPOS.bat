@@ -116,6 +116,7 @@ Start-Process ^
 -FilePath '%NODE%' ^
 -ArgumentList 'server.cjs' ^
 -WorkingDirectory '%CLIENT%' ^
+-WindowStyle Hidden ^
 -RedirectStandardOutput '%BACKENDLOG%' ^
 -RedirectStandardError '%BACKENDERR%'"
 
