@@ -299,6 +299,31 @@ export default function App() {
     });
   };
 
+  // Fast local barcode/SKU index.
+  // The catalog is already loaded in memory, so known items should not wait
+  // for a network/API round-trip before being added to the cart.
+  const productLookupIndex = useMemo(() => {
+    const index = new Map<string, Product>();
+
+    for (const product of products) {
+      const addKey = (value?: string | null) => {
+        const key = value?.trim().toLowerCase();
+        if (key) index.set(key, product);
+      };
+
+      addKey(product.barcode);
+      addKey(product.sku);
+
+      if (Array.isArray(product.barcodes)) {
+        for (const entry of product.barcodes) {
+          addKey(entry?.barcode);
+        }
+      }
+    }
+
+    return index;
+  }, [products]);
+
   // Barcode Scanner Pipeline Handler (User Story: Cashier Barcode Scanning)
   // Flow: Scanner → POS Bridge → Barcode/UPC → Product API → Inventory Database → Cart
   const handleBarcodeScanned = useCallback(async (scannedBarcode: string, source: string = 'POS Bridge Hardware Scanner') => {
@@ -306,31 +331,21 @@ export default function App() {
     if (!clean) return;
 
     try {
-      // 1. Resolve product via Product API lookup: Scanner → POS Bridge → Barcode/UPC → Product API → Inventory Database
-      let product: Product | null = null;
-      let inventoryAvail = 0;
-      let effectivePrice: number | undefined;
-
-      try {
-        const lookup = await api.lookupBarcode(clean);
-        if (lookup && lookup.found && lookup.product) {
-          product = lookup.product;
-          inventoryAvail = lookup.inventoryAvailable ?? lookup.product.stockQuantity;
-          effectivePrice = lookup.product.effectivePrice;
-        }
-      } catch (err) {
-        // Fallback to local products array if backend lookup unavailable
-      }
+      // 1. Resolve known catalog items locally first for instant scanning.
+      // Only call the API when the barcode/SKU is not already in the loaded catalog.
+      const cleanLower = clean.toLowerCase();
+      let product: Product | null = productLookupIndex.get(cleanLower) || null;
+      let effectivePrice: number | undefined = product?.effectivePrice;
 
       if (!product) {
-        const cleanLower = clean.toLowerCase();
-        product = products.find(
-          p => (p.barcode && p.barcode.toLowerCase() === cleanLower) ||
-               (p.sku && p.sku.toLowerCase() === cleanLower) ||
-               (p.barcodes && p.barcodes.some(b => b.barcode.toLowerCase() === cleanLower))
-        ) || null;
-        if (product) {
-          inventoryAvail = product.stockQuantity;
+        try {
+          const lookup = await api.lookupBarcode(clean);
+          if (lookup && lookup.found && lookup.product) {
+            product = lookup.product;
+            effectivePrice = lookup.product.effectivePrice;
+          }
+        } catch {
+          // Unknown/offline barcode remains unresolved; do not block the POS UI.
         }
       }
 
@@ -388,12 +403,10 @@ export default function App() {
           timestamp: new Date().toLocaleTimeString(),
         });
 
-        // 4. Synchronize with Secondary Customer Display
-        hardwareStore.broadcastCustomerDisplay({
-          lastScannedItem: `${product.name} (${product.size || ''})`,
-        });
+        // Customer Display synchronization is handled by the cart state effect below.
+        // Avoid sending a second partial BroadcastChannel/localStorage update for every scan.
 
-        // 5. Audit Log Event
+        // 4. Audit Log Event
         fetch('/api/user-activities', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -410,7 +423,7 @@ export default function App() {
     } catch (e) {
       playBeep('error', settings?.scannerSound);
     }
-  }, [products, settings]);
+  }, [productLookupIndex, settings]);
 
   const handleUpdateQuantity = (productId: string, delta: number) => {
     playBeep('click', settings?.scannerSound);
