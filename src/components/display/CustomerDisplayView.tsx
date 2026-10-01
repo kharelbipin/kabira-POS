@@ -24,23 +24,46 @@ import { IdentifyDisplaysOverlay } from './IdentifyDisplaysOverlay';
 import { hardwareStore } from '../../hardware/HardwareStore';
 import { playBeep } from '../../utils/audio';
 
+const DEFAULT_DISPLAY_STATE: CustomerDisplayState = {
+  screenState: 'welcome',
+  storeName: 'KABIRA POS',
+  tagline: 'Fine Liquors, Craft Spirits, Wine & Beer • 377 SPIRITS',
+  items: [],
+  subtotal: 0,
+  discountTotal: 0,
+  taxTotal: 0,
+  grandTotal: 0,
+  welcomeMessage: 'Welcome to KABIRA POS! Please present valid ID if purchasing alcohol.',
+  promoBanner: 'Specials: Texas Whiskey & Garrison Brothers Bourbon 10% Off with Club Points!',
+};
+
 export const CustomerDisplayView: React.FC = () => {
   const [displayState, setDisplayState] = useState<CustomerDisplayState>(() => {
     try {
       const saved = localStorage.getItem('pos_customer_display_state');
-      if (saved) return JSON.parse(saved);
+
+      if (saved) {
+        const parsed = JSON.parse(saved);
+
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          parsed.type !== 'CUSTOMER_TOUCH_ACTION'
+        ) {
+          return {
+            ...DEFAULT_DISPLAY_STATE,
+            ...parsed,
+            items: Array.isArray(parsed.items)
+              ? parsed.items
+              : DEFAULT_DISPLAY_STATE.items,
+          };
+        }
+      }
     } catch (e) {}
+
     return {
-      screenState: 'welcome',
-      storeName: 'KABIRA POS',
-      tagline: 'Fine Liquors, Craft Spirits, Wine & Beer • 377 SPIRITS',
+      ...DEFAULT_DISPLAY_STATE,
       items: [],
-      subtotal: 0,
-      discountTotal: 0,
-      taxTotal: 0,
-      grandTotal: 0,
-      welcomeMessage: 'Welcome to KABIRA POS! Please present valid ID if purchasing alcohol.',
-      promoBanner: 'Specials: Texas Whiskey & Garrison Brothers Bourbon 10% Off with Club Points!',
     };
   });
 
@@ -77,14 +100,32 @@ export const CustomerDisplayView: React.FC = () => {
   useEffect(() => {
     // BroadcastChannel synchronization (WV-030)
     let channel: BroadcastChannel | null = null;
+
+    const applyDisplayStateUpdate = (incoming: any) => {
+      if (!incoming || typeof incoming !== 'object') return;
+
+      // Customer touch actions share this channel, but they are outbound actions
+      // for the cashier/POS. Never let them replace the customer display state.
+      if (incoming.type === 'CUSTOMER_TOUCH_ACTION') return;
+
+      // Display broadcasts can be partial (for example only lastScannedItem).
+      // Always merge them into the existing state so required totals/items remain.
+      setDisplayState(prev => ({
+        ...prev,
+        ...incoming,
+        items: Array.isArray(incoming.items) ? incoming.items : prev.items,
+      }));
+
+      if (typeof incoming.screenState === 'string') {
+        handleStateTransition(incoming as CustomerDisplayState);
+      }
+    };
+
     try {
       if ('BroadcastChannel' in window) {
         channel = new BroadcastChannel('pos_customer_display_channel');
         channel.onmessage = (event) => {
-          if (event.data) {
-            setDisplayState(event.data);
-            handleStateTransition(event.data);
-          }
+          applyDisplayStateUpdate(event.data);
         };
       }
     } catch (e) {}
@@ -93,9 +134,7 @@ export const CustomerDisplayView: React.FC = () => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'pos_customer_display_state' && e.newValue) {
         try {
-          const parsed = JSON.parse(e.newValue);
-          setDisplayState(parsed);
-          handleStateTransition(parsed);
+          applyDisplayStateUpdate(JSON.parse(e.newValue));
         } catch (err) {}
       }
     };
@@ -175,7 +214,7 @@ export const CustomerDisplayView: React.FC = () => {
   };
 
   const handleKeypadSubmit = () => {
-    if (customerPhone.length >= 7) {
+    if (customerPhone.length === 10) {
       playBeep('success');
       setPhoneSubmitted(true);
       hardwareStore.broadcastCustomerTouchAction({
@@ -336,7 +375,7 @@ export const CustomerDisplayView: React.FC = () => {
                       </button>
                       <button
                         onClick={handleKeypadSubmit}
-                        disabled={customerPhone.length < 7}
+                        disabled={customerPhone.length !== 10}
                         className="flex-1 py-2.5 rounded-xl bg-[#C5A059] hover:bg-[#B38F46] disabled:opacity-50 text-black text-xs font-black uppercase tracking-wider"
                       >
                         Apply Phone
