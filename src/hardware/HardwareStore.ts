@@ -33,6 +33,13 @@ export class HardwareStore {
     private customerDisplayLaunchActive: boolean = false;
     private broadcastChannel: BroadcastChannel | null = null;
 
+    // Customer display performance:
+    // BroadcastChannel stays real-time, while localStorage persistence is
+    // coalesced so rapid cart updates do not block the cashier UI repeatedly.
+    private lastCustomerDisplayPayloadJson: string | null = null;
+    private pendingCustomerDisplayPayloadJson: string | null = null;
+    private customerDisplayPersistTimer: ReturnType<typeof setTimeout> | null = null;
+
     private health: BridgeHealth = {
         status: 'offline',
         version: 'Not Connected',
@@ -787,17 +794,53 @@ export class HardwareStore {
     }
 
     public broadcastCustomerDisplay(payload: any) {
-        // 1. Post to BroadcastChannel
+        let serialized: string | null = null;
+
+        try {
+            serialized = JSON.stringify(payload);
+
+            // Do not rebroadcast identical display state.
+            if (serialized === this.lastCustomerDisplayPayloadJson) {
+                return;
+            }
+
+            this.lastCustomerDisplayPayloadJson = serialized;
+        } catch {
+            // Payloads should be plain JSON data, but BroadcastChannel can still
+            // be attempted if serialization ever fails.
+        }
+
+        // BroadcastChannel is the real-time path to the customer display.
+        // Keep this immediate so the customer screen still feels instant.
         try {
             if (this.broadcastChannel) {
                 this.broadcastChannel.postMessage(payload);
             }
         } catch { }
 
-        // 2. Persist to localStorage for cross-window sync
-        try {
-            localStorage.setItem('pos_customer_display_state', JSON.stringify(payload));
-        } catch { }
+        // localStorage is retained as startup/fallback state, but writes are
+        // synchronous and can block the cashier UI. Coalesce rapid updates and
+        // persist only the most recent display state on the next event-loop turn.
+        if (serialized !== null) {
+            this.pendingCustomerDisplayPayloadJson = serialized;
+
+            if (this.customerDisplayPersistTimer === null) {
+                this.customerDisplayPersistTimer = setTimeout(() => {
+                    const latest = this.pendingCustomerDisplayPayloadJson;
+
+                    this.pendingCustomerDisplayPayloadJson = null;
+                    this.customerDisplayPersistTimer = null;
+
+                    if (latest === null) {
+                        return;
+                    }
+
+                    try {
+                        localStorage.setItem('pos_customer_display_state', latest);
+                    } catch { }
+                }, 0);
+            }
+        }
     }
 
     public syncCartToCustomerDisplay(cart: any[], totals: any, storeMeta?: any) {
