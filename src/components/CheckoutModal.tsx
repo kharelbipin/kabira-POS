@@ -818,6 +818,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     inputMode="decimal"
                     placeholder={remainingBalance.toFixed(2)}
                     value={tenderInput}
+                    onFocus={() => setShowNumpad(true)}
+                    onClick={() => setShowNumpad(true)}
                     onChange={e => {
                       const val = e.target.value;
                       if (/^\d*\.?\d{0,2}$/.test(val) || val === '') {
