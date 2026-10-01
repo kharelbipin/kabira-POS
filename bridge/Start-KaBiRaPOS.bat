@@ -5,17 +5,18 @@ REM ============================================================
 REM KaBiRa POS Windows Launcher
 REM ============================================================
 
-REM Run backend in production mode
 set "NODE_ENV=production"
 
-REM Resolve installation directory from this BAT file.
-REM This avoids hard-coding C:\Program Files\KaBiRa POS.
+REM Resolve installation directory
 set "APPDIR=%~dp0"
 if "%APPDIR:~-1%"=="\" set "APPDIR=%APPDIR:~0,-1%"
 
 set "CLIENT=%APPDIR%\Client"
 set "NODE=%APPDIR%\Runtime\node.exe"
 set "SERVER=%CLIENT%\server.cjs"
+
+REM Dedicated browser profile for cashier POS
+set "CASHIER_PROFILE=%LOCALAPPDATA%\KaBiRaPOS-Cashier"
 
 REM ============================================================
 REM Writable application/log directories
@@ -29,6 +30,7 @@ set "BACKENDERR=%LOGDIR%\backend-error.log"
 
 if not exist "%DATADIR%" mkdir "%DATADIR%"
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
+if not exist "%CASHIER_PROFILE%" mkdir "%CASHIER_PROFILE%"
 
 echo.>>"%LAUNCHERLOG%"
 echo ============================================================>>"%LAUNCHERLOG%"
@@ -41,12 +43,6 @@ REM ============================================================
 if not exist "%NODE%" (
     echo [%date% %time%] ERROR: Node runtime not found: %NODE%>>"%LAUNCHERLOG%"
     echo ERROR: KaBiRa POS Node runtime was not found.
-    echo.
-    echo Expected:
-    echo %NODE%
-    echo.
-    echo See:
-    echo %LAUNCHERLOG%
     pause
     exit /b 1
 )
@@ -54,21 +50,15 @@ if not exist "%NODE%" (
 if not exist "%SERVER%" (
     echo [%date% %time%] ERROR: Backend server not found: %SERVER%>>"%LAUNCHERLOG%"
     echo ERROR: KaBiRa POS backend server was not found.
-    echo.
-    echo Expected:
-    echo %SERVER%
-    echo.
-    echo See:
-    echo %LAUNCHERLOG%
     pause
     exit /b 1
 )
 
 REM ============================================================
-REM Check whether the actual KaBiRa backend is already healthy
+REM Check if backend is already healthy
 REM ============================================================
 
-powershell.exe -NoProfile -Command ^
+powershell.exe -NoProfile -WindowStyle Hidden -Command ^
 "try { ^
     $r = Invoke-RestMethod -Uri 'http://127.0.0.1:3000/api/health' -TimeoutSec 2; ^
     if ($r.status -eq 'ok') { exit 0 } else { exit 1 } ^
@@ -76,41 +66,36 @@ powershell.exe -NoProfile -Command ^
 
 if errorlevel 1 goto START_BACKEND
 
-echo [%date% %time%] Backend already running and healthy.>>"%LAUNCHERLOG%"
+echo [%date% %time%] Backend already running.>>"%LAUNCHERLOG%"
 goto LAUNCH_POS
 
 
 :START_BACKEND
 
 REM ============================================================
-REM Detect port conflict before starting KaBiRa
+REM Make sure port 3000 is free
 REM ============================================================
 
-powershell.exe -NoProfile -Command ^
+powershell.exe -NoProfile -WindowStyle Hidden -Command ^
 "if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }"
 
 if errorlevel 1 (
-    echo [%date% %time%] ERROR: Port 3000 is occupied by another process.>>"%LAUNCHERLOG%"
-    echo ERROR: KaBiRa POS cannot start because port 3000 is already
-    echo being used by another application.
-    echo.
-    echo See:
-    echo %LAUNCHERLOG%
+    echo [%date% %time%] ERROR: Port 3000 already in use.>>"%LAUNCHERLOG%"
+    echo ERROR: Port 3000 is already being used.
     pause
     exit /b 1
 )
 
 REM ============================================================
-REM Start KaBiRa backend
+REM Start Node backend hidden
 REM ============================================================
 
 echo [%date% %time%] Starting backend...>>"%LAUNCHERLOG%"
 
-REM Clear previous backend startup logs so they describe this launch.
 type nul > "%BACKENDLOG%"
 type nul > "%BACKENDERR%"
 
-powershell.exe -NoProfile -Command ^
+powershell.exe -NoProfile -WindowStyle Hidden -Command ^
 "$env:NODE_ENV='production'; ^
 Start-Process ^
 -FilePath '%NODE%' ^
@@ -121,22 +106,16 @@ Start-Process ^
 -RedirectStandardError '%BACKENDERR%'"
 
 if errorlevel 1 (
-    echo [%date% %time%] ERROR: Failed to create backend process.>>"%LAUNCHERLOG%"
-    echo ERROR: KaBiRa POS backend could not be started.
-    echo.
-    echo Check:
-    echo %BACKENDERR%
+    echo [%date% %time%] ERROR: Backend failed to start.>>"%LAUNCHERLOG%"
     pause
     exit /b 1
 )
 
 REM ============================================================
-REM Wait for actual KaBiRa health endpoint
+REM Wait for backend
 REM ============================================================
 
-echo [%date% %time%] Waiting for backend health check...>>"%LAUNCHERLOG%"
-
-powershell.exe -NoProfile -Command ^
+powershell.exe -NoProfile -WindowStyle Hidden -Command ^
 "$ready=$false; ^
 for($i=0; $i -lt 30; $i++) { ^
     try { ^
@@ -146,46 +125,74 @@ for($i=0; $i -lt 30; $i++) { ^
             break ^
         } ^
     } catch {} ^
-    Start-Sleep -Seconds 1 ^
+    Start-Sleep -Milliseconds 500 ^
 }; ^
 if($ready) { exit 0 } else { exit 1 }"
 
 if errorlevel 1 (
-    echo [%date% %time%] ERROR: Backend failed health check.>>"%LAUNCHERLOG%"
-    echo ERROR: KaBiRa POS backend failed to start correctly.
-    echo.
-    echo Diagnostic logs:
-    echo %BACKENDLOG%
-    echo %BACKENDERR%
-    echo %LAUNCHERLOG%
-    echo.
+    echo [%date% %time%] ERROR: Backend health check failed.>>"%LAUNCHERLOG%"
+    echo ERROR: KaBiRa POS backend failed to start.
     pause
     exit /b 1
 )
 
-echo [%date% %time%] Backend health check PASSED.>>"%LAUNCHERLOG%"
+echo [%date% %time%] Backend ready.>>"%LAUNCHERLOG%"
 
 
 :LAUNCH_POS
 
 REM ============================================================
-REM Launch POS through HTTP
+REM Prevent duplicate cashier POS windows
 REM ============================================================
 
-echo [%date% %time%] Opening http://127.0.0.1:3000>>"%LAUNCHERLOG%"
+powershell.exe -NoProfile -WindowStyle Hidden -Command ^
+"$existing = Get-CimInstance Win32_Process -Filter ""Name='msedge.exe'"" -ErrorAction SilentlyContinue ^| ^
+Where-Object { $_.CommandLine -like '*KaBiRaPOS-Cashier*' }; ^
+if ($existing) { exit 0 } else { exit 1 }"
 
-start "" "http://127.0.0.1:3000"
-
-if errorlevel 1 (
-    echo [%date% %time%] ERROR: Unable to open POS browser.>>"%LAUNCHERLOG%"
-    echo ERROR: KaBiRa POS is running, but the browser could not be opened.
-    echo.
-    echo Open this address manually:
-    echo http://127.0.0.1:3000
-    pause
-    exit /b 1
+if not errorlevel 1 (
+    echo [%date% %time%] KaBiRa POS cashier window already running.>>"%LAUNCHERLOG%"
+    exit /b 0
 )
 
-echo [%date% %time%] KaBiRa POS launcher completed successfully.>>"%LAUNCHERLOG%"
+REM ============================================================
+REM Locate Microsoft Edge
+REM ============================================================
+
+set "EDGE="
+
+if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" (
+    set "EDGE=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
+)
+
+if not defined EDGE if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" (
+    set "EDGE=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
+)
+
+REM ============================================================
+REM Launch POS in standalone APP mode
+REM ============================================================
+
+if defined EDGE (
+
+    echo [%date% %time%] Opening KaBiRa POS in Edge App Mode.>>"%LAUNCHERLOG%"
+
+    start "" "%EDGE%" ^
+    --app="http://127.0.0.1:3000" ^
+    --user-data-dir="%CASHIER_PROFILE%" ^
+    --start-maximized ^
+    --no-first-run ^
+    --no-default-browser-check ^
+    --disable-session-crashed-bubble
+
+) else (
+
+    REM Fallback if Edge is unavailable
+    echo [%date% %time%] Edge not found. Using default browser.>>"%LAUNCHERLOG%"
+    start "" "http://127.0.0.1:3000"
+
+)
+
+echo [%date% %time%] KaBiRa POS launched successfully.>>"%LAUNCHERLOG%"
 
 exit /b 0
