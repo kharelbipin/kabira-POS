@@ -33,6 +33,7 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
     hardwareStore.getDiscoveredDevices()
   );
   const [showDockedPreview, setShowDockedPreview] = useState<boolean>(false);
+  const [showDisplayDetails, setShowDisplayDetails] = useState<boolean>(false);
   const [isDismissed, setIsDismissed] = useState<boolean>(
     hardwareStore.isCustomerDisplayWarningDismissed()
   );
@@ -144,7 +145,7 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
       {showWarningBanner && (
         <div
           id="customer-display-warning-banner"
-          className="fixed top-14 right-4 z-40 max-w-md bg-amber-950/90 text-amber-100 border-2 border-amber-500/80 rounded-xl shadow-2xl p-3 backdrop-blur-md animate-in fade-in slide-in-from-top-2"
+          className="fixed top-24 right-4 z-40 max-w-md bg-amber-950/90 text-amber-100 border-2 border-amber-500/80 rounded-xl shadow-2xl p-3 backdrop-blur-md animate-in fade-in slide-in-from-top-2"
         >
           <div className="flex items-start gap-2.5">
             <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
@@ -192,101 +193,174 @@ export const CustomerDisplayAutoBanner: React.FC<CustomerDisplayAutoBannerProps>
         </div>
       )}
 
-      {/* Floating Bottom Status Pill with 3 distinct hardware states */}
-      <div
-        id="customer-display-auto-pill"
-        className="fixed bottom-3 right-3 z-40 flex items-center gap-2 bg-slate-900/95 text-white backdrop-blur-md px-3 py-2 rounded-2xl shadow-xl border border-slate-700/80 text-xs animate-in fade-in slide-in-from-bottom-2"
-      >
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2.5 w-2.5">
-            {isWindowOpen ? (
-              <>
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-              </>
-            ) : isPhysicalDisplayDetected ? (
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-400 animate-pulse" />
-            ) : (
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
-            )}
+      {/* Compact Customer Display header indicator.
+          No floating bottom bar: checkout buttons remain fully visible. */}
+      <div className="fixed top-[64px] right-4 z-40 hidden md:block">
+        <button
+          type="button"
+          onClick={() => {
+            playBeep('click');
+            setShowDisplayDetails(prev => !prev);
+          }}
+          className={`h-8 px-3 rounded-lg border shadow-sm bg-white flex items-center gap-2 text-[11px] font-bold cursor-pointer transition-colors ${
+            isWindowOpen
+              ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+              : isPhysicalDisplayDetected
+                ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                : 'border-rose-200 text-rose-700 hover:bg-rose-50'
+          }`}
+          title="Customer Display status and controls"
+        >
+          <Monitor className="w-3.5 h-3.5" />
+          <span>Display 2</span>
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isWindowOpen
+                ? 'bg-emerald-500'
+                : isPhysicalDisplayDetected
+                  ? 'bg-amber-400'
+                  : 'bg-rose-500'
+            }`}
+          />
+          <span className="hidden lg:inline">
+            {isWindowOpen
+              ? 'Connected'
+              : isPhysicalDisplayDetected
+                ? 'Ready'
+                : 'Unavailable'}
           </span>
+        </button>
+      </div>
 
-          <Monitor className="w-4 h-4 text-slate-300" />
-          <span className="font-semibold text-slate-200 hidden sm:inline">
-            Customer Display:
-          </span>
+      {/* On-demand display details. Only shown when cashier clicks the compact chip. */}
+      {showDisplayDetails && (
+        <div
+          id="customer-display-details-popover"
+          className="fixed top-[100px] right-4 z-50 w-[360px] max-w-[calc(100vw-24px)] rounded-xl border border-slate-200 bg-white shadow-2xl overflow-hidden"
+        >
+          <div className="px-3 py-2.5 bg-slate-900 text-white flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Monitor className="w-4 h-4 text-sky-300" />
+              <div>
+                <div className="text-xs font-black">Customer Display</div>
+                <div className="text-[10px] text-slate-400">
+                  Secondary display controls
+                </div>
+              </div>
+            </div>
 
-          {/* Three Truthful Hardware States */}
-          <div className="flex items-center space-x-1 font-mono text-[11px]">
-            <span
-              className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
-                isWindowOpen ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-slate-800 text-slate-400'
-              }`}
+            <button
+              type="button"
+              onClick={() => setShowDisplayDetails(false)}
+              className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+              title="Close"
             >
-              WINDOW: {isWindowOpen ? 'OPEN' : 'CLOSED'}
-            </span>
-            <span
-              className={`font-bold px-1.5 py-0.5 rounded text-[10px] hidden md:inline ${
-                isPhysicalDisplayDetected ? 'bg-sky-950 text-sky-300 border border-sky-800' : 'bg-slate-800 text-slate-400'
-              }`}
-            >
-              MONITOR: {isPhysicalDisplayDetected ? 'DETECTED' : 'NOT DETECTED'}
-            </span>
-            <span
-              className={`font-bold px-1.5 py-0.5 rounded text-[10px] hidden lg:inline ${
-                isBridgeConnected ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-rose-950 text-rose-300 border border-rose-800'
-              }`}
-            >
-              BRIDGE: {isBridgeConnected ? 'CONNECTED' : 'OFFLINE'}
-            </span>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="p-3 space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                  Window
+                </div>
+                <div className={`text-[11px] font-black mt-1 ${isWindowOpen ? 'text-emerald-700' : 'text-slate-600'}`}>
+                  {isWindowOpen ? 'OPEN' : 'CLOSED'}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                  Monitor
+                </div>
+                <div className={`text-[11px] font-black mt-1 ${isPhysicalDisplayDetected ? 'text-sky-700' : 'text-rose-700'}`}>
+                  {isPhysicalDisplayDetected ? 'DETECTED' : 'MISSING'}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <div className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                  Bridge
+                </div>
+                <div className={`text-[11px] font-black mt-1 ${isBridgeConnected ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {isBridgeConnected ? 'ONLINE' : 'OFFLINE'}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {!isWindowOpen ? (
+                <button
+                  type="button"
+                  onClick={handleManualOpen}
+                  className="h-9 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Open Screen
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleRestart}
+                  className="h-9 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Restart Display
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  playBeep('click');
+                  setShowDockedPreview(prev => !prev);
+                }}
+                className={`h-9 rounded-lg border text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer ${
+                  showDockedPreview
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {showDockedPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                {showDockedPreview ? 'Hide Preview' : 'Preview'}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRetry}
+                disabled={isRetrying}
+                className="h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRetrying ? 'animate-spin' : ''}`} />
+                Retry
+              </button>
+
+              {onOpenCustomerDisplayModal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playBeep('click');
+                    onOpenCustomerDisplayModal();
+                  }}
+                  className="h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  Select Display
+                </button>
+              )}
+            </div>
           </div>
         </div>
-
-        <div className="flex items-center gap-1 pl-1 border-l border-slate-700">
-          {!isWindowOpen ? (
-            <button
-              type="button"
-              onClick={handleManualOpen}
-              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              <ExternalLink className="w-3 h-3" />
-              OPEN SCREEN
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleRestart}
-              title="Restart Customer Display Window"
-              className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => {
-              playBeep('click');
-              setShowDockedPreview(!showDockedPreview);
-            }}
-            title={showDockedPreview ? 'Hide Docked Live Preview' : 'Show Docked Live Preview'}
-            className={`px-2 py-1 rounded-lg font-medium transition-colors flex items-center gap-1 cursor-pointer ${
-              showDockedPreview
-                ? 'bg-indigo-600 text-white'
-                : 'text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            {showDockedPreview ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-            <span className="hidden sm:inline">Preview</span>
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Docked Picture-in-Picture Preview Container */}
       {showDockedPreview && (
         <div
           id="customer-display-docked-preview"
-          className="fixed bottom-14 right-3 z-40 w-96 max-w-[calc(100vw-24px)] h-64 bg-slate-950 border-2 border-indigo-500/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-3"
+          className="fixed bottom-3 right-3 z-40 w-96 max-w-[calc(100vw-24px)] h-64 bg-slate-950 border-2 border-indigo-500/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-3"
         >
           <div className="px-3 py-1.5 bg-indigo-950/80 border-b border-indigo-500/30 flex items-center justify-between text-xs text-indigo-200">
             <span className="font-bold flex items-center gap-1.5">
