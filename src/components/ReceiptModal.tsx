@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Order, StoreSettings } from '../types';
 import { playBeep } from '../utils/audio';
 import { hardwareStore, bridgeClient, DiscoveredHardwareDevice } from '../hardware';
@@ -118,6 +118,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             if (res.success) {
                 playBeep('success');
                 setPrintStatus('printed');
+                setPrintError(null);
                 setPrintJobId(res.jobId || `JOB-${Date.now().toString().slice(-6)}`);
                 setPrinterUsed(res.printerUsed || printer.deviceName);
             } else {
@@ -146,10 +147,28 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         setTestPrintMessage(null);
         playBeep('click');
 
-        const res = await hardwareStore.testDevice('receipt_printer');
-        setIsTestPrinting(false);
-        setTestPrintMessage(res.message);
-        playBeep(res.success ? 'success' : 'error');
+        try {
+            const res = await hardwareStore.testDevice('receipt_printer');
+
+            if (res.success) {
+                // A successful hardware response must clear any stale
+                // printer-offline state left by an earlier failed attempt.
+                setPrintStatus('idle');
+                setPrintError(null);
+                setTestPrintMessage(null);
+                playBeep('success');
+            } else {
+                setPrintStatus('offline');
+                setTestPrintMessage(res.message || 'Printer test failed.');
+                playBeep('error');
+            }
+        } catch (err: any) {
+            setPrintStatus('offline');
+            setTestPrintMessage(err?.message || 'Printer test failed.');
+            playBeep('error');
+        } finally {
+            setIsTestPrinting(false);
+        }
     };
 
     // Optional manual fallback: only trigger browser print dialog if user explicitly requests
@@ -513,134 +532,6 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                         </div>
                     )}
 
-                    {printStatus === 'offline' && (
-                        <div className="bg-amber-950/40 border border-amber-600/70 rounded-xl p-3.5 text-xs space-y-2.5 text-amber-100 shadow-lg">
-                            <div className="flex items-start space-x-2.5">
-                                <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-                                <div className="space-y-1 w-full">
-                                    <span className="font-bold text-amber-200 block text-xs">
-                                        Receipt Printer Connection Problem
-                                    </span>
-                                    <span className="text-[11px] text-zinc-300 block">
-                                        The configured printer could not be reached.
-                                    </span>
-                                    <div className="bg-black/50 border border-white/10 rounded-lg p-2 font-mono text-[11px] space-y-0.5 text-zinc-300">
-                                        <div>
-                                            <span className="text-zinc-500">Configured:</span>{' '}
-                                            <span className="text-white font-bold">{configuredPrinter.name}</span>
-                                        </div>
-                                        <div>
-                                            <span className="text-zinc-500">Connection:</span>{' '}
-                                            <span className="text-white">{configuredPrinter.connection}</span>
-                                        </div>
-                                        <div className="flex items-center gap-4 pt-0.5">
-                                            <span>
-                                                <span className="text-zinc-500">Windows detected:</span>{' '}
-                                                <span className="text-emerald-400 font-bold">
-                                                    {configuredPrinter.windowsDetected ? 'Yes' : 'No'}
-                                                </span>
-                                            </span>
-                                            <span>
-                                                <span className="text-zinc-500">Bridge detected:</span>{' '}
-                                                <span className="text-rose-400 font-bold">
-                                                    {configuredPrinter.bridgeDetected ? 'Yes' : 'No'}
-                                                </span>
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <p className="text-[10px] text-amber-300/90 italic pt-0.5">
-                                        Windows Detected: Yes + Bridge Detected: No means your printer isn&apos;t necessarily offline—the Bridge has a discovery/communication problem.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {showSelectPrinter && (
-                                <div className="bg-black/70 border border-amber-500/40 rounded-lg p-2.5 space-y-2 animate-in fade-in">
-                                    <div className="text-[11px] font-bold text-amber-300 flex items-center justify-between">
-                                        <span>Discovered Windows Printers</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowSelectPrinter(false)}
-                                            className="text-zinc-400 hover:text-white cursor-pointer"
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                    <div className="space-y-1.5 text-[11px] max-h-48 overflow-y-auto">
-                                        {discoveredPrinters.length === 0 ? (
-                                            <div className="text-zinc-400 text-center py-2 text-[10px]">
-                                                No physical Windows printers found. Click &quot;Scan Printers&quot; to query Windows Spooler.
-                                            </div>
-                                        ) : (
-                                            discoveredPrinters.map(p => (
-                                                <button
-                                                    key={p.deviceId}
-                                                    type="button"
-                                                    onClick={() => handleSelectPrinterChange(p)}
-                                                    className="w-full text-left p-2 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white flex items-center justify-between cursor-pointer"
-                                                >
-                                                    <div>
-                                                        <div className="font-bold text-zinc-200">{p.name} ({p.address})</div>
-                                                        <div className="text-[10px] text-zinc-400">{p.manufacturer} &bull; {p.connectionType.toUpperCase()}</div>
-                                                    </div>
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${p.isResponding ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-amber-950 text-amber-300 border-amber-800'}`}>
-                                                        {p.isResponding ? 'READY' : 'DETECTED'}
-                                                    </span>
-                                                </button>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {testPrintMessage && (
-                                <div className="text-[11px] font-mono p-2 rounded bg-slate-900 border border-slate-700 text-slate-200">
-                                    {testPrintMessage}
-                                </div>
-                            )}
-
-                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                <button
-                                    type="button"
-                                    onClick={handleRetryBridge}
-                                    disabled={isRetryingBridge}
-                                    className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-500 text-black font-bold text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-50 transition-colors"
-                                >
-                                    {isRetryingBridge ? 'Retrying...' : 'Retry Bridge'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleTestPrint}
-                                    disabled={isTestPrinting}
-                                    className="px-2.5 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-50 transition-colors"
-                                >
-                                    {isTestPrinting ? 'Testing...' : 'Test Print'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleScanPrinters}
-                                    disabled={isScanningPrinters}
-                                    className="px-2.5 py-1 rounded bg-[#222222] hover:bg-[#333333] text-zinc-200 font-bold text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-50 transition-colors"
-                                >
-                                    {isScanningPrinters ? 'Scanning...' : 'Scan Printers'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowSelectPrinter(!showSelectPrinter)}
-                                    className="px-2.5 py-1 rounded bg-[#222222] hover:bg-[#333333] text-zinc-200 font-bold text-[11px] uppercase tracking-wider cursor-pointer transition-colors"
-                                >
-                                    Select Printer
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleSystemPrintFallback}
-                                    className="px-2.5 py-1 rounded bg-[#1A1A1A] hover:bg-[#2A2A2A] text-amber-300 font-bold text-[11px] uppercase tracking-wider cursor-pointer transition-colors border border-amber-500/30"
-                                >
-                                    Use Windows Print Dialog
-                                </button>
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 {/* Printable Thermal Receipt Canvas (CA-08) */}
