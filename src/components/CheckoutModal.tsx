@@ -920,6 +920,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       DEL
                     </button>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleNumpadPress('C')}
+                      className="h-9 rounded-lg bg-[#1E1E1E] hover:bg-[#2A2A2A] text-red-400 font-bold text-xs uppercase border border-[#333333] cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playBeep('click');
+                        setTenderInputError(null);
+                        setShowNumpad(false);
+                      }}
+                      className="h-9 rounded-lg bg-[#C5A059] hover:bg-[#D4B36B] text-black font-black text-xs uppercase border border-[#C5A059] cursor-pointer"
+                    >
+                      Done
+                    </button>
+                  </div>
                 </div>
               )}
 
