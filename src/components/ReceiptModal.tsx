@@ -212,20 +212,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         playBeep('success');
     };
 
-    // Auto-print on order completion if enabled in settings and printer is connected
+    // Printing is intentionally NOT triggered when this modal opens.
+    // App.tsx owns the automatic print after a successful sale.
+    // This prevents duplicate receipt jobs and printer contention.
     useEffect(() => {
-        if (isOpen && order && !autoPrintedOnce) {
-            const isConnected =
-                hardwareStore.getHealth().status === 'running' &&
-                Boolean(hardwareStore.getConfiguredHardware().receipt_printer.deviceId);
-            const autoPrintEnabled = settings?.directReceiptPrinting?.autoPrintOnSale !== false;
-            if (isConnected && autoPrintEnabled) {
-                setAutoPrintedOnce(true);
-                handleDirectPrint(false);
-            } else if (!isConnected) {
-                setPrintStatus('idle');
-            }
-        }
         if (!isOpen) {
             setAutoPrintedOnce(false);
             setPrintStatus('idle');
@@ -234,7 +224,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             setPrintError(null);
             setIsReprint(false);
         }
-    }, [isOpen, order?.id]);
+    }, [isOpen]);
 
     if (!isOpen || !order) return null;
 
