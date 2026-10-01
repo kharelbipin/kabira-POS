@@ -145,7 +145,48 @@ namespace KaBiRa.HardwareBridge
             }
             finally
             {
-                _listener?.Stop();
+                StopHttpListener();
+            }
+        }
+
+        public override async Task StopAsync(CancellationToken cancellationToken)
+        {
+            _logger.LogInformation("KaBiRa POS Hardware Bridge stopping...");
+
+            // HttpListener.GetContextAsync() does not observe the BackgroundService
+            // cancellation token by itself. Stopping the listener immediately
+            // releases the pending GetContextAsync wait so Windows Service Control
+            // Manager does not sit waiting for the bridge to stop.
+            StopHttpListener();
+
+            await base.StopAsync(cancellationToken);
+
+            _logger.LogInformation("KaBiRa POS Hardware Bridge stopped.");
+        }
+
+        private void StopHttpListener()
+        {
+            try
+            {
+                if (_listener == null)
+                {
+                    return;
+                }
+
+                if (_listener.IsListening)
+                {
+                    _listener.Stop();
+                }
+
+                _listener.Close();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Listener was already closed by another shutdown path.
+            }
+            catch (HttpListenerException ex)
+            {
+                _logger.LogDebug(ex, "HttpListener was already stopping.");
             }
         }
 
