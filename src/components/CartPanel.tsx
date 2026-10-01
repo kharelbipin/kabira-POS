@@ -41,6 +41,7 @@ interface CartPanelProps {
   settings: StoreSettings | null;
   onOpenDrawer?: () => void;
   onPrintLastReceipt?: () => void;
+  mode?: 'full' | 'items' | 'summary';
 }
 
 export const CartPanel: React.FC<CartPanelProps> = ({
@@ -62,6 +63,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
   settings,
   onOpenDrawer,
   onPrintLastReceipt,
+  mode = 'full',
 }) => {
   const [showDiscountModal, setShowDiscountModal] = useState<boolean>(false);
   const [discountType, setDiscountType] = useState<'percent' | 'amount' | 'promo'>('percent');
@@ -115,9 +117,16 @@ export const CartPanel: React.FC<CartPanelProps> = ({
   const totalItemsCount = items.reduce((sum, i) => sum + i.quantity, 0);
 
   return (
-    <div className="flex flex-col h-full bg-white text-slate-800 select-none shadow-xs border-l border-slate-200">
-      {/* Top Header matching user mockup */}
-      <div className="p-3.5 border-b border-slate-200 bg-white flex items-center justify-between">
+    <div
+      className={`flex flex-col h-full bg-white text-slate-800 select-none ${
+        mode === 'summary'
+          ? 'border-l border-slate-200'
+          : 'border border-slate-200 rounded-xl overflow-hidden'
+      }`}
+    >
+      {/* Current Order header is shown in the large center workspace. */}
+      {mode !== 'summary' && (
+      <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
         <div className="flex items-center space-x-2">
           <h2 className="font-bold text-sm text-slate-900 tracking-tight">Current Order</h2>
           <span className="text-[11px] text-slate-400 font-mono">#TXN-00001</span>
@@ -159,9 +168,10 @@ export const CartPanel: React.FC<CartPanelProps> = ({
           </button>
         </div>
       </div>
+      )}
 
       {/* Clear Cart Confirmation Dialog */}
-      {showClearConfirm && (
+      {mode !== 'items' && showClearConfirm && (
         <div className="p-3 bg-rose-50 border-b border-rose-200 text-rose-800 text-xs flex items-center justify-between animate-in fade-in">
           <span className="font-medium">Clear all {totalItemsCount} items from order?</span>
           <div className="flex space-x-1.5">
@@ -186,8 +196,9 @@ export const CartPanel: React.FC<CartPanelProps> = ({
         </div>
       )}
 
-      {/* Cart Items List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      {/* Large Current Order workspace */}
+      {mode !== 'summary' && (
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 bg-slate-50/40">
         {items.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 space-y-2">
             <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-300">
@@ -202,7 +213,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
           items.map(item => (
             <div
               key={item.product.id}
-              className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col gap-2 group transition-all"
+              className="px-3 py-2.5 bg-white border border-slate-200 rounded-xl flex flex-col gap-1.5 group transition-all hover:border-amber-300"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
@@ -296,9 +307,29 @@ export const CartPanel: React.FC<CartPanelProps> = ({
           ))
         )}
       </div>
+      )}
 
-      {/* Cart Summary & Financials */}
-      <div className="p-4 bg-[#F8FAFC] border-t border-slate-200 flex flex-col gap-2 shrink-0">
+      {/* Fixed Order Summary / Checkout Controls */}
+      {mode !== 'items' && (
+      <div
+        className={`p-4 bg-[#F8FAFC] flex flex-col gap-3 ${
+          mode === 'summary'
+            ? 'h-full border-0'
+            : 'border-t border-slate-200 shrink-0'
+        }`}
+      >
+        {mode === 'summary' && (
+          <div className="pb-2 border-b border-slate-200">
+            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+              Order Summary
+            </div>
+            <div className="text-sm font-black text-slate-900 mt-0.5">
+              {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'}
+            </div>
+          </div>
+        )}
+
+        <div className={mode === 'summary' ? 'space-y-3' : 'space-y-2'}>
         <div className="flex justify-between text-xs text-slate-600 font-medium">
           <span>Subtotal ({totalItemsCount} items)</span>
           <span className="font-mono text-slate-900 font-bold">${(rawSubtotal ?? 0).toFixed(2)}</span>
@@ -328,6 +359,10 @@ export const CartPanel: React.FC<CartPanelProps> = ({
           </span>
         </div>
 
+        </div>
+
+        {/* Keep all checkout actions pinned to the lower-right panel. */}
+        <div className={mode === 'summary' ? 'mt-auto space-y-2' : 'space-y-2'}>
         {/* Big Complete Checkout Button (Matches Design HTML) */}
         <button
           id="cart-checkout-btn"
@@ -396,10 +431,12 @@ export const CartPanel: React.FC<CartPanelProps> = ({
             🧾 Last Receipt
           </button>
         </div>
+        </div>
       </div>
+      )}
 
       {/* Order Discount Modal */}
-      {showDiscountModal && (
+      {mode !== 'items' && showDiscountModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-sm overflow-hidden text-slate-800 animate-in fade-in zoom-in-95 duration-150">
             <div className="px-5 py-3.5 border-b border-slate-100 flex justify-between items-center">
