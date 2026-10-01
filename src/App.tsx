@@ -828,17 +828,40 @@ export default function App() {
   };
 
   const handleOpenLastReceipt = () => {
-    // Prefer the order completed in this register session.
-    // If the app was restarted, fall back to the newest loaded order.
-    const latestOrder = lastCompletedOrder ?? orders[0] ?? null;
+    // Prefer the order just completed in this register session.
+    // After an app restart, select the newest COMPLETED order by timestamp
+    // instead of assuming the API always returns orders in newest-first order.
+    const latestCompletedOrder =
+      lastCompletedOrder?.status === 'completed'
+        ? lastCompletedOrder
+        : orders
+            .filter(order => order.status === 'completed')
+            .reduce<Order | null>((latest, order) => {
+              if (!latest) {
+                return order;
+              }
 
-    if (!latestOrder) {
+              const latestTime = Date.parse(latest.createdAt);
+              const orderTime = Date.parse(order.createdAt);
+
+              if (Number.isNaN(orderTime)) {
+                return latest;
+              }
+
+              if (Number.isNaN(latestTime) || orderTime > latestTime) {
+                return order;
+              }
+
+              return latest;
+            }, null);
+
+    if (!latestCompletedOrder) {
       playBeep('error');
       console.warn('[Receipt] No completed receipt is available yet.');
       return;
     }
 
-    setLastCompletedOrder(latestOrder);
+    setLastCompletedOrder(latestCompletedOrder);
     setShowReceiptModal(true);
   };
 
