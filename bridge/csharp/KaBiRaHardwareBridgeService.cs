@@ -71,6 +71,12 @@ namespace KaBiRa.HardwareBridge
         // Cache of real Windows peripherals
         private readonly object _lock = new();
         private List<DiscoveredDeviceDto> _cachedDevices = new();
+
+        // Keep the real Windows printer records in memory as well.
+        // Win32_Printer/WMI enumeration is relatively slow, so normal
+        // print/drawer actions should not rescan Windows on every click.
+        private List<WindowsPrinterDto> _cachedPrinters = new();
+
         private DateTime _lastScanTime = DateTime.MinValue;
 
         public BridgeWorkerService(ILogger<BridgeWorkerService> logger)
@@ -696,6 +702,7 @@ namespace KaBiRa.HardwareBridge
                 // they may be returned as detected/responding devices.
 
                 _cachedDevices = list;
+                _cachedPrinters = printers;
                 _lastScanTime = DateTime.UtcNow;
             }
         }
@@ -748,8 +755,36 @@ namespace KaBiRa.HardwareBridge
 
         private WindowsPrinterDto? FindPrinterByDeviceId(string deviceId)
         {
-            var printers = GetInstalledWindowsPrinters();
-            return printers.FirstOrDefault(p =>
+            if (string.IsNullOrWhiteSpace(deviceId))
+            {
+                return null;
+            }
+
+            // Fast path: use the printer list already discovered at bridge startup
+            // or during the last explicit hardware scan.
+            lock (_lock)
+            {
+                var cached = _cachedPrinters.FirstOrDefault(p =>
+                    string.Equals(p.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(p.Name, deviceId, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(p.QueueName, deviceId, StringComparison.OrdinalIgnoreCase));
+
+                if (cached != null)
+                {
+                    return cached;
+                }
+            }
+
+            // Fallback only when the configured printer was not in cache
+            // (for example, a printer was connected after bridge startup).
+            var refreshedPrinters = GetInstalledWindowsPrinters();
+
+            lock (_lock)
+            {
+                _cachedPrinters = refreshedPrinters;
+            }
+
+            return refreshedPrinters.FirstOrDefault(p =>
                 string.Equals(p.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(p.Name, deviceId, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(p.QueueName, deviceId, StringComparison.OrdinalIgnoreCase));
