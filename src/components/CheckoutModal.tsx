@@ -421,8 +421,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     if (!target) return;
 
     playBeep('click');
-    if (target.method === 'cash') {
-      // Return cash from drawer
+    const wasRealCashPayment =
+      target.method === 'cash' &&
+      Number(target.cashTendered ?? 0) > 0;
+
+    if (wasRealCashPayment) {
+      // Open only when actual physical cash must be returned.
       hardwareStore.openCashDrawer().catch(() => {});
     }
 
@@ -445,12 +449,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     try {
       const lastCard = [...successfulPayments].reverse().find(p => p.method === 'card');
-      const totalCashTendered = successfulPayments.filter(p => p.method === 'cash').reduce((sum, p) => sum + p.amount, 0);
+
+      // Only real physical cash records carry cashTendered.
+      // Gift cards are currently mapped to the supported 'cash' enum,
+      // so method === 'cash' alone is not safe enough.
+      const totalCashTendered = successfulPayments
+        .filter(
+          p =>
+            p.method === 'cash' &&
+            Number(p.cashTendered ?? 0) > 0
+        )
+        .reduce(
+          (sum, p) => sum + Number(p.cashTendered ?? 0),
+          0
+        );
 
       const paymentPayload: any = {
         method: recordedPayments.length === 1 ? recordedPayments[0].method : 'split',
         amount: effectiveGrandTotal,
-        cashTendered: totalCashTendered + changeDueCustomer,
+        cashTendered: totalCashTendered,
         changeDue: changeDueCustomer,
         cardBrand: lastCard?.cardBrand || 'Visa',
         cardLast4: lastCard?.cardLast4 || '8392',
@@ -489,8 +506,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const handleVoidAllAndCancel = () => {
     playBeep('click');
-    const cashTotal = successfulPayments.filter(p => p.method === 'cash').reduce((s, p) => s + p.amount, 0);
-    if (cashTotal > 0) {
+
+    const hasRealCashToReturn = successfulPayments.some(
+      p =>
+        p.method === 'cash' &&
+        Number(p.cashTendered ?? 0) > 0
+    );
+
+    if (hasRealCashToReturn) {
       hardwareStore.openCashDrawer().catch(() => {});
     }
 
