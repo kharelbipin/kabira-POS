@@ -827,6 +827,21 @@ export default function App() {
     hardwareStore.printReceipt(order, settings).catch(() => {});
   };
 
+  const handleOpenLastReceipt = () => {
+    // Prefer the order completed in this register session.
+    // If the app was restarted, fall back to the newest loaded order.
+    const latestOrder = lastCompletedOrder ?? orders[0] ?? null;
+
+    if (!latestOrder) {
+      playBeep('error');
+      console.warn('[Receipt] No completed receipt is available yet.');
+      return;
+    }
+
+    setLastCompletedOrder(latestOrder);
+    setShowReceiptModal(true);
+  };
+
   const handleToggleOffline = () => {
     const nextState = !isOffline;
     setIsOffline(nextState);
@@ -973,6 +988,7 @@ export default function App() {
             onScanBarcode={handleBarcodeScanned}
             scanNotification={scanNotification}
             onDismissScanNotification={() => setScanNotification(null)}
+            onPrintLastReceipt={handleOpenLastReceipt}
           />
         )}
 
