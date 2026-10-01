@@ -230,14 +230,20 @@ export default function App() {
   }, [scanNotification]);
 
   // Initial Data Fetch
+  // Load cashier-critical data first so the register becomes usable without
+  // waiting for order history/customer history to finish loading.
   const loadAllData = useCallback(async () => {
+    // Start secondary requests immediately, but do not let them block POS startup.
+    const secondaryDataPromise = Promise.all([
+      api.getOrders().catch(() => []),
+      api.getCustomers().catch(() => []),
+    ]);
+
     try {
-      const [u, prods, cats, ords, custs, usrs, setts] = await Promise.all([
+      const [u, prods, cats, usrs, setts] = await Promise.all([
         api.getCurrentUser().catch(() => null),
         api.getProducts().catch(() => []),
         api.getCategories().catch(() => []),
-        api.getOrders().catch(() => []),
-        api.getCustomers().catch(() => []),
         api.getUsers().catch(() => []),
         api.getSettings().catch(() => null),
       ]);
@@ -245,23 +251,34 @@ export default function App() {
       if (u) {
         setCurrentUser(u);
       } else if (usrs && usrs.length > 0) {
-        // Default to first active user if session not established
-        const defaultUser = usrs.find(usr => usr.role === 'Cashier' && usr.active) || usrs[0];
+        // Default to first active user if session not established.
+        const defaultUser =
+          usrs.find(usr => usr.role === 'Cashier' && usr.active) || usrs[0];
+
         setCurrentUser(defaultUser);
         api.setUserId(defaultUser.id);
       }
 
       setProducts(prods);
       setCategories(cats);
-      setOrders(ords);
-      setCustomers(custs);
       setUsers(usrs);
       if (setts) setSettings(setts);
     } catch (err) {
-      console.error('Failed to load initial POS data:', err);
+      console.error('Failed to load critical POS data:', err);
     } finally {
+      // The selling screen can become available now.
       setIsAuthenticating(false);
     }
+
+    // Finish non-critical history data in the background.
+    void secondaryDataPromise
+      .then(([ords, custs]) => {
+        setOrders(ords);
+        setCustomers(custs);
+      })
+      .catch(err => {
+        console.error('Failed to load background POS data:', err);
+      });
   }, []);
   useEffect(() => {
     if (isCustomerDisplayMode || checkUploadSession || shelfCameraSession || mobileSessionParam) {
