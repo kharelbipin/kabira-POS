@@ -138,10 +138,14 @@ DestDir: "{app}\Runtime"; \
 Flags: ignoreversion
 
 ; ------------------------------------------------------------------------------
-; Main KaBiRa POS launcher
+; Main KaBiRa POS launchers
 ; ------------------------------------------------------------------------------
 
 Source: "..\Start-KaBiRaPOS.bat"; \
+DestDir: "{app}"; \
+Flags: ignoreversion
+
+Source: "..\Launch-KaBiRaPOS.vbs"; \
 DestDir: "{app}"; \
 Flags: ignoreversion
 
@@ -168,12 +172,16 @@ Flags: ignoreversion
 [Icons]
 
 Name: "{group}\{#MyAppName}"; \
-Filename: "{app}\Start-KaBiRaPOS.bat"; \
-WorkingDir: "{app}"
+Filename: "{sys}\wscript.exe"; \
+Parameters: """{app}\Launch-KaBiRaPOS.vbs"""; \
+WorkingDir: "{app}"; \
+IconFilename: "{app}\Client\favicon.ico"
 
 Name: "{autodesktop}\{#MyAppName}"; \
-Filename: "{app}\Start-KaBiRaPOS.bat"; \
+Filename: "{sys}\wscript.exe"; \
+Parameters: """{app}\Launch-KaBiRaPOS.vbs"""; \
 WorkingDir: "{app}"; \
+IconFilename: "{app}\Client\favicon.ico"; \
 Tasks: desktopicon
 
 Name: "{group}\Uninstall {#MyAppName}"; \
@@ -191,8 +199,9 @@ Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Bridge\install-ser
 StatusMsg: "Installing KaBiRa POS Hardware Bridge..."; \
 Flags: runhidden waituntilterminated
 
-; Launch KaBiRa POS after installation.
-Filename: "{app}\Start-KaBiRaPOS.bat"; \
+; Launch KaBiRa POS after installation without showing a console window.
+Filename: "{sys}\wscript.exe"; \
+Parameters: """{app}\Launch-KaBiRaPOS.vbs"""; \
 Description: "Launch KaBiRa POS"; \
 WorkingDir: "{app}"; \
 Flags: postinstall nowait skipifsilent
