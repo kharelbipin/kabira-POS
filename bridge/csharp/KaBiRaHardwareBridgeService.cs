@@ -345,7 +345,7 @@ namespace KaBiRa.HardwareBridge
                 if (path.StartsWith("/api/printers/") && path.EndsWith("/test-print") && method == "POST")
                 {
                     EnforceAuthentication(req);
-                    string deviceId = ExtractSegment(path, 3);
+                    string deviceId = ExtractSegment(path, 2);
                     var printer = FindPrinterByDeviceId(deviceId);
 
                     if (printer == null)
@@ -391,7 +391,7 @@ namespace KaBiRa.HardwareBridge
                 if (path.StartsWith("/api/printers/") && path.EndsWith("/print") && method == "POST")
                 {
                     EnforceAuthentication(req);
-                    string deviceId = ExtractSegment(path, 3);
+                    string deviceId = ExtractSegment(path, 2);
                     var printer = FindPrinterByDeviceId(deviceId);
 
                     if (printer == null)
@@ -510,7 +510,7 @@ namespace KaBiRa.HardwareBridge
                 // 11. /api/displays/{displayId}/test (POST)
                 if (path.StartsWith("/api/displays/") && path.EndsWith("/test") && method == "POST")
                 {
-                    string displayId = ExtractSegment(path, 3);
+                    string displayId = ExtractSegment(path, 2);
                     var monitors = GetWindowsMonitors();
                     var match = monitors.FirstOrDefault(m => string.Equals(m.Id, displayId, StringComparison.OrdinalIgnoreCase));
 
