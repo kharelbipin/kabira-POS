@@ -638,14 +638,64 @@ export default function App() {
 
     const completed = await api.createOrder(orderPayload);
 
-    // Canonical Hardware Integration (Requirement 1 & 5: Single Authoritative Path)
-    if (paymentDetails.method === 'cash' || paymentDetails.method === 'split') {
-      hardwareStore.openCashDrawer().catch(() => {});
-    }
+    // Open the drawer exactly once, and only after the sale has been
+    // successfully created. For split tenders, only open it when at least
+    // one completed payment is actually cash.
+    const completedPayments = Array.isArray(paymentDetails.payments)
+      ? paymentDetails.payments
+      : [];
 
-    if (settings?.autoPrintReceipt ?? true) {
-      hardwareStore.printReceipt(completed, settings).catch(() => {});
-    }
+    const hasCashTender =
+      paymentDetails.method === 'cash' ||
+      completedPayments.some(
+        (payment: any) =>
+          payment?.method === 'cash' &&
+          payment?.status === 'completed' &&
+          Number(payment?.amount || 0) > 0
+      );
+
+    // Keep hardware I/O off the checkout UI path so Complete Sale feels fast.
+    // Sequence drawer before receipt because both can share the receipt printer.
+    void (async () => {
+      if (hasCashTender) {
+        try {
+          const drawerResult = await hardwareStore.openCashDrawer();
+
+          if (!drawerResult.success) {
+            console.warn(
+              '[Cash Drawer] Sale completed, but drawer pulse failed:',
+              drawerResult.message
+            );
+          }
+        } catch (error) {
+          console.error(
+            '[Cash Drawer] Sale completed, but drawer pulse failed:',
+            error
+          );
+        }
+      }
+
+      if (settings?.autoPrintReceipt ?? true) {
+        try {
+          const printResult = await hardwareStore.printReceipt(
+            completed,
+            settings
+          );
+
+          if (!printResult.success) {
+            console.warn(
+              '[Receipt Printer] Sale completed, but receipt printing failed:',
+              printResult.message
+            );
+          }
+        } catch (error) {
+          console.error(
+            '[Receipt Printer] Sale completed, but receipt printing failed:',
+            error
+          );
+        }
+      }
+    })();
 
     hardwareStore.broadcastCustomerDisplay({
       screenState: 'thank_you',
