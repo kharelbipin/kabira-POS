@@ -746,9 +746,59 @@ export default function App() {
     setOrderDiscountPercent(0);
     setOrderDiscountAmount(0);
 
-    // Refresh products to update inventory counts
-    api.getProducts().then(setProducts).catch(console.error);
-    api.getCustomers().then(setCustomers).catch(console.error);
+    // Update the sold inventory locally immediately instead of downloading the
+    // entire product/customer catalog while the receipt screen is opening.
+    const soldQuantityByProduct = new Map<string, number>();
+
+    for (const item of cartItems) {
+      soldQuantityByProduct.set(
+        item.product.id,
+        (soldQuantityByProduct.get(item.product.id) || 0) + item.quantity
+      );
+    }
+
+    setProducts(prev =>
+      prev.map(product => {
+        const soldQty = soldQuantityByProduct.get(product.id) || 0;
+
+        if (soldQty <= 0) {
+          return product;
+        }
+
+        return {
+          ...product,
+          stockQuantity: Math.max(0, product.stockQuantity - soldQty),
+        };
+      })
+    );
+
+    // Reconcile with the server only when the browser is idle. This preserves
+    // server-authoritative inventory/loyalty values without competing with the
+    // drawer, receipt printer, receipt modal, or the next cashier interaction.
+    const reconcileAfterSale = () => {
+      void api.getProducts()
+        .then(setProducts)
+        .catch(error => console.warn('[Post Sale] Product reconciliation failed:', error));
+
+      if (selectedCustomer) {
+        void api.getCustomers()
+          .then(setCustomers)
+          .catch(error => console.warn('[Post Sale] Customer reconciliation failed:', error));
+      }
+    };
+
+    const browserWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: () => void,
+        options?: { timeout: number }
+      ) => number;
+    };
+
+    if (typeof browserWindow.requestIdleCallback === 'function') {
+      browserWindow.requestIdleCallback(reconcileAfterSale, { timeout: 3000 });
+    } else {
+      window.setTimeout(reconcileAfterSale, 1000);
+    }
   };
 
   const handleStartNewSale = () => {
