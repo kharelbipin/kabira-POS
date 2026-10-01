@@ -676,12 +676,16 @@ export default function App() {
       : [];
 
     const hasCashTender =
-      paymentDetails.method === 'cash' ||
       completedPayments.some(
         (payment: any) =>
           payment?.method === 'cash' &&
           payment?.status === 'completed' &&
-          Number(payment?.amount || 0) > 0
+          Number(payment?.cashTendered ?? 0) > 0
+      ) ||
+      (
+        completedPayments.length === 0 &&
+        paymentDetails.method === 'cash' &&
+        Number(paymentDetails.cashTendered ?? 0) > 0
       );
 
     // Keep hardware I/O off the checkout UI path so Complete Sale feels fast.
