@@ -908,17 +908,7 @@ export const POSView: React.FC<POSViewProps> = ({
           )}
 
           {/* Current Order owns the center workspace and remains visible while browsing. */}
-          <section className="flex-1 min-h-0 flex flex-col">
-            <div className="shrink-0 px-1 pb-1 flex items-center justify-between gap-3">
-              <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
-                Current Order
-              </div>
-              <div className="hidden xl:block text-[10px] font-bold text-slate-400">
-                Scan items or browse a category
-              </div>
-            </div>
-
-            <div className="flex-1 min-h-0">
+          <section className="flex-1 min-h-0">
             <CartPanel
               mode="items"
               items={cartItems}
@@ -939,7 +929,6 @@ export const POSView: React.FC<POSViewProps> = ({
               onProceedToCheckout={onProceedToCheckout}
               settings={settings}
             />
-            </div>
           </section>
         </div>
 
