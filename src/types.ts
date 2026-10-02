@@ -751,18 +751,33 @@ export interface BarcodeReceivingSession {
 // SR-01 to SR-25: Shift Management Types
 // ----------------------------------------------------
 export interface ShiftDenominationCount {
-  d100: number; // $100 bills
-  d50: number;  // $50 bills
-  d20: number;  // $20 bills
-  d10: number;  // $10 bills
-  d5: number;   // $5 bills
-  d2: number;   // $2 bills
-  d1: number;   // $1 bills
-  c50: number;  // 50¢ coins
-  c25: number;  // 25¢ quarters
-  c10: number;  // 10¢ dimes
-  c5: number;   // 5¢ nickels
-  c1: number;   // 1¢ pennies
+  // Current POS reconciliation UI keys.
+  hundreds?: number;
+  fifties?: number;
+  twenties?: number;
+  tens?: number;
+  fives?: number;
+  ones?: number;
+  halves?: number;
+  quarters?: number;
+  dimes?: number;
+  nickels?: number;
+  pennies?: number;
+  rolls?: number; // direct dollar amount for loose/rolled coin
+
+  // Legacy stored reconciliation keys kept for backward compatibility.
+  d100?: number; // $100 bills
+  d50?: number;  // $50 bills
+  d20?: number;  // $20 bills
+  d10?: number;  // $10 bills
+  d5?: number;   // $5 bills
+  d2?: number;   // $2 bills
+  d1?: number;   // $1 bills
+  c50?: number;  // 50¢ coins
+  c25?: number;  // 25¢ quarters
+  c10?: number;  // 10¢ dimes
+  c5?: number;   // 5¢ nickels
+  c1?: number;   // 1¢ pennies
 }
 
 export interface ShiftPaymentMethodBreakdown {
@@ -835,7 +850,7 @@ export interface ShiftSummarySnapshot {
 export interface ShiftCashMovement {
   id: string;
   shiftId: string;
-  type: 'paid_in' | 'payout';
+  type: 'cash_in' | 'cash_drop' | 'payout' | 'paid_in';
   amount: number;
   reason: string;
   userId: string;
