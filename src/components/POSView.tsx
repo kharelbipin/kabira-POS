@@ -1151,6 +1151,7 @@ export const POSView: React.FC<POSViewProps> = ({
         isOpen={showManualDrawerModal}
         onClose={() => setShowManualDrawerModal(false)}
         currentUser={currentUser}
+        requiresManagerApproval={settings?.requireManagerToOpenDrawerNoSale ?? false}
       />
 
       {/* Omnichannel Cart Transfer Modal (US-013 & US-014) */}
