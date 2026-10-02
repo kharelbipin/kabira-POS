@@ -40,15 +40,36 @@ export const DeviceSetupWizardModal: React.FC<DeviceSetupWizardModalProps> = ({
   const [hostConfig, setHostConfig] = useState<WindowsWebView2HostConfig>(() => {
     try {
       const saved = localStorage.getItem('pos_host_config');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...parsed,
+          customerDisplayFullscreen: parsed.customerDisplayFullscreen ?? true,
+        };
+      }
     } catch {}
     return {
-      autoOpenCustomerWindow: true,
-      fullscreenCustomerDisplay: false,
-      returnToWelcomeTimeoutSec: 8,
-      hardwareScannerPrefix: '',
-      printerSpoolerPollingMs: 2000,
+      isWebView2Runtime: true,
+      runtimeVersion: 'Windows',
+      wrapperVersion: '1.0.0',
+      bridgeVersion: '1.0.0',
+      webPosVersion: '1.0.0',
+      registerId: 'REG-01',
+      deviceId: 'POS-01',
+      storeId: 'STORE-01',
+      businessName: '377 SPIRITS',
+      cashierDisplayNumber: 1,
+      customerDisplayNumber: 2,
       customerDisplayEnabled: true,
+      customerDisplayUrl: '/customer-display',
+      customerDisplayFullscreen: true,
+      returnToWelcomeTimeoutSec: 8,
+      kioskModeEnabled: true,
+      preventNavigationAway: true,
+      autoLaunchOnWindowsStartup: true,
+      bridgeEndpoint: 'http://127.0.0.1:5055',
+      hardwareAllowlist: [],
+      trustedOrigins: ['http://127.0.0.1:3000'],
     };
   });
   const [displays, setDisplays] = useState<WindowsDisplayInfo[]>([]);
@@ -332,15 +353,15 @@ export const DeviceSetupWizardModal: React.FC<DeviceSetupWizardModalProps> = ({
                   />
                 </label>
 
-                <label className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl flex items-center justify-between cursor-pointer">
-                  <span className="text-xs font-semibold text-slate-300">Fullscreen Borderless Customer Display</span>
-                  <input
-                    type="checkbox"
-                    checked={hostConfig.customerDisplayFullscreen}
-                    onChange={e => setHostConfig({ ...hostConfig, customerDisplayFullscreen: e.target.checked })}
-                    className="w-4 h-4 accent-[#C5A059] rounded"
-                  />
-                </label>
+                <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-semibold text-slate-300 block">Fullscreen Borderless Customer Display</span>
+                    <span className="text-[11px] text-slate-500">Locked fullscreen is ON by default. Only Admin can change it in Manager Settings → Devices.</span>
+                  </div>
+                  <span className="px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-black uppercase">
+                    Admin Managed
+                  </span>
+                </div>
               </div>
             </div>
           )}
