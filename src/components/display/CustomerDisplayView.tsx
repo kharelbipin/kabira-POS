@@ -3,8 +3,6 @@ import {
   Sparkles,
   CheckCircle2,
   ShieldCheck,
-  Maximize2,
-  Minimize2,
   QrCode,
   Smartphone,
   CreditCard,
@@ -67,7 +65,6 @@ export const CustomerDisplayView: React.FC = () => {
     };
   });
 
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [promoIndex, setPromoIndex] = useState(0);
 
   // Customer Touchscreen Interactions (WV-049 - WV-053)
@@ -185,16 +182,6 @@ export const CustomerDisplayView: React.FC = () => {
     }
   };
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen?.().catch(() => {});
-      setIsFullscreen(false);
-    }
-  };
-
   // Focus protection: Stop events from stealing cashier focus on primary screen (WV-053)
   const handleTouchContainerClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -284,7 +271,7 @@ export const CustomerDisplayView: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Header Status & Fullscreen toggle */}
+        {/* Right Header Status */}
         <div className="flex items-center space-x-4">
           {/* Customer Loyalty Button */}
           {displayState.screenState !== 'thank_you' && (
@@ -309,13 +296,6 @@ export const CustomerDisplayView: React.FC = () => {
             <span>Display 2 Synced</span>
           </div>
 
-          <button
-            onClick={toggleFullscreen}
-            title="Toggle Fullscreen for 2nd Monitor"
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
-          >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
         </div>
       </header>
 
