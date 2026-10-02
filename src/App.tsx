@@ -56,6 +56,8 @@ import { AdminPosDesigner } from './components/admin/AdminPosDesigner';
 import { StoreFeatureManagementModal } from './components/admin/StoreFeatureManagementModal';
 import { HardwareDeviceManager } from './components/admin/HardwareDeviceManager';
 
+const HELD_ORDERS_STORAGE_KEY = 'kabira_pos_held_orders_v1';
+
 export default function App() {
   // Authentication & Current User (AU-01)
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -146,8 +148,53 @@ export default function App() {
   const [orderDiscountAmount, setOrderDiscountAmount] = useState<number>(0);
 
   // Held Orders State (CA-09, CA-10)
-  const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
+  // Persist parked orders in the dedicated cashier browser profile so they
+  // survive KaBiRa POS restarts on this register until resumed or discarded.
+  const [heldOrders, setHeldOrders] = useState<HeldOrder[]>(() => {
+    try {
+      const raw = window.localStorage.getItem(HELD_ORDERS_STORAGE_KEY);
+
+      if (!raw) {
+        return [];
+      }
+
+      const parsed = JSON.parse(raw);
+
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      return parsed.filter(
+        (held: HeldOrder) =>
+          held &&
+          typeof held.id === 'string' &&
+          typeof held.holdNumber === 'string' &&
+          typeof held.createdAt === 'string' &&
+          Array.isArray(held.items)
+      );
+    } catch (error) {
+      console.warn('[Held Orders] Could not restore held orders:', error);
+      return [];
+    }
+  });
+
   const [showHeldOrdersModal, setShowHeldOrdersModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      if (heldOrders.length === 0) {
+        window.localStorage.removeItem(HELD_ORDERS_STORAGE_KEY);
+        return;
+      }
+
+      window.localStorage.setItem(
+        HELD_ORDERS_STORAGE_KEY,
+        JSON.stringify(heldOrders)
+      );
+    } catch (error) {
+      console.warn('[Held Orders] Could not persist held orders:', error);
+    }
+  }, [heldOrders]);
 
   // Modals & Overlays
   const [showCheckoutModal, setShowCheckoutModal] = useState<boolean>(false);
