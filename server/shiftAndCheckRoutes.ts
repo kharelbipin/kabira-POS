@@ -45,25 +45,39 @@ function findActiveManagerByPin(pin: unknown): User | undefined {
 // ============================================================================
 // REGISTERS & TERMINALS (SR-01)
 // ============================================================================
-shiftAndCheckRouter.get('/registers', (req: Request, res: Response) => {
+shiftAndCheckRouter.get('/registers', (_req: Request, res: Response) => {
+  const buildRegister = (
+    id: string,
+    name: string,
+    location: string
+  ) => {
+    const activeShift = db.shifts.find(
+      s => s.status === 'open' && s.registerId === id
+    );
+
+    return {
+      id,
+      name,
+      location,
+      status: 'active',
+      currentCashier: activeShift?.cashierName || null,
+      activeShiftId: activeShift?.id || null,
+    };
+  };
+
   const registers = [
-    {
-      id: 'reg-1',
-      name: 'Terminal #01 (Front Register)',
-      location: 'Main Checkout Counter',
-      status: 'active',
-      currentCashier: 'Elena Rostova',
-      activeShiftId: db.shifts.find(s => s.status === 'open' && s.registerId === 'reg-1')?.id || null,
-    },
-    {
-      id: 'reg-2',
-      name: 'Terminal #02 (Express / Drive-Thru)',
-      location: 'Secondary Express Counter',
-      status: 'active',
-      currentCashier: null,
-      activeShiftId: db.shifts.find(s => s.status === 'open' && s.registerId === 'reg-2')?.id || null,
-    },
+    buildRegister(
+      'reg-1',
+      'Terminal #01 (Front Register)',
+      'Main Checkout Counter'
+    ),
+    buildRegister(
+      'reg-2',
+      'Terminal #02 (Express / Drive-Thru)',
+      'Secondary Express Counter'
+    ),
   ];
+
   res.json({ registers });
 });
 
