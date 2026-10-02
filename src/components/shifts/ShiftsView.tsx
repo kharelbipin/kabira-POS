@@ -118,26 +118,26 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
   const formatCurrency = (val?: number) => `$${(val || 0).toFixed(2)}`;
 
   return (
-    <div className="h-full flex flex-col bg-[#0D0D0D] text-[#E5E5E5] overflow-y-auto p-4 sm:p-6 space-y-6">
+    <div className="h-full flex flex-col bg-[#F4F7FB] text-slate-900 overflow-y-auto p-4 sm:p-5 space-y-4">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#262626] pb-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-sm">
         <div>
           <div className="flex items-center space-x-3">
-            <h1 className="text-xl sm:text-2xl font-black tracking-wider text-white uppercase flex items-center gap-2">
-              <Coins className="w-6 h-6 text-[#C5A059]" />
+            <h1 className="text-lg sm:text-xl font-black tracking-wide text-slate-900 uppercase flex items-center gap-2">
+              <Coins className="w-5 h-5 text-sky-600" />
               Shift & Drawer Management
             </h1>
             <span
               className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
                 hasActiveShift
-                  ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60'
-                  : 'bg-amber-950/80 text-amber-400 border border-amber-800/60'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}
             >
               {hasActiveShift ? '● Shift Active' : '○ No Shift Open'}
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-[#888888] mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Cash drawer accountability, safe drops, payouts, denomination reconciliation, and Z-Reports.
           </p>
         </div>
@@ -146,7 +146,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
           <button
             onClick={loadShiftData}
             disabled={isLoading}
-            className="p-2 bg-[#1A1A1A] hover:bg-[#262626] text-[#CCCCCC] hover:text-white rounded-lg border border-[#2A2A2A] transition-colors cursor-pointer"
+            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-200 transition-colors cursor-pointer"
             title="Refresh shift data"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-[#C5A059]' : ''}`} />
@@ -155,7 +155,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
           {!hasActiveShift ? (
             <button
               onClick={() => setShowStartShiftModal(true)}
-              className="flex items-center space-x-2 px-4 py-2 bg-[#C5A059] hover:bg-[#B38F46] text-black font-bold text-xs uppercase tracking-wider rounded-lg shadow transition-colors cursor-pointer"
+              className="flex items-center space-x-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-sm transition-colors cursor-pointer"
             >
               <Unlock className="w-4 h-4" />
               <span>Open New Shift (SR-01)</span>
@@ -164,7 +164,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
             <div className="flex items-center space-x-2">
               <button
                 onClick={handleOpenXReport}
-                className="flex items-center space-x-1.5 px-3 py-2 bg-[#1A1A1A] hover:bg-[#262626] text-[#C5A059] border border-[#C5A059]/40 hover:border-[#C5A059] text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer"
+                className="flex items-center space-x-1.5 px-3 py-2.5 bg-sky-600 hover:bg-sky-700 text-white border border-sky-600 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer shadow-sm"
                 title="Mid-day snapshot without closing shift"
               >
                 <Printer className="w-3.5 h-3.5" />
@@ -173,7 +173,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
 
               <button
                 onClick={() => setShowReconcileModal(true)}
-                className="flex items-center space-x-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow transition-colors cursor-pointer"
+                className="flex items-center space-x-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-sm transition-colors cursor-pointer"
               >
                 <Lock className="w-4 h-4" />
                 <span>Close Shift & Z-Report (SR-05)</span>
@@ -185,32 +185,32 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
 
       {/* Active Shift Card or Prompt */}
       {hasActiveShift && activeShift && shiftSummary ? (
-        <div className="bg-[#141414] border border-[#262626] rounded-xl p-5 shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-[#C5A059] via-amber-400 to-emerald-500" />
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-sky-500 via-blue-500 to-emerald-500" />
 
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-[#222222]">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-4 border-b border-slate-200">
             <div className="flex items-start sm:items-center space-x-4">
-              <div className="w-12 h-12 rounded-xl bg-[#C5A059]/10 border border-[#C5A059]/30 flex items-center justify-center text-[#C5A059] shrink-0">
+              <div className="w-11 h-11 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-600 shrink-0">
                 <DollarSign className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center space-x-3 flex-wrap">
-                  <span className="text-lg font-black text-white">{activeShift.shiftNumber}</span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-[#222222] text-[#AAAAAA] font-mono">
+                  <span className="text-lg font-black text-slate-900">{activeShift.shiftNumber}</span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono border border-slate-200">
                     Register: {activeShift.registerName || activeShift.registerId}
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-[#222222] text-[#AAAAAA] flex items-center gap-1">
-                    <UserIcon className="w-3 h-3 text-[#C5A059]" />
+                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 flex items-center gap-1 border border-slate-200">
+                    <UserIcon className="w-3 h-3 text-sky-600" />
                     {activeShift.cashierName}
                   </span>
                 </div>
-                <div className="flex items-center space-x-4 text-xs text-[#888888] mt-1.5">
+                <div className="flex items-center space-x-4 text-xs text-slate-500 mt-1.5">
                   <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-[#C5A059]" />
+                    <Clock className="w-3.5 h-3.5 text-sky-600" />
                     Opened {new Date(activeShift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({Math.floor(durationMinutes / 60)}h {durationMinutes % 60}m)
                   </span>
                   <span>•</span>
-                  <span>Starting Drawer: <strong className="text-white">{formatCurrency(activeShift.startingCash)}</strong></span>
+                  <span>Starting Drawer: <strong className="text-slate-900">{formatCurrency(activeShift.startingCash)}</strong></span>
                 </div>
               </div>
             </div>
@@ -222,7 +222,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
                   setMovementType('cash_in');
                   setShowCashMovementModal(true);
                 }}
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#1F2937]/70 hover:bg-[#1F2937] text-sky-400 border border-sky-800/50 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                className="flex items-center space-x-1.5 px-3 py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
               >
                 <ArrowDownRight className="w-3.5 h-3.5" />
                 <span>+ Cash In / Float</span>
@@ -233,7 +233,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
                   setMovementType('cash_drop');
                   setShowCashMovementModal(true);
                 }}
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#1F2937]/70 hover:bg-[#1F2937] text-amber-400 border border-amber-800/50 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                className="flex items-center space-x-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
               >
                 <ArrowUpRight className="w-3.5 h-3.5" />
                 <span>Safe Drop</span>
@@ -244,7 +244,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
                   setMovementType('payout');
                   setShowCashMovementModal(true);
                 }}
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#1F2937]/70 hover:bg-[#1F2937] text-rose-400 border border-rose-800/50 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                className="flex items-center space-x-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
               >
                 <ArrowUpRight className="w-3.5 h-3.5" />
                 <span>Payout / Expense</span>
@@ -254,56 +254,56 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
 
           {/* Real-time Calculated Drawer Numbers (SR-02) */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-5">
-            <div className="bg-[#1A1A1A] p-3 rounded-lg border border-[#282828]">
-              <span className="text-[10px] uppercase font-bold text-[#888888] tracking-wider block">Live Expected Cash</span>
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Live Expected Cash</span>
               <span className="text-xl font-black text-emerald-400 mt-1 block">
                 {formatCurrency(shiftSummary.expectedCashInDrawer ?? shiftSummary.expectedCash)}
               </span>
-              <span className="text-[10px] text-[#666666]">Should be in drawer</span>
+              <span className="text-[10px] text-slate-400">Should be in drawer</span>
             </div>
 
-            <div className="bg-[#1A1A1A] p-3 rounded-lg border border-[#282828]">
-              <span className="text-[10px] uppercase font-bold text-[#888888] tracking-wider block">Cash Sales</span>
-              <span className="text-lg font-bold text-white mt-1 block">
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Cash Sales</span>
+              <span className="text-lg font-bold text-slate-900 mt-1 block">
                 {formatCurrency(shiftSummary.cashSales)}
               </span>
-              <span className="text-[10px] text-[#666666]">
+              <span className="text-[10px] text-slate-400">
                 {shiftSummary.paymentMethods?.cash?.count ?? (shiftSummary.paymentBreakdown?.find(p => p.method === 'cash')?.count || 0)} transactions
               </span>
             </div>
 
-            <div className="bg-[#1A1A1A] p-3 rounded-lg border border-[#282828]">
-              <span className="text-[10px] uppercase font-bold text-[#888888] tracking-wider block">Card Sales</span>
-              <span className="text-lg font-bold text-white mt-1 block">
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Card Sales</span>
+              <span className="text-lg font-bold text-slate-900 mt-1 block">
                 {formatCurrency(shiftSummary.cardSales ?? (shiftSummary.paymentBreakdown?.find(p => p.method === 'card')?.amount || 0))}
               </span>
-              <span className="text-[10px] text-[#666666]">
+              <span className="text-[10px] text-slate-400">
                 {shiftSummary.paymentMethods?.card?.count ?? (shiftSummary.paymentBreakdown?.find(p => p.method === 'card')?.count || 0)} transactions
               </span>
             </div>
 
-            <div className="bg-[#1A1A1A] p-3 rounded-lg border border-[#282828]">
-              <span className="text-[10px] uppercase font-bold text-[#888888] tracking-wider block">Checks Cashed</span>
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Checks Cashed</span>
               <span className="text-lg font-bold text-amber-400 mt-1 block">
                 {formatCurrency(shiftSummary.checksCashedVolume || 0)}
               </span>
-              <span className="text-[10px] text-[#666666]">{shiftSummary.checksCashedCount || 0} check(s)</span>
+              <span className="text-[10px] text-slate-400">{shiftSummary.checksCashedCount || 0} check(s)</span>
             </div>
 
-            <div className="bg-[#1A1A1A] p-3 rounded-lg border border-[#282828]">
-              <span className="text-[10px] uppercase font-bold text-[#888888] tracking-wider block">Drops & Payouts</span>
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Drops & Payouts</span>
               <span className="text-lg font-bold text-rose-400 mt-1 block">
                 -{formatCurrency((shiftSummary.cashDropsTotal || 0) + (shiftSummary.payoutsTotal || 0))}
               </span>
-              <span className="text-[10px] text-[#666666]">Safe drops & expenses</span>
+              <span className="text-[10px] text-slate-400">Safe drops & expenses</span>
             </div>
 
-            <div className="bg-[#1A1A1A] p-3 rounded-lg border border-[#282828]">
-              <span className="text-[10px] uppercase font-bold text-[#888888] tracking-wider block">Gross Sales</span>
-              <span className="text-lg font-bold text-[#C5A059] mt-1 block">
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Gross Sales</span>
+              <span className="text-lg font-bold text-sky-700 mt-1 block">
                 {formatCurrency(shiftSummary.grossSales)}
               </span>
-              <span className="text-[10px] text-[#666666]">{shiftSummary.totalOrders ?? shiftSummary.totalTransactions ?? 0} total sales</span>
+              <span className="text-[10px] text-slate-400">{shiftSummary.totalOrders ?? shiftSummary.totalTransactions ?? 0} total sales</span>
             </div>
           </div>
 
@@ -347,7 +347,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
                       >
                         {mov.type === 'cash_in' ? '+' : '-'}{formatCurrency(mov.amount)}
                       </span>
-                      <span className="text-[10px] text-[#666666] block font-mono">
+                      <span className="text-[10px] text-slate-400 block font-mono">
                         {new Date(mov.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
@@ -359,20 +359,20 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
         </div>
       ) : (
         /* No active shift state */
-        <div className="bg-[#141414] border border-[#262626] rounded-xl p-8 text-center shadow-lg">
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
           <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-4">
             <Lock className="w-8 h-8" />
           </div>
           <h2 className="text-xl font-black text-white uppercase tracking-wider">
             Register Drawer Is Currently Closed
           </h2>
-          <p className="text-sm text-[#888888] max-w-md mx-auto mt-2">
+          <p className="text-sm text-slate-500 max-w-md mx-auto mt-2">
             No active shift is open on Register 1. Cash transactions, returns, and check cashing payouts require an open shift drawer for audit compliance.
           </p>
 
           {lastClosedShift && (
             <div className="mt-4 p-3 bg-[#1A1A1A] border border-[#262626] rounded-lg max-w-sm mx-auto text-xs text-left">
-              <span className="text-[#888888] block">Previous Shift #{lastClosedShift.shiftNumber}</span>
+              <span className="text-slate-500 block">Previous Shift #{lastClosedShift.shiftNumber}</span>
               <div className="flex justify-between items-center mt-1">
                 <span className="text-[#CCCCCC]">Closed by {lastClosedShift.cashierName}</span>
                 <span className="font-mono text-emerald-400 font-bold">
@@ -395,14 +395,14 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
       )}
 
       {/* Past Shifts History Table (SR-07) */}
-      <div className="bg-[#141414] border border-[#262626] rounded-xl p-5 shadow-lg">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-sm font-black uppercase text-white tracking-wider flex items-center gap-2">
-              <FileSpreadsheet className="w-4 h-4 text-[#C5A059]" />
+            <h3 className="text-sm font-black uppercase text-slate-900 tracking-wider flex items-center gap-2">
+              <FileSpreadsheet className="w-4 h-4 text-sky-600" />
               Shift Audit Log & Z-Reports History
             </h3>
-            <p className="text-xs text-[#888888]">Comprehensive record of all closed register sessions and cash reconciliations.</p>
+            <p className="text-xs text-slate-500">Comprehensive record of all closed register sessions and cash reconciliations.</p>
           </div>
         </div>
 
@@ -425,7 +425,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
             <tbody className="divide-y divide-[#1F1F1F]">
               {pastShifts.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-[#666666]">
+                  <td colSpan={10} className="py-8 text-center text-slate-400">
                     No past shifts found.
                   </td>
                 </tr>
@@ -451,8 +451,8 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
                         </span>
                       </td>
                       <td className="py-3 px-3 text-[#CCCCCC]">{shift.cashierName}</td>
-                      <td className="py-3 px-3 text-[#888888]">{shift.registerName || shift.registerId}</td>
-                      <td className="py-3 px-3 text-[#888888] font-mono">
+                      <td className="py-3 px-3 text-slate-500">{shift.registerName || shift.registerId}</td>
+                      <td className="py-3 px-3 text-slate-500 font-mono">
                         {new Date(shift.startTime).toLocaleString([], {
                           month: 'short',
                           day: 'numeric',
@@ -460,7 +460,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
                           minute: '2-digit',
                         })}
                       </td>
-                      <td className="py-3 px-3 text-[#888888] font-mono">
+                      <td className="py-3 px-3 text-slate-500 font-mono">
                         {shift.endTime
                           ? new Date(shift.endTime).toLocaleString([], {
                               month: 'short',
@@ -671,12 +671,12 @@ const StartShiftModal: React.FC<StartShiftModalProps> = ({
               <h3 className="text-base font-black uppercase text-white tracking-wider">
                 Open Cash Drawer Shift
               </h3>
-              <p className="text-xs text-[#888888]">Register 1 • KABIRA POS Granbury</p>
+              <p className="text-xs text-slate-500">Register 1 • KABIRA POS Granbury</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-[#888888] hover:text-white rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-slate-500 hover:text-white rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -695,7 +695,7 @@ const StartShiftModal: React.FC<StartShiftModalProps> = ({
               Opening Cash Drawer Float ($)
             </label>
             <div className="relative">
-              <DollarSign className="w-4 h-4 text-[#888888] absolute left-3 top-1/2 -translate-y-1/2" />
+              <DollarSign className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="number"
                 step="0.01"
@@ -899,12 +899,12 @@ const CashMovementModal: React.FC<CashMovementModalProps> = ({
               <h3 className="text-base font-black uppercase text-white tracking-wider">
                 Drawer Cash Movement
               </h3>
-              <p className="text-xs text-[#888888]">Live Cash Drop / In / Payout Audit</p>
+              <p className="text-xs text-slate-500">Live Cash Drop / In / Payout Audit</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-[#888888] hover:text-white rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-slate-500 hover:text-white rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -926,7 +926,7 @@ const CashMovementModal: React.FC<CashMovementModalProps> = ({
               className={`py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all cursor-pointer ${
                 type === 'cash_in'
                   ? 'bg-sky-500 text-black shadow'
-                  : 'text-[#888888] hover:text-white'
+                  : 'text-slate-500 hover:text-white'
               }`}
             >
               + Cash In
@@ -937,7 +937,7 @@ const CashMovementModal: React.FC<CashMovementModalProps> = ({
               className={`py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all cursor-pointer ${
                 type === 'cash_drop'
                   ? 'bg-amber-500 text-black shadow'
-                  : 'text-[#888888] hover:text-white'
+                  : 'text-slate-500 hover:text-white'
               }`}
             >
               Safe Drop
@@ -948,7 +948,7 @@ const CashMovementModal: React.FC<CashMovementModalProps> = ({
               className={`py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all cursor-pointer ${
                 type === 'payout'
                   ? 'bg-rose-500 text-white shadow'
-                  : 'text-[#888888] hover:text-white'
+                  : 'text-slate-500 hover:text-white'
               }`}
             >
               Payout
@@ -960,7 +960,7 @@ const CashMovementModal: React.FC<CashMovementModalProps> = ({
               Amount ($)
             </label>
             <div className="relative">
-              <DollarSign className="w-4 h-4 text-[#888888] absolute left-3 top-1/2 -translate-y-1/2" />
+              <DollarSign className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="number"
                 step="0.01"
@@ -1013,7 +1013,7 @@ const CashMovementModal: React.FC<CashMovementModalProps> = ({
                 className="w-full bg-[#1A1A1A] border border-[#333333] rounded-lg px-3 py-2 text-xs text-white font-mono text-center tracking-widest focus:outline-none focus:border-[#C5A059] disabled:opacity-60"
                 placeholder="••••"
               />
-              <p className="text-[10px] text-[#666666] mt-1">
+              <p className="text-[10px] text-slate-400 mt-1">
                 Approval must come from an active Manager or Admin account.
               </p>
             </div>
@@ -1200,14 +1200,14 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
               <h3 className="text-base font-black uppercase text-white tracking-wider">
                 Reconcile & Close Shift (Z-Report)
               </h3>
-              <p className="text-xs text-[#888888]">
+              <p className="text-xs text-slate-500">
                 {shift.shiftNumber} • Cashier: {shift.cashierName}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-[#888888] hover:text-white rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-slate-500 hover:text-white rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -1225,19 +1225,19 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
           {/* Variance Comparison Banner */}
           <div className="grid grid-cols-3 gap-3 bg-[#1A1A1A] p-4 rounded-xl border border-[#282828]">
             <div>
-              <span className="text-[10px] uppercase font-bold text-[#888888] block">Expected Drawer</span>
+              <span className="text-[10px] uppercase font-bold text-slate-500 block">Expected Drawer</span>
               <span className="text-lg font-black text-white mt-0.5 block font-mono">
                 ${expectedCash.toFixed(2)}
               </span>
             </div>
             <div>
-              <span className="text-[10px] uppercase font-bold text-[#888888] block">Counted Cash</span>
+              <span className="text-[10px] uppercase font-bold text-slate-500 block">Counted Cash</span>
               <span className="text-lg font-black text-[#C5A059] mt-0.5 block font-mono">
                 ${totalCounted.toFixed(2)}
               </span>
             </div>
             <div>
-              <span className="text-[10px] uppercase font-bold text-[#888888] block">Variance</span>
+              <span className="text-[10px] uppercase font-bold text-slate-500 block">Variance</span>
               <span
                 className={`text-lg font-black mt-0.5 block font-mono ${
                   Math.abs(variance) < 0.01
@@ -1539,7 +1539,7 @@ const ShiftReportModal: React.FC<ShiftReportModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-[#888888] hover:text-white rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-slate-500 hover:text-white rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
