@@ -1,12 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from './db.js';
+import { getAuthUser } from './authSession.js';
 import {
   Product,
   BarcodeReceivingSession,
   BarcodeReceivingLine,
   InventoryReceivingTransaction,
   ScannedInvoice,
-  User,
 } from '../src/types.js';
 
 export const barcodeReceivingRouter = Router();
@@ -15,12 +15,6 @@ const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => P
   (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
-
-function getAuthUser(req: Request): User {
-  const userId = (req.headers['x-user-id'] as string) || 'usr-1';
-  const user = db.users.find(u => u.id === userId && u.active);
-  return user || db.users[0];
-}
 
 // ----------------------------------------------------------------------------
 // List sessions
