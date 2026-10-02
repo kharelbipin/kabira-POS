@@ -85,6 +85,27 @@ export const ManualDrawerModal: React.FC<ManualDrawerModalProps> = ({
       const res = await hardwareStore.openCashDrawer({ reason });
 
       if (res.success) {
+        try {
+          const auditResponse = await fetch('/api/user-activities', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'DRAWER_OPEN',
+              targetType: 'drawer',
+              targetId: 'REG-01',
+              details: `Manual cash drawer opened: ${reason}`,
+              newValue: reason,
+              module: 'POS',
+            }),
+          });
+
+          if (!auditResponse.ok) {
+            console.error('[Cash Drawer] Drawer opened, but audit logging failed.');
+          }
+        } catch (auditError) {
+          console.error('[Cash Drawer] Drawer opened, but audit logging failed:', auditError);
+        }
+
         playBeep('success');
         setManagerPin('');
         onClose();
