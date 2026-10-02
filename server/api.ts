@@ -1510,7 +1510,7 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
         const itemPrice = product.price;
         const itemDiscount = Number(item.discountAmount || 0);
         const lineSubtotal = (itemPrice * item.quantity) - itemDiscount;
-        const itemTax = lineSubtotal * (product.taxRate || db.settings.defaultTaxRate);
+        const itemTax = lineSubtotal * (product.taxRate ?? db.settings.defaultTaxRate);
 
         calculatedSubtotal += itemPrice * item.quantity;
         calculatedTax += itemTax;
