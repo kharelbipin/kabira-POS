@@ -607,6 +607,8 @@ const StartShiftModal: React.FC<StartShiftModalProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [activeDenomField, setActiveDenomField] = useState<keyof ShiftDenominationCount | null>(null);
+  const [denomInputValue, setDenomInputValue] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -1111,11 +1113,55 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   const varianceExceeded = Math.abs(variance) > 5.0; // Tolerance is $5.00
 
   const handleDenomChange = (field: keyof ShiftDenominationCount, value: string) => {
-    const num = parseInt(value, 10);
+    const num = field === 'rolls' ? parseFloat(value) : parseInt(value, 10);
     setDenominations(prev => ({
       ...prev,
       [field]: isNaN(num) || num < 0 ? 0 : num,
     }));
+  };
+
+  const openDenomKeypad = (field: keyof ShiftDenominationCount) => {
+    const current = denominations[field] || 0;
+    setActiveDenomField(field);
+    setDenomInputValue(current > 0 ? String(current) : '');
+    playBeep('click');
+  };
+
+  const applyDenomKeypadValue = (nextValue: string) => {
+    if (!activeDenomField) return;
+
+    const sanitized =
+      activeDenomField === 'rolls'
+        ? nextValue.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')
+        : nextValue.replace(/\D/g, '');
+
+    setDenomInputValue(sanitized);
+    handleDenomChange(activeDenomField, sanitized);
+  };
+
+  const handleDenomKey = (key: string) => {
+    if (!activeDenomField) return;
+    playBeep('click');
+
+    if (key === 'C') {
+      applyDenomKeypadValue('');
+      return;
+    }
+
+    if (key === '⌫') {
+      applyDenomKeypadValue(denomInputValue.slice(0, -1));
+      return;
+    }
+
+    if (key === '.' && activeDenomField !== 'rolls') return;
+    if (key === '.' && denomInputValue.includes('.')) return;
+
+    const nextValue =
+      denomInputValue === '0' && key !== '.'
+        ? key
+        : denomInputValue + key;
+
+    applyDenomKeypadValue(nextValue);
   };
 
   const handleCloseShiftSubmit = async () => {
@@ -1282,19 +1328,88 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
                       <span className="text-[11px] font-bold text-[#CCCCCC] block">{item.label}</span>
                       <span className="text-[10px] text-[#777777] font-mono">${subtotal.toFixed(2)}</span>
                     </div>
-                    <input
-                      type="number"
-                      min="0"
-                      value={count || ''}
-                      onChange={e => handleDenomChange(item.field as keyof ShiftDenominationCount, e.target.value)}
-                      placeholder="0"
-                      className="w-16 bg-[#111111] border border-[#333333] rounded px-2 py-1 text-center font-mono text-xs text-white focus:outline-none focus:border-[#C5A059]"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => openDenomKeypad(item.field as keyof ShiftDenominationCount)}
+                      className="w-20 bg-[#111111] border border-[#333333] rounded-lg px-2 py-2 text-center font-mono text-sm text-white focus:outline-none focus:border-[#C5A059] cursor-pointer active:scale-[0.98]"
+                      aria-label={`Enter ${item.label} count`}
+                    >
+                      {count || '0'}
+                    </button>
                   </div>
                 );
               })}
             </div>
           </div>
+
+          {activeDenomField && (
+            <div className="fixed inset-0 z-[70] bg-black/65 flex items-center justify-center p-4">
+              <div className="w-full max-w-sm bg-[#161616] border border-[#333333] rounded-2xl shadow-2xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-[#2A2A2A] flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-[#888888] font-bold">
+                      Enter Physical Count
+                    </div>
+                    <div className="text-sm font-black text-white mt-0.5">
+                      {activeDenomField === 'rolls'
+                        ? 'Loose / Rolled Coin Amount'
+                        : activeDenomField.replace(/([A-Z])/g, ' $1')}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveDenomField(null)}
+                    className="w-9 h-9 rounded-lg bg-[#242424] text-[#BBBBBB] hover:text-white cursor-pointer"
+                  >
+                    <X className="w-4 h-4 mx-auto" />
+                  </button>
+                </div>
+
+                <div className="p-4">
+                  <div className="w-full h-14 rounded-xl border-2 border-[#C5A059]/70 bg-black text-right px-4 flex items-center justify-end font-mono text-2xl font-black text-white mb-3">
+                    {denomInputValue || '0'}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {['1','2','3','4','5','6','7','8','9','C','0','⌫'].map(key => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleDenomKey(key)}
+                        className={`h-14 rounded-xl border text-lg font-black cursor-pointer active:scale-95 transition-transform ${
+                          key === 'C'
+                            ? 'bg-rose-950/60 border-rose-800 text-rose-300'
+                            : key === '⌫'
+                            ? 'bg-amber-950/50 border-amber-800 text-amber-300'
+                            : 'bg-[#242424] border-[#3A3A3A] text-white hover:bg-[#303030]'
+                        }`}
+                      >
+                        {key}
+                      </button>
+                    ))}
+                  </div>
+
+                  {activeDenomField === 'rolls' && (
+                    <button
+                      type="button"
+                      onClick={() => handleDenomKey('.')}
+                      className="w-full mt-2 h-12 rounded-xl bg-[#242424] border border-[#3A3A3A] text-white text-lg font-black cursor-pointer"
+                    >
+                      .
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveDenomField(null)}
+                    className="w-full mt-3 h-12 rounded-xl bg-[#C5A059] hover:bg-[#B38F46] text-black font-black uppercase tracking-wider cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Manager Override Section if variance exceeds threshold */}
           {varianceExceeded && (
