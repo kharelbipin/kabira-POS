@@ -111,6 +111,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
         try {
             const res = await hardwareStore.printReceipt(order, {
+                ...(settings || {}),
                 isReprint: asReprint,
                 reason: asReprint ? 'Cashier reprint request' : 'Customer checkout receipt',
             });
