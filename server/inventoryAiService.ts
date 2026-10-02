@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { GoogleGenAI } from '@google/genai';
 import { db } from './db.js';
+import { getAuthUser } from './authSession.js';
 import { Product, InventoryAdjustment, AiShelfCountSession, AiDetectedBottle, User } from '../src/types.js';
 
 export const inventoryAiRouter = Router();
@@ -58,12 +59,6 @@ export const aiShelfCountSessions: AiShelfCountSession[] = [
     ],
   },
 ];
-
-function getAuthUser(req: Request): User {
-  const userId = (req.headers['x-user-id'] as string) || 'usr-2';
-  const user = db.users.find(u => u.id === userId && u.active);
-  return user || db.users[0];
-}
 
 // Fallback heuristic bottle counter if Gemini API is unavailable or offline
 function heuristicBottleAnalysis(shelfLabel: string, products: Product[]): AiDetectedBottle[] {
