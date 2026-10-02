@@ -84,8 +84,17 @@ export const CartPanel: React.FC<CartPanelProps> = ({
   }
 
   const subtotalAfterDiscounts = Math.max(0, adjustedSubtotal - calculatedOrderDiscount);
-  const taxRate = settings?.defaultTaxRate ?? 0.0825;
-  const taxTotal = subtotalAfterDiscounts * taxRate;
+  const defaultTaxRate = settings?.defaultTaxRate ?? 0.0825;
+  const orderDiscountFactor =
+    adjustedSubtotal > 0 ? subtotalAfterDiscounts / adjustedSubtotal : 0;
+  const taxTotal = items.reduce((sum, item) => {
+    const lineSubtotal = Math.max(
+      0,
+      item.unitPrice * item.quantity - (item.discountAmount || 0)
+    );
+    const lineTaxRate = item.product.taxRate ?? defaultTaxRate;
+    return sum + lineSubtotal * orderDiscountFactor * lineTaxRate;
+  }, 0);
   const grandTotal = subtotalAfterDiscounts + taxTotal;
 
   const handleApplyDiscountSubmit = (e: React.FormEvent) => {
