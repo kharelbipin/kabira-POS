@@ -2503,6 +2503,14 @@ apiRouter.put('/settings', asyncHandler(async (req: Request, res: Response) => {
         return res.status(403).json({ error: 'Only Admins and Managers can modify store settings' });
     }
 
+    if (
+        Object.prototype.hasOwnProperty.call(req.body, 'requireManagerToOpenDrawerNoSale') &&
+        currentUser.role !== 'Admin' &&
+        Boolean(req.body.requireManagerToOpenDrawerNoSale) !== Boolean(db.settings.requireManagerToOpenDrawerNoSale)
+    ) {
+        return res.status(403).json({ error: 'Only Admins can change manual drawer approval requirements' });
+    }
+
     const before = { ...db.settings };
     db.settings = { ...db.settings, ...req.body };
 
