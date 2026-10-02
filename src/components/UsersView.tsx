@@ -25,6 +25,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
   const [email, setEmail] = useState<string>('');
   const [role, setRole] = useState<UserRole>('Cashier');
   const [pin, setPin] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
   const [active, setActive] = useState<boolean>(true);
 
   const handleOpenAdd = () => {
@@ -33,6 +34,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
     setEmail('');
     setRole('Cashier');
     setPin('');
+    setPassword('');
     setActive(true);
     setShowAddEditModal(true);
   };
@@ -43,6 +45,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
     setEmail(u.email);
     setRole(u.role);
     setPin('');
+    setPassword('');
     setActive(u.active);
     setShowAddEditModal(true);
   };
@@ -80,6 +83,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
       return;
     }
 
+    if (password && password.length < 8) {
+      playBeep('error');
+      alert('Password must be at least 8 characters.');
+      return;
+    }
+
     try {
       if (editingUser) {
         await api.updateUser(editingUser.id, {
@@ -88,6 +97,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
           role,
           active,
           ...(normalizedPin ? { pin: normalizedPin } : {}),
+          ...(password ? { password } : {}),
         });
       } else {
         await api.createUser({
@@ -96,12 +106,14 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
           role,
           pin: normalizedPin,
           active,
+          ...(password ? { password } : {}),
         });
       }
 
       playBeep('success');
       setShowAddEditModal(false);
       setPin('');
+      setPassword('');
       onRefresh();
     } catch (err: any) {
       playBeep('error');
@@ -320,6 +332,24 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
                     placeholder={editingUser ? 'Keep current PIN' : 'Enter 4-digit PIN'}
                     className="w-full bg-[#141414] border border-[#262626] rounded-lg p-2 text-[#E5E5E5] font-mono tracking-widest focus:outline-hidden focus:border-[#C5A059]"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1.5">
+                    {editingUser ? 'New Password — leave blank to keep current' : 'Email Login Password (Optional)'}
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={8}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder={editingUser ? 'Keep current password' : 'Minimum 8 characters'}
+                    className="w-full bg-[#141414] border border-[#262626] rounded-lg p-2 text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
+                  />
+                  <p className="mt-1 text-[10px] text-[#666666]">
+                    Register PIN is used for fast terminal sign-in. Password enables email/password sign-in.
+                  </p>
                 </div>
               </div>
 
