@@ -154,6 +154,7 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
     requireManagerForRefunds: true,
     requireManagerForPriceOverride: true,
     requireManagerToOpenDrawerNoSale: settings?.requireManagerToOpenDrawerNoSale ?? false,
+    customerDisplayFullscreen: settings?.customerDisplayFullscreen ?? true,
 
     // Payments
     enableCash: settings?.enableCash !== false,
@@ -294,6 +295,7 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
         receiptFooter: formData.receiptFooter,
         requireManagerDiscountAbove: formData.requireManagerDiscountAbove,
         requireManagerToOpenDrawerNoSale: formData.requireManagerToOpenDrawerNoSale,
+        customerDisplayFullscreen: formData.customerDisplayFullscreen,
         enableCash: formData.enableCash,
         enableCard: formData.enableCard,
         enableContactless: formData.enableContactless,
@@ -1262,7 +1264,31 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
 
             {/* SECTION 12: DEVICES & WINDOWS POS WRAPPER (WV-072) */}
             {activeSection === 'devices' && (
-              <WindowsPosManagerTab />
+              <div className="space-y-5">
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
+                  <div className="flex items-center justify-between gap-6">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                        Customer Display Window Mode
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        When enabled, Display 2 launches in locked borderless fullscreen with no minimize, maximize, or close buttons.
+                      </p>
+                      <p className="text-[11px] text-amber-700 font-semibold mt-1">
+                        Admin-only setting. Enabled by default.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={formData.customerDisplayFullscreen}
+                      onChange={e => setFormData({ ...formData, customerDisplayFullscreen: e.target.checked })}
+                      disabled={currentUser?.role !== 'Admin'}
+                      className="w-5 h-5 accent-amber-500 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+                <WindowsPosManagerTab />
+              </div>
             )}
 
             {/* SECTION 13: NOTIFICATIONS */}
