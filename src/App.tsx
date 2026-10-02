@@ -768,10 +768,17 @@ export default function App() {
         Number(paymentDetails.cashTendered ?? 0) > 0
       );
 
+    const hasLottoPayout = cartItems.some(
+      item =>
+        item.product?.sku === 'LOTTO-PAYOUT' ||
+        String(item.product?.id || '').startsWith('lotto-payout-')
+    );
+
     // Keep hardware I/O off the checkout UI path so Complete Sale feels fast.
+    // Lotto payout drawer access happens only after the transaction is created.
     // Sequence drawer before receipt because both can share the receipt printer.
     void (async () => {
-      if (hasCashTender) {
+      if (hasCashTender || hasLottoPayout) {
         try {
           const drawerResult = await hardwareStore.openCashDrawer();
 
