@@ -458,29 +458,32 @@ export const CartPanel: React.FC<CartPanelProps> = ({
           </button>
         )}
 
-        {/* Hardware shortcuts bottom row matching mockup */}
+        {/* Hardware shortcuts */}
         <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/70">
           <button
             type="button"
+            disabled={!onOpenDrawer}
             onClick={() => {
+              if (!onOpenDrawer) return;
               playBeep('click');
-              if (onOpenDrawer) onOpenDrawer();
-              else alert('Cash Drawer kick signal sent to Epson TM-T88VII.');
+              onOpenDrawer();
             }}
-            className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold border border-slate-200 transition-colors cursor-pointer text-center"
+            className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold border border-slate-200 transition-colors cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            🗄 Open Drawer (F8)
+            Open Drawer (F8)
           </button>
+
           <button
             type="button"
+            disabled={!onPrintLastReceipt}
             onClick={() => {
+              if (!onPrintLastReceipt) return;
               playBeep('click');
-              if (onPrintLastReceipt) onPrintLastReceipt();
-              else alert('Reprinting last completed customer receipt...');
+              onPrintLastReceipt();
             }}
-            className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold border border-slate-200 transition-colors cursor-pointer text-center"
+            className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold border border-slate-200 transition-colors cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            🧾 Last Receipt
+            Last Receipt
           </button>
         </div>
         </div>
