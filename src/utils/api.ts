@@ -140,6 +140,27 @@ class ApiService {
     }
   }
 
+  async verifyManagerPin(
+    pin: string,
+    reason: string = 'Manager approval'
+  ): Promise<{
+    approved: boolean;
+    approver?: {
+      id: string;
+      name: string;
+      role: string;
+    };
+    error?: string;
+  }> {
+    return this.request('/auth/manager-verify', {
+      method: 'POST',
+      body: JSON.stringify({
+        pin: pin.trim(),
+        reason,
+      }),
+    });
+  }
+
   async getUsers() {
     return this.request<User[]>('/users');
   }
