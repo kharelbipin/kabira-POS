@@ -2,6 +2,11 @@ import { Router, Request, Response } from 'express';
 import { db } from './db.js';
 import { getAuthUser } from './authSession.js';
 import {
+  hashCredential,
+  needsCredentialUpgrade,
+  verifyCredential,
+} from './credentialSecurity.js';
+import {
   Shift,
   ShiftDenominationCount,
   IssuedCheck,
@@ -28,12 +33,22 @@ function findActiveManagerByPin(pin: unknown): User | undefined {
     return undefined;
   }
 
-  return db.users.find(
+  const manager = db.users.find(
     user =>
       user.active &&
       (user.role === 'Manager' || user.role === 'Admin') &&
-      user.pin === normalizedPin
+      Boolean(user.pin) &&
+      verifyCredential(normalizedPin, user.pin)
   );
+
+  if (
+    manager?.pin &&
+    needsCredentialUpgrade(manager.pin)
+  ) {
+    manager.pin = hashCredential(normalizedPin);
+  }
+
+  return manager;
 }
 
 // ============================================================================
@@ -526,8 +541,11 @@ shiftAndCheckRouter.post('/shifts/:id/override', (req: Request, res: Response) =
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
 
   const { managerPin, reason, action } = req.body;
-  const manager = db.users.find(u => (u.role === 'Manager' || u.role === 'Admin') && u.pin === managerPin && u.active);
-  if (!manager) return res.status(401).json({ error: 'Invalid manager PIN' });
+  const manager = findActiveManagerByPin(managerPin);
+
+  if (!manager) {
+    return res.status(401).json({ error: 'Invalid manager PIN' });
+  }
 
   if (!reason || !reason.trim()) {
     return res.status(400).json({ error: 'Override reason is required' });
