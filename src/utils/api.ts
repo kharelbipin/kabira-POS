@@ -46,12 +46,40 @@ import {
 
 // Client-side API caller
 class ApiService {
-  private currentUserId: string = 'usr-3'; // Elena Rostova by default
+  private currentUserId: string | null = (() => {
+    try {
+      return sessionStorage.getItem('kabira_pos_user_id');
+    } catch {
+      return null;
+    }
+  })();
+
   public isOffline: boolean = false;
   private offlineOrderQueue: any[] = [];
 
   setUserId(id: string) {
-    this.currentUserId = id;
+    const normalizedId = id.trim();
+    this.currentUserId = normalizedId || null;
+
+    try {
+      if (this.currentUserId) {
+        sessionStorage.setItem('kabira_pos_user_id', this.currentUserId);
+      } else {
+        sessionStorage.removeItem('kabira_pos_user_id');
+      }
+    } catch {
+      // Session storage is optional; in-memory auth state still works.
+    }
+  }
+
+  clearUserId() {
+    this.currentUserId = null;
+
+    try {
+      sessionStorage.removeItem('kabira_pos_user_id');
+    } catch {
+      // Ignore browser storage failures.
+    }
   }
 
   getUserId() {
@@ -63,11 +91,14 @@ class ApiService {
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const headers = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-user-id': this.currentUserId,
-      ...(options.headers || {}),
+      ...((options.headers || {}) as Record<string, string>),
     };
+
+    if (this.currentUserId) {
+      headers['x-user-id'] = this.currentUserId;
+    }
 
     if (this.isOffline) {
       // If offline mode is enabled, handle offline simulation
@@ -76,8 +107,8 @@ class ApiService {
         const tempOrder: Order = {
           id: `ord-offline-${Date.now()}`,
           orderNumber: `ORD-OFFLINE-${Math.floor(1000 + Math.random() * 9000)}`,
-          cashierId: this.currentUserId,
-          cashierName: 'Elena Rostova (Offline Queue)',
+          cashierId: this.currentUserId || 'offline-user',
+          cashierName: 'Offline Queue',
           items: orderData.items,
           subtotal: orderData.items.reduce((s: number, i: any) => s + (i.unitPrice * i.quantity), 0),
           discountTotal: orderData.discountTotal || 0,
@@ -100,7 +131,20 @@ class ApiService {
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'An unknown server error occurred' }));
+      if (res.status === 401 || res.status === 403) {
+        const isAuthEndpoint =
+          endpoint === '/auth/login' ||
+          endpoint === '/auth/manager-verify';
+
+        if (!isAuthEndpoint) {
+          this.clearUserId();
+        }
+      }
+
+      const err = await res.json().catch(() => ({
+        error: 'An unknown server error occurred',
+      }));
+
       throw new Error(err.error || `HTTP error ${res.status}`);
     }
 
@@ -121,21 +165,34 @@ class ApiService {
 
   async logout() {
     try {
-      await this.request('/auth/logout', { method: 'POST' });
+      if (this.currentUserId) {
+        await this.request('/auth/logout', { method: 'POST' });
+      }
     } catch {
-      // Ignore
+      // Local logout must still clear the operator session.
+    } finally {
+      this.clearUserId();
     }
   }
 
   async getMe() {
+    if (!this.currentUserId) {
+      throw new Error('No operator session is active.');
+    }
+
     return this.request<{ user: User }>('/auth/me');
   }
 
   async getCurrentUser(): Promise<User | null> {
+    if (!this.currentUserId) {
+      return null;
+    }
+
     try {
       const res = await this.getMe();
       return res.user || null;
     } catch {
+      this.clearUserId();
       return null;
     }
   }
