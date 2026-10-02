@@ -1088,8 +1088,6 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   });
 
   const [notes, setNotes] = useState<string>('');
-  const [managerOverridePin, setManagerOverridePin] = useState<string>('');
-  const [overrideReason, setOverrideReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -1165,52 +1163,6 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   };
 
   const handleCloseShiftSubmit = async () => {
-    let approvedManagerPin: string | undefined;
-
-    if (varianceExceeded) {
-      const normalizedPin = managerOverridePin.trim();
-
-      if (!/^\d{4,12}$/.test(normalizedPin)) {
-        setErrorMsg(
-          `Drawer variance of $${Math.abs(variance).toFixed(2)} exceeds the $5.00 tolerance. A valid manager PIN is required.`
-        );
-        playBeep('error');
-        return;
-      }
-
-      if (!overrideReason.trim()) {
-        setErrorMsg(
-          'A documented override reason is required when the drawer variance exceeds tolerance.'
-        );
-        playBeep('error');
-        return;
-      }
-
-      setIsSubmitting(true);
-      setErrorMsg(null);
-
-      try {
-        const approval = await api.verifyManagerPin(
-          normalizedPin,
-          `Shift close variance approval: ${shift.shiftNumber}, variance $${variance.toFixed(2)} - ${overrideReason.trim()}`
-        );
-
-        if (!approval.approved) {
-          setErrorMsg(approval.error || 'Manager approval was denied.');
-          playBeep('error');
-          setIsSubmitting(false);
-          return;
-        }
-
-        approvedManagerPin = normalizedPin;
-      } catch (err: any) {
-        setErrorMsg(err?.message || 'Unable to verify manager approval.');
-        playBeep('error');
-        setIsSubmitting(false);
-        return;
-      }
-    }
-
     setIsSubmitting(true);
     setErrorMsg(null);
 
@@ -1218,11 +1170,8 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
       const res = await api.closeShift(shift.id, {
         denominations,
         notes,
-        managerOverridePin: approvedManagerPin,
-        overrideReason: varianceExceeded ? overrideReason.trim() : undefined,
       });
 
-      setManagerOverridePin('');
       playBeep('success');
       onClosedSuccess(res.shift);
     } catch (err: any) {
@@ -1411,48 +1360,16 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
             </div>
           )}
 
-          {/* Manager Override Section if variance exceeds threshold */}
+          {/* Variance warning is informational only; closing does not require a manager PIN. */}
           {varianceExceeded && (
-            <div className="p-3.5 bg-amber-950/30 border border-amber-800/60 rounded-xl space-y-2.5">
+            <div className="p-3.5 bg-amber-950/30 border border-amber-800/60 rounded-xl space-y-1.5">
               <div className="flex items-center space-x-2 text-amber-400 text-xs font-bold uppercase tracking-wider">
                 <ShieldCheck className="w-4 h-4" />
                 <span>Variance Threshold Exceeded (Tolerance: $5.00)</span>
               </div>
               <p className="text-[11px] text-[#BBBBBB]">
-                A variance of ${Math.abs(variance).toFixed(2)} requires manager PIN authorization and a documented audit reason.
+                Variance: $${Math.abs(variance).toFixed(2)}. Review the count before closing the shift.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                <div>
-                  <label className="text-[10px] text-[#AAAAAA] uppercase block mb-1">Manager PIN</label>
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    maxLength={12}
-                    value={managerOverridePin}
-                    onChange={e => {
-                      setManagerOverridePin(e.target.value.replace(/\D/g, ''));
-                      setErrorMsg(null);
-                    }}
-                    disabled={isSubmitting}
-                    className="w-full bg-[#111111] border border-[#333333] rounded px-2.5 py-1.5 text-xs text-white font-mono tracking-widest text-center focus:outline-none focus:border-[#C5A059] disabled:opacity-60"
-                    placeholder="••••"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-[#AAAAAA] uppercase block mb-1">Override Reason</label>
-                  <input
-                    type="text"
-                    value={overrideReason}
-                    onChange={e => {
-                      setOverrideReason(e.target.value);
-                      setErrorMsg(null);
-                    }}
-                    className="w-full bg-[#111111] border border-[#333333] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#C5A059]"
-                    placeholder="e.g. Unaccounted coin shortage"
-                  />
-                </div>
-              </div>
             </div>
           )}
 
@@ -1481,12 +1398,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
           </button>
           <button
             type="button"
-            disabled={
-              isSubmitting ||
-              (varianceExceeded &&
-                (managerOverridePin.trim().length < 4 ||
-                  !overrideReason.trim()))
-            }
+            disabled={isSubmitting}
             onClick={() => void handleCloseShiftSubmit()}
             className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
