@@ -40,44 +40,16 @@ import {
 
 // In-Memory Database with Persistence for AI Studio Applet
 class Database {
-  users: User[] = [
-    {
-      id: 'usr-1',
-      name: 'Sarah Connor (Admin)',
-      email: 'admin@pos.local',
-      role: 'Admin',
-      pin: '9999',
-      active: true,
-      createdAt: '2026-01-01T08:00:00Z',
-    },
-    {
-      id: 'usr-2',
-      name: 'Marcus Rivera (Manager)',
-      email: 'manager@pos.local',
-      role: 'Manager',
-      pin: '5555',
-      active: true,
-      createdAt: '2026-01-05T08:00:00Z',
-    },
-    {
-      id: 'usr-3',
-      name: 'Elena Rostova (Cashier)',
-      email: 'cashier@pos.local',
-      role: 'Cashier',
-      pin: '1234',
-      active: true,
-      createdAt: '2026-01-10T08:00:00Z',
-    },
-    {
-      id: 'usr-4',
-      name: 'David Kim (Cashier)',
-      email: 'david@pos.local',
-      role: 'Cashier',
-      pin: '2345',
-      active: true,
-      createdAt: '2026-01-15T08:00:00Z',
-    },
-  ];
+  // No production operator credentials are shipped in source.
+  //
+  // Existing installations keep the users already stored in
+  // %LOCALAPPDATA%\KaBiRa POS\data\pos_database.json because loadFromDisk()
+  // replaces this default array with the persisted users table.
+  //
+  // A brand-new installation starts with no users and is completed through
+  // the first-run Admin setup flow exposed by the local API.
+  users: User[] = [];
+
 
   categories: Category[] = [
     { id: 'cat-1', name: 'Whiskey & Bourbon', slug: 'whiskey', order: 1, active: true },
