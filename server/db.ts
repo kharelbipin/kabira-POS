@@ -588,6 +588,7 @@ class Database {
     timezone: 'America/Chicago',
     defaultTaxRate: 0.0825,
     requireManagerDiscountAbove: 20, // Requires manager PIN if > 20%
+    requireManagerToOpenDrawerNoSale: false, // Cashier opens drawer directly unless Admin enables approval
     allowedPaymentMethods: {
       cash: true,
       card: true,
