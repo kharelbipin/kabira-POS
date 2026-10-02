@@ -25,6 +25,21 @@ function getAuthUser(req: Request): User {
   return user || db.users[0];
 }
 
+function findActiveManagerByPin(pin: unknown): User | undefined {
+  const normalizedPin = String(pin ?? '').trim();
+
+  if (!/^\d{4,12}$/.test(normalizedPin)) {
+    return undefined;
+  }
+
+  return db.users.find(
+    user =>
+      user.active &&
+      (user.role === 'Manager' || user.role === 'Admin') &&
+      user.pin === normalizedPin
+  );
+}
+
 // ============================================================================
 // SR-01 to SR-25: SHIFT MANAGEMENT ENDPOINTS
 // ============================================================================
@@ -203,32 +218,68 @@ shiftAndCheckRouter.get('/shifts/:id', (req: Request, res: Response) => {
   });
 });
 
-// POST /api/shifts/:id/cash-movement - Record Paid In / Payout (SR-09)
+// POST /api/shifts/:id/cash-movement - Record Cash In / Cash Drop / Payout (SR-09)
 shiftAndCheckRouter.post('/shifts/:id/cash-movement', (req: Request, res: Response) => {
   const shift = db.shifts.find(s => s.id === req.params.id);
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
   if (shift.status !== 'open') return res.status(400).json({ error: 'Cannot add cash movement to a closed shift' });
 
   const currentUser = getAuthUser(req);
-  const { type, amount, reason } = req.body;
+  const { type, amount, reason, managerPin } = req.body;
 
-  if (!type || !['paid_in', 'payout'].includes(type)) {
-    return res.status(400).json({ error: 'Invalid cash movement type. Must be paid_in or payout.' });
+  // Accept legacy "paid_in" from older clients but store the canonical
+  // frontend value "cash_in" going forward.
+  const normalizedType =
+    type === 'paid_in' ? 'cash_in' : type;
+
+  if (!normalizedType || !['cash_in', 'cash_drop', 'payout'].includes(normalizedType)) {
+    return res.status(400).json({
+      error: 'Invalid cash movement type. Must be cash_in, cash_drop, or payout.',
+    });
   }
-  const numAmount = parseFloat(amount);
-  if (isNaN(numAmount) || numAmount <= 0) {
+
+  const numAmount = Number.parseFloat(String(amount));
+  if (!Number.isFinite(numAmount) || numAmount <= 0) {
     return res.status(400).json({ error: 'Amount must be greater than zero.' });
   }
-  if (!reason || !reason.trim()) {
+
+  if (!reason || !String(reason).trim()) {
     return res.status(400).json({ error: 'Reason is required for cash movement.' });
+  }
+
+  // Cashier payouts require manager/admin approval. Managers/Admins can
+  // record the payout directly. Cash In and Cash Drop do not require it.
+  if (
+    normalizedType === 'payout' &&
+    currentUser.role !== 'Manager' &&
+    currentUser.role !== 'Admin'
+  ) {
+    const approvingManager = findActiveManagerByPin(managerPin);
+
+    if (!approvingManager) {
+      return res.status(401).json({
+        error: 'Manager approval is required for cash payouts.',
+        requiresManagerPin: true,
+      });
+    }
+
+    db.addAudit(
+      currentUser.id,
+      currentUser.name,
+      currentUser.role,
+      'MANAGER_APPROVAL',
+      'security',
+      shift.id,
+      `Cash payout of $${numAmount.toFixed(2)} on ${shift.shiftNumber} approved by ${approvingManager.name} (${approvingManager.role})`
+    );
   }
 
   const movement = {
     id: `mov-${Date.now()}`,
     shiftId: shift.id,
-    type: type as 'paid_in' | 'payout',
+    type: normalizedType as 'cash_in' | 'cash_drop' | 'payout',
     amount: numAmount,
-    reason: reason.trim(),
+    reason: String(reason).trim(),
     userId: currentUser.id,
     userName: currentUser.name,
     timestamp: new Date().toISOString(),
@@ -238,20 +289,35 @@ shiftAndCheckRouter.post('/shifts/:id/cash-movement', (req: Request, res: Respon
   shift.cashMovements.push(movement);
   shift.updatedAt = new Date().toISOString();
 
+  const movementLabel =
+    normalizedType === 'cash_in'
+      ? 'Cash In'
+      : normalizedType === 'cash_drop'
+      ? 'Cash Drop'
+      : 'Payout';
+
+  const auditAction =
+    normalizedType === 'cash_in'
+      ? 'SHIFT_CASH_IN'
+      : normalizedType === 'cash_drop'
+      ? 'SHIFT_CASH_DROP'
+      : 'SHIFT_PAYOUT';
+
   db.addAudit(
     currentUser.id,
     currentUser.name,
     currentUser.role,
-    type === 'paid_in' ? 'SHIFT_PAID_IN' : 'SHIFT_PAYOUT',
+    auditAction,
     'system',
     shift.id,
-    `${type === 'paid_in' ? 'Paid In' : 'Payout'} of $${numAmount.toFixed(2)} recorded on ${shift.shiftNumber}. Reason: ${reason}`
+    `${movementLabel} of $${numAmount.toFixed(2)} recorded on ${shift.shiftNumber}. Reason: ${movement.reason}`
   );
 
   const summary = calculateShiftSummary(shift);
 
   res.json({
     success: true,
+    message: `${movementLabel} recorded successfully.`,
     movement,
     shift,
     summary,
@@ -263,7 +329,19 @@ shiftAndCheckRouter.post('/shifts/:id/reconcile', (req: Request, res: Response) 
   const shift = db.shifts.find(s => s.id === req.params.id);
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
 
-  const { denominations, toleranceAmount = 5.0, reconciliationNote, managerPin } = req.body;
+  const {
+    denominations,
+    toleranceAmount = 5.0,
+    reconciliationNote,
+    notes,
+    managerPin,
+    managerOverridePin,
+  } = req.body;
+
+  const effectiveManagerPin = managerOverridePin || managerPin;
+  const effectiveReconciliationNote =
+    reconciliationNote ?? notes ?? undefined;
+
   const summary = calculateShiftSummary(shift);
   const actualCash = calculateDenominationTotal(denominations);
   const expectedCash = summary.expectedCash;
@@ -275,8 +353,8 @@ shiftAndCheckRouter.post('/shifts/:id/reconcile', (req: Request, res: Response) 
   let managerApproved = false;
   let managerApprovedBy: string | undefined;
 
-  if (isVarianceMaterial && managerPin) {
-    const manager = db.users.find(u => (u.role === 'Manager' || u.role === 'Admin') && u.pin === managerPin && u.active);
+  if (isVarianceMaterial && effectiveManagerPin) {
+    const manager = findActiveManagerByPin(effectiveManagerPin);
     if (manager) {
       managerApproved = true;
       managerApprovedBy = manager.name;
@@ -293,7 +371,7 @@ shiftAndCheckRouter.post('/shifts/:id/reconcile', (req: Request, res: Response) 
     managerApproved,
     managerApprovedBy,
     denominations,
-    reconciliationNote,
+    reconciliationNote: effectiveReconciliationNote,
   });
 });
 
@@ -306,7 +384,22 @@ shiftAndCheckRouter.post('/shifts/:id/close', (req: Request, res: Response) => {
   }
 
   const currentUser = getAuthUser(req);
-  const { denominations, toleranceAmount = 5.0, reconciliationNote, managerPin, managerApprovalReason, notes } = req.body;
+  const {
+    denominations,
+    toleranceAmount = 5.0,
+    reconciliationNote,
+    managerPin,
+    managerApprovalReason,
+    managerOverridePin,
+    overrideReason,
+    notes,
+  } = req.body;
+
+  // Frontend uses managerOverridePin / overrideReason. Keep the older
+  // managerPin / managerApprovalReason names as backwards-compatible aliases.
+  const effectiveManagerPin = managerOverridePin || managerPin;
+  const effectiveApprovalReason =
+    String(overrideReason ?? managerApprovalReason ?? '').trim();
 
   const summary = calculateShiftSummary(shift);
   const actualCash = calculateDenominationTotal(denominations);
@@ -318,19 +411,42 @@ shiftAndCheckRouter.post('/shifts/:id/close', (req: Request, res: Response) => {
   let managerApprovedBy: string | undefined;
 
   if (isVarianceMaterial) {
-    if (!managerPin) {
+    if (!effectiveManagerPin) {
       return res.status(400).json({
-        error: `Variance ($${variance.toFixed(2)}) exceeds tolerance limit ($${toleranceAmount.toFixed(2)}). Manager PIN approval is required.`,
+        error: `Variance ($${variance.toFixed(2)}) exceeds tolerance limit ($${toleranceAmount.toFixed(2)}). Manager approval is required.`,
         requiresManagerPin: true,
         variance,
       });
     }
-    const manager = db.users.find(u => (u.role === 'Manager' || u.role === 'Admin') && u.pin === managerPin && u.active);
-    if (!manager) {
-      return res.status(401).json({ error: 'Invalid manager PIN for variance approval.' });
+
+    if (!effectiveApprovalReason) {
+      return res.status(400).json({
+        error: 'A documented override reason is required for a material drawer variance.',
+        requiresOverrideReason: true,
+        variance,
+      });
     }
+
+    const manager = findActiveManagerByPin(effectiveManagerPin);
+
+    if (!manager) {
+      return res.status(401).json({
+        error: 'Invalid manager credentials for variance approval.',
+      });
+    }
+
     managerApproved = true;
     managerApprovedBy = manager.name;
+
+    db.addAudit(
+      currentUser.id,
+      currentUser.name,
+      currentUser.role,
+      'MANAGER_APPROVAL',
+      'security',
+      shift.id,
+      `Shift close variance ${variance.toFixed(2)} on ${shift.shiftNumber} approved by ${manager.name} (${manager.role}). Reason: ${effectiveApprovalReason}`
+    );
   }
 
   const now = new Date().toISOString();
@@ -355,7 +471,7 @@ shiftAndCheckRouter.post('/shifts/:id/close', (req: Request, res: Response) => {
     reconciliationNote,
     managerApproved,
     managerApprovedBy,
-    managerApprovalReason,
+    managerApprovalReason: managerApproved ? effectiveApprovalReason : undefined,
     managerApprovalTime: managerApproved ? now : undefined,
   };
 
@@ -387,8 +503,10 @@ shiftAndCheckRouter.post('/shifts/:id/close', (req: Request, res: Response) => {
 
   res.json({
     success: true,
+    message: `Shift ${shift.shiftNumber} closed successfully.`,
     shift,
     summary,
+    reconciliation: shift.reconciliation,
   });
 });
 
