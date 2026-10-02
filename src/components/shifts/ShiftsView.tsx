@@ -611,29 +611,43 @@ const StartShiftModal: React.FC<StartShiftModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pin) {
-      setErrorMsg('Please enter your cashier PIN to verify drawer opening.');
+
+    if (!currentUser?.id) {
+      setErrorMsg('A signed-in operator is required to start a shift.');
+      playBeep('error');
+      return;
+    }
+
+    const normalizedPin = pin.trim();
+
+    if (!/^\d{4}$/.test(normalizedPin)) {
+      setErrorMsg('Enter your 4-digit register PIN to verify drawer opening.');
+      playBeep('error');
       return;
     }
 
     const numStarting = parseFloat(startingCash);
+
     if (isNaN(numStarting) || numStarting < 0) {
       setErrorMsg('Please enter a valid starting cash amount.');
+      playBeep('error');
       return;
     }
 
     setIsSubmitting(true);
     setErrorMsg(null);
+
     try {
       await api.startShift({
-        cashierId: currentUser?.id || 'usr-3',
+        cashierId: currentUser.id,
         registerId: 'reg-1',
         registerName: 'Main Liquor Counter (Reg 1)',
         startingCash: numStarting,
-        pin,
-        notes,
+        pin: normalizedPin,
+        notes: notes.trim() || undefined,
       });
 
+      setPin('');
       playBeep('success');
       onShiftStarted();
     } catch (err: any) {
@@ -702,10 +716,16 @@ const StartShiftModal: React.FC<StartShiftModalProps> = ({
             </label>
             <input
               type="password"
-              maxLength={6}
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={4}
               value={pin}
-              onChange={e => setPin(e.target.value)}
-              className="w-full bg-[#1A1A1A] border border-[#333333] rounded-lg px-3 py-2.5 text-white text-center tracking-widest font-mono text-lg focus:outline-none focus:border-[#C5A059]"
+              onChange={e => {
+                setPin(e.target.value.replace(/\D/g, ''));
+                setErrorMsg(null);
+              }}
+              disabled={isSubmitting}
+              className="w-full bg-[#1A1A1A] border border-[#333333] rounded-lg px-3 py-2.5 text-white text-center tracking-widest font-mono text-lg focus:outline-none focus:border-[#C5A059] disabled:opacity-60"
               placeholder="••••"
               required
               autoFocus
