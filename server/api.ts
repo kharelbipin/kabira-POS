@@ -219,6 +219,85 @@ const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextF
 // ----------------------------------------------------
 // AU-01 & BE-01: Authentication & User Management
 // ----------------------------------------------------
+apiRouter.get('/auth/bootstrap-status', (_req: Request, res: Response) => {
+    res.json({
+        requiresSetup: db.users.length === 0,
+    });
+});
+
+apiRouter.post('/auth/bootstrap-admin', asyncHandler(async (req: Request, res: Response) => {
+    if (db.users.length > 0) {
+        return res.status(409).json({
+            error: 'Initial Admin setup has already been completed.',
+        });
+    }
+
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const pin = String(req.body?.pin || '').trim();
+    const password = String(req.body?.password || '');
+
+    if (!name) {
+        return res.status(400).json({ error: 'Admin name is required.' });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ error: 'Enter a valid Admin email address.' });
+    }
+
+    if (!/^\d{4}$/.test(pin)) {
+        return res.status(400).json({
+            error: 'Admin register PIN must be exactly 4 digits.',
+        });
+    }
+
+    if (password.length < 8) {
+        return res.status(400).json({
+            error: 'Admin password must be at least 8 characters.',
+        });
+    }
+
+    const admin: User = {
+        id: `usr-${Date.now()}`,
+        name,
+        email,
+        role: 'Admin',
+        pin,
+        password,
+        active: true,
+        createdAt: new Date().toISOString(),
+    };
+
+    // Re-check immediately before insert so this endpoint remains one-time only.
+    if (db.users.length > 0) {
+        return res.status(409).json({
+            error: 'Initial Admin setup has already been completed.',
+        });
+    }
+
+    db.users.push(admin);
+
+    db.addAudit(
+        admin.id,
+        admin.name,
+        admin.role,
+        'INITIAL_ADMIN_SETUP',
+        'user',
+        admin.id,
+        `Initial Admin account created for ${admin.name}`,
+        undefined,
+        toPublicUser(admin)
+    );
+
+    const token = `token-${admin.id}-${Date.now()}`;
+
+    return res.status(201).json({
+        success: true,
+        token,
+        user: toPublicUser(admin),
+    });
+}));
+
 apiRouter.post('/auth/login', asyncHandler(async (req: Request, res: Response) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
