@@ -167,12 +167,15 @@ class ApiService {
     });
 
     if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        const isAuthEndpoint =
+      if (res.status === 401) {
+        const isCredentialCheckEndpoint =
           endpoint === '/auth/login' ||
           endpoint === '/auth/manager-verify';
 
-        if (!isAuthEndpoint) {
+        // A 401 from a normal protected route means the Bearer session is
+        // missing/expired/invalid, so clear it. A failed login or manager-PIN
+        // check must not destroy an otherwise valid cashier session.
+        if (!isCredentialCheckEndpoint) {
           this.clearSession();
         }
       }
