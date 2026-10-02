@@ -1,4 +1,4 @@
-﻿import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -169,6 +169,21 @@ function getAuthUser(req: Request): User {
     return user || db.users[0]; // fallback to admin
 }
 
+function findActiveManagerByPin(pin: unknown): User | undefined {
+    const normalizedPin = String(pin ?? '').trim();
+
+    if (!/^\d{4,12}$/.test(normalizedPin)) {
+        return undefined;
+    }
+
+    return db.users.find(
+        user =>
+            user.active &&
+            (user.role === 'Manager' || user.role === 'Admin') &&
+            user.pin === normalizedPin
+    );
+}
+
 // Centralized error handler helper
 const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
@@ -211,6 +226,41 @@ apiRouter.post('/auth/login', asyncHandler(async (req: Request, res: Response) =
 apiRouter.get('/auth/me', asyncHandler(async (req: Request, res: Response) => {
     const user = getAuthUser(req);
     res.json({ user });
+}));
+
+// Central manager/admin approval endpoint.
+// Frontend screens must never contain hardcoded manager PIN values.
+apiRouter.post('/auth/manager-verify', asyncHandler(async (req: Request, res: Response) => {
+    const requester = getAuthUser(req);
+    const { pin, reason = 'Manager approval' } = req.body;
+
+    const approvingManager = findActiveManagerByPin(pin);
+
+    if (!approvingManager) {
+        return res.status(401).json({
+            approved: false,
+            error: 'Invalid manager credentials.',
+        });
+    }
+
+    db.addAudit(
+        requester.id,
+        requester.name,
+        requester.role,
+        'MANAGER_APPROVAL',
+        'user',
+        approvingManager.id,
+        `${reason} approved by ${approvingManager.name} (${approvingManager.role})`
+    );
+
+    return res.json({
+        approved: true,
+        approver: {
+            id: approvingManager.id,
+            name: approvingManager.name,
+            role: approvingManager.role,
+        },
+    });
 }));
 
 apiRouter.get('/users', asyncHandler(async (req: Request, res: Response) => {
@@ -4195,9 +4245,23 @@ apiRouter.post('/payments/manual-entry', (req: Request, res: Response) => {
     }
     if (permission === 'manager_required') {
         if (currentUser.role !== 'Manager' && currentUser.role !== 'Admin') {
-            if (managerPin !== '5555' && managerPin !== '9999') {
-                return res.status(401).json({ error: 'Manager PIN approval required for manual card entry' });
+            const approvingManager = findActiveManagerByPin(managerPin);
+
+            if (!approvingManager) {
+                return res.status(401).json({
+                    error: 'Manager approval required for manual card entry',
+                });
             }
+
+            db.addAudit(
+                currentUser.id,
+                currentUser.name,
+                currentUser.role,
+                'MANAGER_APPROVAL',
+                'user',
+                approvingManager.id,
+                `Manual card entry approved by ${approvingManager.name} (${approvingManager.role})`
+            );
         }
     }
 
