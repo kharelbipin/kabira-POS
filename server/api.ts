@@ -2514,7 +2514,7 @@ apiRouter.put('/settings', asyncHandler(async (req: Request, res: Response) => {
     if (
         Object.prototype.hasOwnProperty.call(req.body, 'customerDisplayFullscreen') &&
         currentUser.role !== 'Admin' &&
-        Boolean(req.body.customerDisplayFullscreen) !== Boolean(db.settings.customerDisplayFullscreen)
+        Boolean(req.body.customerDisplayFullscreen) !== (db.settings.customerDisplayFullscreen !== false)
     ) {
         return res.status(403).json({ error: 'Only Admins can change customer display fullscreen mode' });
     }
