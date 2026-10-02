@@ -39,6 +39,11 @@ import { barcodeReceivingRouter } from './barcodeReceivingRoutes.js';
 import { onlineStoreRouter } from './onlineStoreRoutes.js';
 import { inventoryAiRouter } from './inventoryAiService.js';
 import { paymentFallbackService } from './paymentFallbackService.js';
+import {
+    createAuthSession,
+    getAuthUser,
+    logoutRequest,
+} from './authSession.js';
 
 export const apiRouter = express.Router();
 apiRouter.use(express.json());
@@ -176,28 +181,6 @@ apiRouter.get('/bridge/telemetry', (req: Request, res: Response) => {
     });
 });
 
-// Resolve the signed-in operator from the local POS session header.
-// Never silently fall back to a Cashier/Admin account.
-function getAuthUser(req: Request): User {
-    const userId = String(req.headers['x-user-id'] || '').trim();
-
-    if (!userId) {
-        const error: any = new Error('Authentication required.');
-        error.status = 401;
-        throw error;
-    }
-
-    const user = db.users.find(u => u.id === userId && u.active);
-
-    if (!user) {
-        const error: any = new Error('Operator session is invalid or inactive.');
-        error.status = 401;
-        throw error;
-    }
-
-    return user;
-}
-
 function toPublicUser(user: User) {
     return {
         id: user.id,
@@ -303,7 +286,7 @@ apiRouter.post('/auth/bootstrap-admin', asyncHandler(async (req: Request, res: R
         toPublicUser(admin)
     );
 
-    const token = `token-${admin.id}-${Date.now()}`;
+    const token = createAuthSession(admin.id);
 
     return res.status(201).json({
         success: true,
@@ -347,7 +330,7 @@ apiRouter.post('/auth/login', asyncHandler(async (req: Request, res: Response) =
         });
     }
 
-    const token = `token-${user.id}-${Date.now()}`;
+    const token = createAuthSession(user.id);
 
     db.addAudit(
         user.id,
@@ -368,6 +351,24 @@ apiRouter.post('/auth/login', asyncHandler(async (req: Request, res: Response) =
 apiRouter.get('/auth/me', asyncHandler(async (req: Request, res: Response) => {
     const user = getAuthUser(req);
     res.json({ user: toPublicUser(user) });
+}));
+
+apiRouter.post('/auth/logout', asyncHandler(async (req: Request, res: Response) => {
+    const user = getAuthUser(req);
+
+    logoutRequest(req);
+
+    db.addAudit(
+        user.id,
+        user.name,
+        user.role,
+        'LOGOUT',
+        'user',
+        user.id,
+        'User logged out'
+    );
+
+    res.json({ success: true });
 }));
 
 // Central manager/admin approval endpoint.
