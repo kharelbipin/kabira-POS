@@ -112,6 +112,10 @@ export const ChecksView: React.FC<ChecksViewProps> = ({
   const [showReturnedCheckModal, setShowReturnedCheckModal] = useState<boolean>(false);
   const [selectedTransactionForReturn, setSelectedTransactionForReturn] = useState<CheckCashingTransaction | null>(null);
   const [showDepositSlipModal, setShowDepositSlipModal] = useState<boolean>(false);
+
+  const [showCheckApprovalModal, setShowCheckApprovalModal] = useState<boolean>(false);
+  const [selectedTransactionForApproval, setSelectedTransactionForApproval] =
+    useState<CheckCashingTransaction | null>(null);
   const [selectedBatchForSlip, setSelectedBatchForSlip] = useState<DepositBatch | null>(null);
 
   // Poll for customer smartphone submissions so POS can retrieve them instantly
@@ -505,13 +509,8 @@ export const ChecksView: React.FC<ChecksViewProps> = ({
                           {tx.status === 'pending_review' && (
                             <button
                               onClick={() => {
-                                const pin = prompt('Enter Manager PIN to approve check cashing:');
-                                if (pin) {
-                                  api.decideCheckCashingApproval(tx.id, 'approved', pin).then(() => {
-                                    loadData();
-                                    playBeep('success');
-                                  });
-                                }
+                                setSelectedTransactionForApproval(tx);
+                                setShowCheckApprovalModal(true);
                               }}
                               className="px-2 py-1 bg-[#C5A059] hover:bg-[#B38F46] text-black rounded text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
                             >
@@ -952,6 +951,182 @@ export const ChecksView: React.FC<ChecksViewProps> = ({
           }}
         />
       )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: MANAGER APPROVAL FOR CHECK CASHING                                 */}
+      {showCheckApprovalModal && selectedTransactionForApproval && (
+        <CheckCashingApprovalModal
+          transaction={selectedTransactionForApproval}
+          onClose={() => {
+            setShowCheckApprovalModal(false);
+            setSelectedTransactionForApproval(null);
+          }}
+          onApproved={() => {
+            setShowCheckApprovalModal(false);
+            setSelectedTransactionForApproval(null);
+            loadData();
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+interface CheckCashingApprovalModalProps {
+  transaction: CheckCashingTransaction;
+  onClose: () => void;
+  onApproved: () => void;
+}
+
+const CheckCashingApprovalModal: React.FC<CheckCashingApprovalModalProps> = ({
+  transaction,
+  onClose,
+  onApproved,
+}) => {
+  const [managerPin, setManagerPin] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  const handleApprove = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+
+    const normalizedPin = managerPin.trim();
+
+    if (!/^\d{4,12}$/.test(normalizedPin)) {
+      playBeep('error');
+      setErrorMsg('Enter a valid Manager or Admin PIN.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+
+    try {
+      await api.decideCheckCashingApproval(
+        transaction.id,
+        'approved',
+        normalizedPin,
+        notes.trim() || undefined
+      );
+
+      setManagerPin('');
+      playBeep('success');
+      onApproved();
+    } catch (error: any) {
+      playBeep('error');
+      setErrorMsg(
+        error?.message || 'Unable to approve this check-cashing transaction.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+      <form
+        onSubmit={handleApprove}
+        className="w-full max-w-md rounded-2xl border border-[#333333] bg-[#111111] shadow-2xl overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#292929]">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-wider text-white">
+              Approve Check Cashing
+            </h3>
+            <p className="text-[11px] text-[#888888] mt-1">
+              {transaction.transactionNumber} • {transaction.customerName}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="p-2 rounded-lg text-[#888888] hover:text-white hover:bg-[#222222] disabled:opacity-50"
+            aria-label="Close approval"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#171717] p-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[#888888]">Check Amount</span>
+              <span className="font-mono font-black text-white">
+                ${Number(transaction.checkAmount || 0).toFixed(2)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs mt-2">
+              <span className="text-[#888888]">Customer Payout</span>
+              <span className="font-mono font-black text-[#C5A059]">
+                ${Number(transaction.customerPayoutAmount || 0).toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-[#AAAAAA] mb-1.5">
+              Manager / Admin PIN
+            </label>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={12}
+              value={managerPin}
+              onChange={e => {
+                setManagerPin(e.target.value.replace(/\D/g, ''));
+                setErrorMsg(null);
+              }}
+              placeholder="Enter PIN"
+              disabled={isSubmitting}
+              autoFocus
+              className="w-full rounded-xl border border-[#333333] bg-[#0B0B0B] px-3 py-2.5 text-center font-mono text-lg tracking-[0.3em] text-white focus:outline-none focus:border-[#C5A059] disabled:opacity-60"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-[#AAAAAA] mb-1.5">
+              Approval Note (Optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              disabled={isSubmitting}
+              rows={3}
+              placeholder="Add an approval note..."
+              className="w-full resize-none rounded-xl border border-[#333333] bg-[#0B0B0B] px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C5A059] disabled:opacity-60"
+            />
+          </div>
+
+          {errorMsg && (
+            <div className="rounded-xl border border-rose-800/60 bg-rose-950/40 px-3 py-2 text-xs text-rose-300">
+              {errorMsg}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 px-5 py-4 border-t border-[#292929] bg-[#0D0D0D]">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="flex-1 rounded-xl border border-[#333333] bg-[#1A1A1A] py-2.5 text-xs font-black uppercase tracking-wider text-[#BBBBBB] hover:bg-[#222222] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            disabled={isSubmitting || managerPin.trim().length < 4}
+            className="flex-1 rounded-xl bg-[#C5A059] py-2.5 text-xs font-black uppercase tracking-wider text-black hover:bg-[#D4B06A] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? 'Approving…' : 'Approve Check'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 };
