@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Landmark, X, ShieldAlert, CheckCircle2, KeyRound } from 'lucide-react';
 import { User } from '../../types';
 import { playBeep } from '../../utils/audio';
+import { api } from '../../utils/api';
 import { hardwareStore } from '../../hardware';
 
 interface ManualDrawerModalProps {
@@ -43,29 +44,56 @@ export const ManualDrawerModal: React.FC<ManualDrawerModalProps> = ({
     const reason = customReason.trim() ? customReason.trim() : selectedReason;
 
     if (requiresManagerPin) {
-      if (managerPin !== '5555' && managerPin !== '9999') {
+      const normalizedPin = managerPin.trim();
+
+      if (!/^\d{4,12}$/.test(normalizedPin)) {
         playBeep('error');
-        setErrorMsg('Invalid Manager PIN. Default store manager PIN is 5555.');
+        setErrorMsg('Enter a valid manager PIN.');
         return;
       }
+
+      setIsKicking(true);
+
+      try {
+        const approval = await api.verifyManagerPin(
+          normalizedPin,
+          `Manual cash drawer access: ${reason}`
+        );
+
+        if (!approval.approved) {
+          playBeep('error');
+          setErrorMsg(approval.error || 'Manager approval was denied.');
+          setIsKicking(false);
+          return;
+        }
+      } catch (error: any) {
+        playBeep('error');
+        setErrorMsg(error?.message || 'Unable to verify manager approval.');
+        setIsKicking(false);
+        return;
+      }
+    } else {
+      setIsKicking(true);
     }
 
-    setIsKicking(true);
     playBeep('click');
 
-    const res = await hardwareStore.openCashDrawer({
-      reason,
-      managerPin: requiresManagerPin ? managerPin : undefined,
-    });
+    try {
+      const res = await hardwareStore.openCashDrawer({ reason });
 
-    setIsKicking(false);
-
-    if (res.success) {
-      playBeep('success');
-      onClose();
-    } else {
+      if (res.success) {
+        playBeep('success');
+        setManagerPin('');
+        onClose();
+      } else {
+        playBeep('error');
+        setErrorMsg(res.error || res.message || 'Failed to open cash drawer.');
+      }
+    } catch (error: any) {
       playBeep('error');
-      setErrorMsg(res.error || res.message || 'Failed to open cash drawer.');
+      setErrorMsg(error?.message || 'Failed to open cash drawer.');
+    } finally {
+      setIsKicking(false);
     }
   };
 
@@ -153,15 +181,21 @@ export const ManualDrawerModal: React.FC<ManualDrawerModalProps> = ({
                 <span>Manager Authorization PIN Required</span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Cashiers must enter manager PIN (5555 or 9999) to pop till outside of a cash sale.
+                Cashiers must receive approval from an active Manager or Admin before opening the till outside a cash sale.
               </p>
               <input
                 type="password"
-                maxLength={4}
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={12}
                 value={managerPin}
-                onChange={e => setManagerPin(e.target.value)}
-                placeholder="Manager PIN (5555)"
-                className="w-full bg-slate-950 border border-amber-600/50 rounded-xl px-3 py-2 text-sm text-center font-mono text-white tracking-widest focus:outline-none"
+                onChange={e => {
+                  setManagerPin(e.target.value.replace(/\D/g, ''));
+                  setErrorMsg(null);
+                }}
+                placeholder="Manager PIN"
+                disabled={isKicking}
+                className="w-full bg-slate-950 border border-amber-600/50 rounded-xl px-3 py-2 text-sm text-center font-mono text-white tracking-widest focus:outline-none disabled:opacity-60"
               />
             </div>
           )}
@@ -180,7 +214,10 @@ export const ManualDrawerModal: React.FC<ManualDrawerModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isKicking}
+              disabled={
+                isKicking ||
+                (requiresManagerPin && managerPin.trim().length < 4)
+              }
               className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black uppercase tracking-wider shadow-md shadow-amber-500/20 cursor-pointer flex items-center space-x-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />
