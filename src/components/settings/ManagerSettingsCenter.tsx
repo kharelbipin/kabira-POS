@@ -153,7 +153,7 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
     requireManagerDiscountAbove: settings?.requireManagerDiscountAbove ?? 20,
     requireManagerForRefunds: true,
     requireManagerForPriceOverride: true,
-    requireManagerToOpenDrawerNoSale: true,
+    requireManagerToOpenDrawerNoSale: settings?.requireManagerToOpenDrawerNoSale ?? false,
 
     // Payments
     enableCash: settings?.enableCash !== false,
@@ -293,6 +293,7 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
         receiptHeader: formData.receiptHeader,
         receiptFooter: formData.receiptFooter,
         requireManagerDiscountAbove: formData.requireManagerDiscountAbove,
+        requireManagerToOpenDrawerNoSale: formData.requireManagerToOpenDrawerNoSale,
         enableCash: formData.enableCash,
         enableCard: formData.enableCard,
         enableContactless: formData.enableContactless,
