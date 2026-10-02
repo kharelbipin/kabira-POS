@@ -5,14 +5,8 @@ import { playBeep } from '../utils/audio';
 import {
   UserCheck,
   UserPlus,
-  Shield,
-  KeyRound,
-  Mail,
   Edit2,
-  CheckCircle2,
-  XCircle,
   X,
-  Lock,
 } from 'lucide-react';
 
 interface UsersViewProps {
@@ -22,13 +16,15 @@ interface UsersViewProps {
 }
 
 export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefresh }) => {
+  const canManageUsers = currentUser?.role === 'Admin';
+
   const [showAddEditModal, setShowAddEditModal] = useState<boolean>(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const [name, setName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [role, setRole] = useState<UserRole>('Cashier');
-  const [pin, setPin] = useState<string>('1234');
+  const [pin, setPin] = useState<string>('');
   const [active, setActive] = useState<boolean>(true);
 
   const handleOpenAdd = () => {
@@ -36,7 +32,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
     setName('');
     setEmail('');
     setRole('Cashier');
-    setPin('1234');
+    setPin('');
     setActive(true);
     setShowAddEditModal(true);
   };
@@ -46,34 +42,66 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
     setName(u.name);
     setEmail(u.email);
     setRole(u.role);
-    setPin(u.pin);
+    setPin('');
     setActive(u.active);
     setShowAddEditModal(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!canManageUsers) {
+      playBeep('error');
+      alert('Only Admin users can create or edit staff accounts.');
+      return;
+    }
+
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const normalizedPin = pin.trim();
+
+    if (!trimmedName || !trimmedEmail) {
+      playBeep('error');
+      alert('Name and email are required.');
+      return;
+    }
+
+    // A new operator always needs a 4-digit PIN.
+    // When editing, leaving the PIN blank means "keep the current PIN".
+    if (!editingUser && !/^\d{4}$/.test(normalizedPin)) {
+      playBeep('error');
+      alert('Enter a unique 4-digit register PIN.');
+      return;
+    }
+
+    if (editingUser && normalizedPin && !/^\d{4}$/.test(normalizedPin)) {
+      playBeep('error');
+      alert('Register PIN must be exactly 4 digits.');
+      return;
+    }
+
     try {
       if (editingUser) {
         await api.updateUser(editingUser.id, {
-          name,
-          email,
+          name: trimmedName,
+          email: trimmedEmail,
           role,
-          pin,
           active,
+          ...(normalizedPin ? { pin: normalizedPin } : {}),
         });
       } else {
         await api.createUser({
-          name,
-          email,
+          name: trimmedName,
+          email: trimmedEmail,
           role,
-          pin,
+          pin: normalizedPin,
           active,
-          password: 'password123',
         });
       }
+
       playBeep('success');
       setShowAddEditModal(false);
+      setPin('');
       onRefresh();
     } catch (err: any) {
       playBeep('error');
@@ -82,6 +110,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
   };
 
   const handleToggleStatus = async (user: User) => {
+    if (!canManageUsers) {
+      playBeep('error');
+      alert('Only Admin users can change staff account status.');
+      return;
+    }
+
     try {
       await api.updateUser(user.id, { active: !user.active });
       playBeep('success');
@@ -102,18 +136,22 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
             <span>Staff & Access Management</span>
           </h2>
           <p className="text-xs text-[#737373] mt-0.5 font-sans">
-            Configure register PINs, role permissions, and terminal access
+            {canManageUsers
+              ? 'Configure staff roles, register access, and account status'
+              : 'View staff roles and terminal access'}
           </p>
         </div>
 
-        <button
-          id="user-create-btn"
-          onClick={handleOpenAdd}
-          className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-[#C5A059] hover:bg-[#D4B06A] text-black text-xs font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>Add Staff Member</span>
-        </button>
+        {canManageUsers && (
+          <button
+            id="user-create-btn"
+            onClick={handleOpenAdd}
+            className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-[#C5A059] hover:bg-[#D4B06A] text-black text-xs font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Add Staff Member</span>
+          </button>
+        )}
       </div>
 
       {/* Users Table */}
@@ -158,8 +196,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
                 </td>
 
                 <td className="px-4 py-3 font-mono text-[#E5E5E5]">
-                  <span className="tracking-widest bg-[#141414] px-2 py-0.5 rounded border border-[#262626]">
-                    {u.pin}
+                  <span
+                    className="tracking-widest bg-[#141414] px-2 py-0.5 rounded border border-[#262626]"
+                    title="Register PIN is hidden"
+                  >
+                    ••••
                   </span>
                 </td>
 
@@ -176,26 +217,32 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
                 </td>
 
                 <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end space-x-2">
-                    <button
-                      onClick={() => handleToggleStatus(u)}
-                      className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-colors ${
-                        u.active
-                          ? 'bg-red-950/40 text-red-400 hover:bg-red-900/60 border border-red-850'
-                          : 'bg-emerald-950/40 text-emerald-400 hover:bg-emerald-900/60 border border-emerald-850'
-                      }`}
-                    >
-                      {u.active ? 'Disable' : 'Reactivate'}
-                    </button>
+                  {canManageUsers ? (
+                    <div className="flex items-center justify-end space-x-2">
+                      <button
+                        onClick={() => handleToggleStatus(u)}
+                        className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                          u.active
+                            ? 'bg-red-950/40 text-red-400 hover:bg-red-900/60 border border-red-850'
+                            : 'bg-emerald-950/40 text-emerald-400 hover:bg-emerald-900/60 border border-emerald-850'
+                        }`}
+                      >
+                        {u.active ? 'Disable' : 'Reactivate'}
+                      </button>
 
-                    <button
-                      onClick={() => handleOpenEdit(u)}
-                      className="p-1.5 text-[#737373] hover:text-white rounded hover:bg-[#1A1A1A] cursor-pointer transition-colors"
-                      title="Edit User"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                      <button
+                        onClick={() => handleOpenEdit(u)}
+                        className="p-1.5 text-[#737373] hover:text-white rounded hover:bg-[#1A1A1A] cursor-pointer transition-colors"
+                        title="Edit User"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] uppercase tracking-wider text-[#666666]">
+                      View only
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -259,14 +306,18 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
                 </div>
 
                 <div>
-                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1.5">Register PIN (4-digits) *</label>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1.5">
+                    Register PIN (4 digits){editingUser ? ' — leave blank to keep current' : ' *'}
+                  </label>
                   <input
                     type="password"
+                    inputMode="numeric"
+                    autoComplete="new-password"
                     maxLength={4}
-                    required
+                    required={!editingUser}
                     value={pin}
-                    onChange={e => setPin(e.target.value)}
-                    placeholder="1234"
+                    onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+                    placeholder={editingUser ? 'Keep current PIN' : 'Enter 4-digit PIN'}
                     className="w-full bg-[#141414] border border-[#262626] rounded-lg p-2 text-[#E5E5E5] font-mono tracking-widest focus:outline-hidden focus:border-[#C5A059]"
                   />
                 </div>
