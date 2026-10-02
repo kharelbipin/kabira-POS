@@ -413,18 +413,8 @@ shiftAndCheckRouter.post('/shifts/:id/close', (req: Request, res: Response) => {
     denominations,
     toleranceAmount = 5.0,
     reconciliationNote,
-    managerPin,
-    managerApprovalReason,
-    managerOverridePin,
-    overrideReason,
     notes,
   } = req.body;
-
-  // Frontend uses managerOverridePin / overrideReason. Keep the older
-  // managerPin / managerApprovalReason names as backwards-compatible aliases.
-  const effectiveManagerPin = managerOverridePin || managerPin;
-  const effectiveApprovalReason =
-    String(overrideReason ?? managerApprovalReason ?? '').trim();
 
   const summary = calculateShiftSummary(shift);
   const actualCash = calculateDenominationTotal(denominations);
@@ -432,47 +422,10 @@ shiftAndCheckRouter.post('/shifts/:id/close', (req: Request, res: Response) => {
   const variance = Math.round((actualCash - expectedCash) * 100) / 100;
   const isVarianceMaterial = Math.abs(variance) > toleranceAmount;
 
-  let managerApproved = false;
-  let managerApprovedBy: string | undefined;
-
-  if (isVarianceMaterial) {
-    if (!effectiveManagerPin) {
-      return res.status(400).json({
-        error: `Variance ($${variance.toFixed(2)}) exceeds tolerance limit ($${toleranceAmount.toFixed(2)}). Manager approval is required.`,
-        requiresManagerPin: true,
-        variance,
-      });
-    }
-
-    if (!effectiveApprovalReason) {
-      return res.status(400).json({
-        error: 'A documented override reason is required for a material drawer variance.',
-        requiresOverrideReason: true,
-        variance,
-      });
-    }
-
-    const manager = findActiveManagerByPin(effectiveManagerPin);
-
-    if (!manager) {
-      return res.status(401).json({
-        error: 'Invalid manager credentials for variance approval.',
-      });
-    }
-
-    managerApproved = true;
-    managerApprovedBy = manager.name;
-
-    db.addAudit(
-      currentUser.id,
-      currentUser.name,
-      currentUser.role,
-      'MANAGER_APPROVAL',
-      'security',
-      shift.id,
-      `Shift close variance ${variance.toFixed(2)} on ${shift.shiftNumber} approved by ${manager.name} (${manager.role}). Reason: ${effectiveApprovalReason}`
-    );
-  }
+  // Variance is recorded and audited, but does not block shift close and does
+  // not require manager credentials.
+  const managerApproved = false;
+  const managerApprovedBy: string | undefined = undefined;
 
   const now = new Date().toISOString();
   shift.status = 'closed';
@@ -496,8 +449,8 @@ shiftAndCheckRouter.post('/shifts/:id/close', (req: Request, res: Response) => {
     reconciliationNote,
     managerApproved,
     managerApprovedBy,
-    managerApprovalReason: managerApproved ? effectiveApprovalReason : undefined,
-    managerApprovalTime: managerApproved ? now : undefined,
+    managerApprovalReason: undefined,
+    managerApprovalTime: undefined,
   };
 
   shift.summary = summary;
@@ -523,7 +476,7 @@ shiftAndCheckRouter.post('/shifts/:id/close', (req: Request, res: Response) => {
     'SHIFT_CLOSE',
     'security',
     shift.id,
-    `Closed shift ${shift.shiftNumber}. Actual cash: $${actualCash.toFixed(2)}, Expected cash: $${expectedCash.toFixed(2)}, Variance: $${variance.toFixed(2)} (${isVarianceMaterial ? 'Material variance approved by ' + managerApprovedBy : 'Within tolerance'})`
+    `Closed shift ${shift.shiftNumber}. Actual cash: ${actualCash.toFixed(2)}, Expected cash: ${expectedCash.toFixed(2)}, Variance: ${variance.toFixed(2)} (${isVarianceMaterial ? 'Material variance recorded' : 'Within tolerance'})`
   );
 
   res.json({
