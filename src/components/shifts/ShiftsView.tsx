@@ -9,6 +9,7 @@ import {
 } from '../../types';
 import { api } from '../../utils/api';
 import { playBeep } from '../../utils/audio';
+import { hardwareStore } from '../../hardware/HardwareStore';
 import {
   Clock,
   DollarSign,
@@ -1404,14 +1405,110 @@ const ShiftReportModal: React.FC<ShiftReportModalProps> = ({
   const [emailTo, setEmailTo] = useState<string>('manager@377spirits.com');
   const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
   const [emailStatus, setEmailStatus] = useState<string | null>(null);
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
+  const [printStatus, setPrintStatus] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const isZReport = reportType === 'z_report';
   const snapshot = shift.reconciliation || shift;
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    if (isPrinting) return;
+
+    setIsPrinting(true);
+    setPrintStatus(null);
+    playBeep('click');
+
+    const width = 42;
+    const divider = '-'.repeat(width);
+    const center = (value: string) => {
+      const text = String(value || '').trim();
+      if (text.length >= width) return text;
+      return ' '.repeat(Math.max(0, Math.floor((width - text.length) / 2))) + text;
+    };
+    const row = (label: string, value: string) => {
+      const left = String(label || '').trim();
+      const right = String(value || '').trim();
+      const gap = width - left.length - right.length;
+      return gap > 0
+        ? left + ' '.repeat(gap) + right
+        : `${left.slice(0, Math.max(1, width - right.length - 1))} ${right}`;
+    };
+    const money = (value: number) => `${Number(value || 0).toFixed(2)}`;
+
+    const expectedCash = shift.reconciliation?.expectedCash ?? shift.startingCash;
+    const actualCash = shift.reconciliation?.actualCash ?? shift.startingCash;
+    const variance = shift.reconciliation?.variance ?? 0;
+    const cashSales = shift.reconciliation?.expectedCash
+      ? shift.reconciliation.expectedCash - shift.startingCash
+      : 0;
+
+    const lines: string[] = [
+      center('KaBiRa POS'),
+      center(settings?.storeName || '377 SPIRITS'),
+      center(settings?.tagline || 'Fine Liquors & Craft Spirits'),
+    ];
+
+    if (settings?.phone) lines.push(center(`Tel: ${settings.phone}`));
+    if (settings?.taxId) lines.push(center(`Tax ID: ${settings.taxId}`));
+
+    lines.push(
+      divider,
+      center(isZReport ? '*** END OF DAY Z-REPORT ***' : '*** MID-DAY X-REPORT ***'),
+      divider,
+      row('Shift Number:', shift.shiftNumber),
+      row('Register:', shift.registerName || shift.registerId),
+      row('Cashier:', shift.cashierName),
+      row('Shift Opened:', new Date(shift.startTime).toLocaleString())
+    );
+
+    if (shift.endTime) {
+      lines.push(row('Shift Closed:', new Date(shift.endTime).toLocaleString()));
+    }
+
+    lines.push(
+      divider,
+      'CASH DRAWER RECONCILIATION',
+      row('Starting Float:', money(shift.startingCash)),
+      row('Cash Sales Received:', `+${money(cashSales)}`),
+      row('Expected Drawer:', money(expectedCash)),
+      row('Actual Counted:', money(actualCash)),
+      row(
+        'Drawer Variance:',
+        variance >= 0
+          ? `+${money(variance)} OVER`
+          : `-${money(Math.abs(variance))} SHORT`
+      ),
+      divider,
+      center('Authorized Cashier & Manager Signatures'),
+      '',
+      'Cashier: __________________________',
+      '',
+      'Manager: __________________________',
+      '',
+      center(settings?.receiptFooter || '377 SPIRITS'),
+      '',
+      ''
+    );
+
+    try {
+      const result = await hardwareStore.printReceipt(lines.join('\n'), {
+        reason: isZReport ? 'Z-report print' : 'X-report print',
+      });
+
+      if (!result.success) {
+        throw new Error(result.message || result.error || 'Receipt printer did not accept the report.');
+      }
+
+      setPrintStatus(`Printed directly to ${result.printerUsed || 'the configured receipt printer'}.`);
+      playBeep('success');
+    } catch (error: any) {
+      setPrintStatus(error?.message || 'Unable to print report to the configured receipt printer.');
+      playBeep('error');
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   const handleSendEmail = async () => {
@@ -1562,12 +1659,18 @@ const ShiftReportModal: React.FC<ShiftReportModalProps> = ({
             >
               Close
             </button>
+            {printStatus && (
+              <span className={`text-[10px] ${printStatus.startsWith('Printed directly') ? 'text-emerald-400' : 'text-red-400'}`}>
+                {printStatus}
+              </span>
+            )}
             <button
               onClick={handlePrint}
-              className="px-4 py-1.5 bg-[#C5A059] hover:bg-[#B38F46] text-black rounded text-xs font-black uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5"
+              disabled={isPrinting}
+              className="px-4 py-1.5 bg-[#C5A059] hover:bg-[#B38F46] disabled:opacity-50 disabled:cursor-not-allowed text-black rounded text-xs font-black uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <Printer className="w-3.5 h-3.5" />
-              Print Receipt
+              {isPrinting ? 'Printing...' : 'Print Report'}
             </button>
           </div>
         </div>
