@@ -79,6 +79,7 @@ export const CardPaymentFallbackManager: React.FC<CardPaymentFallbackManagerProp
   const [managerPin, setManagerPin] = useState<string>('');
   const [managerPinError, setManagerPinError] = useState<string | null>(null);
   const [isManagerApproved, setIsManagerApproved] = useState<boolean>(false);
+  const [isVerifyingManager, setIsVerifyingManager] = useState<boolean>(false);
 
   // Terminal Primary processing state
   const [isProcessingTerminal, setIsProcessingTerminal] = useState<boolean>(false);
@@ -150,8 +151,19 @@ export const CardPaymentFallbackManager: React.FC<CardPaymentFallbackManagerProp
       syncToCustomerDisplay('customer_self_entry');
     } else if (method === 'cashier_manual') {
       syncToCustomerDisplay('active_cart');
+
       const perm = settings?.cashierManualCardEntry || 'manager_required';
-      if (perm === 'manager_required' && currentUser?.role !== 'manager' && currentUser?.role !== 'admin' && !isManagerApproved) {
+      const currentRole = String(currentUser?.role || '').toLowerCase();
+      const isManagerOrAdmin =
+        currentRole === 'manager' || currentRole === 'admin';
+
+      if (
+        perm === 'manager_required' &&
+        !isManagerOrAdmin &&
+        !isManagerApproved
+      ) {
+        setManagerPin('');
+        setManagerPinError(null);
         setShowManagerPinModal(true);
       }
     } else {
@@ -341,12 +353,16 @@ export const CardPaymentFallbackManager: React.FC<CardPaymentFallbackManagerProp
         cardLast4: last4,
         postalCode: manualZip,
         reason: manualReason,
-        managerPin: isManagerApproved ? '5555' : managerPin,
+        managerPin: isManagerApproved ? managerPin.trim() : undefined,
         orderNumber,
       });
 
       if (res.success && res.paymentResult) {
         playBeep();
+        setManagerPin('');
+        setIsManagerApproved(false);
+        setManagerPinError(null);
+
         onPaymentSuccess({
           method: 'card',
           fallbackMethod: 'cashier_manual',
@@ -357,7 +373,15 @@ export const CardPaymentFallbackManager: React.FC<CardPaymentFallbackManagerProp
         });
       }
     } catch (err: any) {
-      setManualError(err.message || 'Keyed transaction declined');
+      const message = err?.message || 'Keyed transaction declined';
+      setManualError(message);
+
+      if (/manager.*approval|manager.*pin/i.test(message)) {
+        setIsManagerApproved(false);
+        setManagerPin('');
+        setManagerPinError(null);
+        setShowManagerPinModal(true);
+      }
     } finally {
       setIsAuthorizingManual(false);
     }
@@ -430,13 +454,44 @@ export const CardPaymentFallbackManager: React.FC<CardPaymentFallbackManagerProp
   };
 
   // Manager PIN Approval verification (PAY-016)
-  const handleVerifyManagerPin = () => {
-    if (managerPin === '5555' || managerPin === '9999') {
+  const handleVerifyManagerPin = async () => {
+    const normalizedPin = managerPin.trim();
+
+    if (!/^\d{4,12}$/.test(normalizedPin)) {
+      playBeep('error');
+      setManagerPinError('Enter a valid manager PIN.');
+      return;
+    }
+
+    setIsVerifyingManager(true);
+    setManagerPinError(null);
+
+    try {
+      const result = await api.verifyManagerPin(
+        normalizedPin,
+        `Cashier keyed card entry approval for order ${orderNumber}`
+      );
+
+      if (!result.approved) {
+        playBeep('error');
+        setManagerPinError(result.error || 'Manager approval was denied.');
+        return;
+      }
+
+      // Keep the verified PIN only for this open checkout because the
+      // manual-entry backend re-validates it before authorizing the action.
+      setManagerPin(normalizedPin);
       setIsManagerApproved(true);
       setShowManagerPinModal(false);
       setManagerPinError(null);
-    } else {
-      setManagerPinError('Invalid Manager PIN. Please contact store manager.');
+      playBeep('success');
+    } catch (error: any) {
+      playBeep('error');
+      setManagerPinError(
+        error?.message || 'Unable to verify manager approval.'
+      );
+    } finally {
+      setIsVerifyingManager(false);
     }
   };
 
@@ -1173,15 +1228,27 @@ export const CardPaymentFallbackManager: React.FC<CardPaymentFallbackManagerProp
 
             <div>
               <label className="text-xs font-bold text-slate-700 block mb-1 text-center">
-                Enter Manager PIN (Demo: 5555 or 9999)
+                Enter Manager PIN
               </label>
               <input
                 type="password"
-                maxLength={4}
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={12}
                 value={managerPin}
-                onChange={e => setManagerPin(e.target.value.replace(/\D/g, ''))}
+                onChange={e => {
+                  setManagerPin(e.target.value.replace(/\D/g, ''));
+                  setManagerPinError(null);
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !isVerifyingManager) {
+                    e.preventDefault();
+                    void handleVerifyManagerPin();
+                  }
+                }}
                 placeholder="••••"
-                className="w-full text-center text-2xl font-mono tracking-widest bg-slate-50 border border-slate-200 rounded-xl py-2 focus:outline-none focus:border-amber-400"
+                disabled={isVerifyingManager}
+                className="w-full text-center text-2xl font-mono tracking-widest bg-slate-50 border border-slate-200 rounded-xl py-2 focus:outline-none focus:border-amber-400 disabled:opacity-60"
                 autoFocus
               />
             </div>
@@ -1191,6 +1258,9 @@ export const CardPaymentFallbackManager: React.FC<CardPaymentFallbackManagerProp
                 type="button"
                 onClick={() => {
                   setShowManagerPinModal(false);
+                  setManagerPin('');
+                  setManagerPinError(null);
+                  setIsManagerApproved(false);
                   handleSelectMethod('card_terminal');
                 }}
                 className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50"
@@ -1199,10 +1269,13 @@ export const CardPaymentFallbackManager: React.FC<CardPaymentFallbackManagerProp
               </button>
               <button
                 type="button"
-                onClick={handleVerifyManagerPin}
-                className="flex-1 py-2.5 rounded-xl bg-[#F3C067] hover:bg-[#F59E0B] text-slate-950 text-xs font-black uppercase tracking-wider"
+                onClick={() => void handleVerifyManagerPin()}
+                disabled={
+                  isVerifyingManager || managerPin.trim().length < 4
+                }
+                className="flex-1 py-2.5 rounded-xl bg-[#F3C067] hover:bg-[#F59E0B] text-slate-950 text-xs font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Approve
+                {isVerifyingManager ? 'Verifying…' : 'Approve'}
               </button>
             </div>
           </div>
