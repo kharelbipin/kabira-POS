@@ -711,7 +711,10 @@ const StartShiftModal: React.FC<StartShiftModalProps> = ({
               autoFocus
             />
             <p className="text-[11px] text-[#777777] mt-1">
-              Active cashier: <strong className="text-[#C5A059]">{currentUser?.name || 'Elena Rostova'}</strong> (Demo PIN: 3344)
+              Active cashier:{' '}
+              <strong className="text-[#C5A059]">
+                {currentUser?.name || 'Current Cashier'}
+              </strong>
             </p>
           </div>
 
@@ -777,6 +780,12 @@ const CashMovementModal: React.FC<CashMovementModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const currentRole = String(currentUser?.role || '').toLowerCase();
+  const currentUserIsManager =
+    currentRole === 'manager' || currentRole === 'admin';
+  const requiresManagerApproval =
+    type === 'payout' && !currentUserIsManager;
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -792,22 +801,55 @@ const CashMovementModal: React.FC<CashMovementModalProps> = ({
       return;
     }
 
-    // Payouts or safe drops > $500 require manager pin
-    if (type === 'payout' && !managerPin) {
-      setErrorMsg('Manager PIN authorization is required for cash payouts.');
-      return;
+    let approvedManagerPin: string | undefined;
+
+    if (requiresManagerApproval) {
+      const normalizedPin = managerPin.trim();
+
+      if (!/^\d{4,12}$/.test(normalizedPin)) {
+        setErrorMsg('Enter a valid manager PIN for this cash payout.');
+        playBeep('error');
+        return;
+      }
+
+      setIsSubmitting(true);
+      setErrorMsg(null);
+
+      try {
+        const approval = await api.verifyManagerPin(
+          normalizedPin,
+          `Shift cash payout approval: $${numAmount.toFixed(2)} - ${reason.trim()}`
+        );
+
+        if (!approval.approved) {
+          setErrorMsg(approval.error || 'Manager approval was denied.');
+          playBeep('error');
+          setIsSubmitting(false);
+          return;
+        }
+
+        approvedManagerPin = normalizedPin;
+      } catch (err: any) {
+        setErrorMsg(err?.message || 'Unable to verify manager approval.');
+        playBeep('error');
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     setIsSubmitting(true);
     setErrorMsg(null);
+
     try {
       await api.recordCashMovement(shiftId, {
         type,
         amount: numAmount,
-        reason,
-        managerPin: managerPin || undefined,
+        reason: reason.trim(),
+        managerPin: approvedManagerPin,
       });
 
+      setManagerPin('');
+      playBeep('success');
       onSuccess();
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to record cash movement.');
@@ -931,20 +973,30 @@ const CashMovementModal: React.FC<CashMovementModalProps> = ({
             />
           </div>
 
-          <div>
-            <label className="block text-xs uppercase font-bold text-[#AAAAAA] tracking-wider mb-1.5">
-              Manager PIN {type === 'payout' ? '(Required)' : '(Optional if > $500)'}
-            </label>
-            <input
-              type="password"
-              maxLength={6}
-              value={managerPin}
-              onChange={e => setManagerPin(e.target.value)}
-              className="w-full bg-[#1A1A1A] border border-[#333333] rounded-lg px-3 py-2 text-xs text-white font-mono text-center tracking-widest focus:outline-none focus:border-[#C5A059]"
-              placeholder="••••"
-            />
-            <p className="text-[10px] text-[#666666] mt-1">Manager PIN: 1122</p>
-          </div>
+          {requiresManagerApproval && (
+            <div>
+              <label className="block text-xs uppercase font-bold text-[#AAAAAA] tracking-wider mb-1.5">
+                Manager PIN (Required)
+              </label>
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={12}
+                value={managerPin}
+                onChange={e => {
+                  setManagerPin(e.target.value.replace(/\D/g, ''));
+                  setErrorMsg(null);
+                }}
+                disabled={isSubmitting}
+                className="w-full bg-[#1A1A1A] border border-[#333333] rounded-lg px-3 py-2 text-xs text-white font-mono text-center tracking-widest focus:outline-none focus:border-[#C5A059] disabled:opacity-60"
+                placeholder="••••"
+              />
+              <p className="text-[10px] text-[#666666] mt-1">
+                Approval must come from an active Manager or Admin account.
+              </p>
+            </div>
+          )}
 
           <div className="pt-2 flex items-center space-x-3">
             <button
@@ -956,8 +1008,11 @@ const CashMovementModal: React.FC<CashMovementModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className={`flex-1 py-2.5 font-black text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer ${
+              disabled={
+                isSubmitting ||
+                (requiresManagerApproval && managerPin.trim().length < 4)
+              }
+              className={`flex-1 py-2.5 font-black text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                 type === 'cash_in'
                   ? 'bg-sky-500 hover:bg-sky-400 text-black'
                   : type === 'cash_drop'
@@ -1043,21 +1098,64 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   };
 
   const handleCloseShiftSubmit = async () => {
-    if (varianceExceeded && !managerOverridePin) {
-      setErrorMsg(`Drawer variance of $${Math.abs(variance).toFixed(2)} exceeds the $5.00 tolerance. Manager PIN override is required.`);
-      return;
+    let approvedManagerPin: string | undefined;
+
+    if (varianceExceeded) {
+      const normalizedPin = managerOverridePin.trim();
+
+      if (!/^\d{4,12}$/.test(normalizedPin)) {
+        setErrorMsg(
+          `Drawer variance of $${Math.abs(variance).toFixed(2)} exceeds the $5.00 tolerance. A valid manager PIN is required.`
+        );
+        playBeep('error');
+        return;
+      }
+
+      if (!overrideReason.trim()) {
+        setErrorMsg(
+          'A documented override reason is required when the drawer variance exceeds tolerance.'
+        );
+        playBeep('error');
+        return;
+      }
+
+      setIsSubmitting(true);
+      setErrorMsg(null);
+
+      try {
+        const approval = await api.verifyManagerPin(
+          normalizedPin,
+          `Shift close variance approval: ${shift.shiftNumber}, variance $${variance.toFixed(2)} - ${overrideReason.trim()}`
+        );
+
+        if (!approval.approved) {
+          setErrorMsg(approval.error || 'Manager approval was denied.');
+          playBeep('error');
+          setIsSubmitting(false);
+          return;
+        }
+
+        approvedManagerPin = normalizedPin;
+      } catch (err: any) {
+        setErrorMsg(err?.message || 'Unable to verify manager approval.');
+        playBeep('error');
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     setIsSubmitting(true);
     setErrorMsg(null);
+
     try {
       const res = await api.closeShift(shift.id, {
         denominations,
         notes,
-        managerOverridePin: managerOverridePin || undefined,
-        overrideReason: overrideReason || undefined,
+        managerOverridePin: approvedManagerPin,
+        overrideReason: varianceExceeded ? overrideReason.trim() : undefined,
       });
 
+      setManagerOverridePin('');
       playBeep('success');
       onClosedSuccess(res.shift);
     } catch (err: any) {
@@ -1192,10 +1290,16 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
                   <label className="text-[10px] text-[#AAAAAA] uppercase block mb-1">Manager PIN</label>
                   <input
                     type="password"
-                    maxLength={6}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={12}
                     value={managerOverridePin}
-                    onChange={e => setManagerOverridePin(e.target.value)}
-                    className="w-full bg-[#111111] border border-[#333333] rounded px-2.5 py-1.5 text-xs text-white font-mono tracking-widest text-center focus:outline-none focus:border-[#C5A059]"
+                    onChange={e => {
+                      setManagerOverridePin(e.target.value.replace(/\D/g, ''));
+                      setErrorMsg(null);
+                    }}
+                    disabled={isSubmitting}
+                    className="w-full bg-[#111111] border border-[#333333] rounded px-2.5 py-1.5 text-xs text-white font-mono tracking-widest text-center focus:outline-none focus:border-[#C5A059] disabled:opacity-60"
                     placeholder="••••"
                   />
                 </div>
@@ -1204,7 +1308,10 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
                   <input
                     type="text"
                     value={overrideReason}
-                    onChange={e => setOverrideReason(e.target.value)}
+                    onChange={e => {
+                      setOverrideReason(e.target.value);
+                      setErrorMsg(null);
+                    }}
                     className="w-full bg-[#111111] border border-[#333333] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#C5A059]"
                     placeholder="e.g. Unaccounted coin shortage"
                   />
@@ -1238,9 +1345,14 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
           </button>
           <button
             type="button"
-            disabled={isSubmitting}
-            onClick={handleCloseShiftSubmit}
-            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-lg"
+            disabled={
+              isSubmitting ||
+              (varianceExceeded &&
+                (managerOverridePin.trim().length < 4 ||
+                  !overrideReason.trim()))
+            }
+            onClick={() => void handleCloseShiftSubmit()}
+            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Lock className="w-4 h-4" />
             {isSubmitting ? 'Closing...' : 'Close Shift & Finalize Z-Report'}
