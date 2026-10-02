@@ -117,25 +117,39 @@ apiRouter.use(onlineStoreRouter);
 apiRouter.use(inventoryAiRouter);
 
 // Registers and Terminals
-apiRouter.get('/registers', (req: Request, res: Response) => {
+apiRouter.get('/registers', (_req: Request, res: Response) => {
+    const buildRegister = (
+        id: string,
+        name: string,
+        location: string
+    ) => {
+        const activeShift = db.shifts.find(
+            s => s.status === 'open' && s.registerId === id
+        );
+
+        return {
+            id,
+            name,
+            location,
+            status: 'active',
+            currentCashier: activeShift?.cashierName || null,
+            activeShiftId: activeShift?.id || null,
+        };
+    };
+
     const registers = [
-        {
-            id: 'reg-1',
-            name: 'Terminal #01 (Front Register)',
-            location: 'Main Checkout Counter',
-            status: 'active',
-            currentCashier: 'Elena Rostova',
-            activeShiftId: db.shifts.find(s => s.status === 'open' && s.registerId === 'reg-1')?.id || null,
-        },
-        {
-            id: 'reg-2',
-            name: 'Terminal #02 (Express / Drive-Thru)',
-            location: 'Secondary Express Counter',
-            status: 'active',
-            currentCashier: null,
-            activeShiftId: db.shifts.find(s => s.status === 'open' && s.registerId === 'reg-2')?.id || null,
-        },
+        buildRegister(
+            'reg-1',
+            'Terminal #01 (Front Register)',
+            'Main Checkout Counter'
+        ),
+        buildRegister(
+            'reg-2',
+            'Terminal #02 (Express / Drive-Thru)',
+            'Secondary Express Counter'
+        ),
     ];
+
     res.json({ registers });
 });
 
@@ -982,13 +996,15 @@ apiRouter.post('/bridge/scan-barcode', (req: Request, res: Response) => {
         });
     }
 
-    // Audit scan activity
+    // Audit scan activity under the actual signed-in operator.
+    const currentUser = getAuthUser(req);
+
     db.auditLogs.unshift({
         id: `aud-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         timestamp: new Date().toISOString(),
-        userId: 'usr-3',
-        userName: 'Elena Rostova (Cashier)',
-        userRole: 'Cashier',
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
         action: 'BARCODE_SCAN_EVENT',
         targetType: 'product',
         targetId: product.id,
