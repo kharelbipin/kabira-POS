@@ -399,7 +399,13 @@ export default function App() {
       // Only call the API when the barcode/SKU is not already in the loaded catalog.
       const cleanLower = clean.toLowerCase();
       let product: Product | null = productLookupIndex.get(cleanLower) || null;
-      let effectivePrice: number | undefined = product?.effectivePrice;
+
+      // Products already loaded in the POS use the regular/promotional fields.
+      // `effectivePrice` exists only on the barcode lookup API response type,
+      // not on the base Product interface.
+      let effectivePrice: number | undefined = product
+        ? (product.promotionalPrice ?? product.price)
+        : undefined;
 
       if (!product) {
         try {
