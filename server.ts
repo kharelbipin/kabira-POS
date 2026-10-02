@@ -194,6 +194,15 @@ if (-not $edge) {
 $profileDir = Join-Path $env:LOCALAPPDATA "KaBiRaPOS-CustomerDisplay"
 New-Item -ItemType Directory -Force -Path $profileDir | Out-Null
 
+# Prevent Edge first-run/import pages from hijacking kiosk startup.
+# The customer display is a dedicated POS surface and should never import
+# Chrome/other browser data or navigate to edge://settings during launch.
+$edgePolicyPath = "HKCU:\Software\Policies\Microsoft\Edge"
+New-Item -Path $edgePolicyPath -Force | Out-Null
+New-ItemProperty -Path $edgePolicyPath -Name "AutoImportAtFirstRun" -PropertyType DWord -Value 4 -Force | Out-Null
+New-ItemProperty -Path $edgePolicyPath -Name "ImportOnEachLaunch" -PropertyType DWord -Value 0 -Force | Out-Null
+New-ItemProperty -Path $edgePolicyPath -Name "HideFirstRunExperience" -PropertyType DWord -Value 1 -Force | Out-Null
+
 # Close only previous KaBiRa customer-display Edge processes before relaunching.
 # This prevents duplicate display windows and also makes the Restart button
 # actually reposition the window on the current secondary monitor.
@@ -218,7 +227,8 @@ $commonArgs = @(
     "--new-window",
     "--no-first-run",
     "--no-default-browser-check",
-    "--disable-session-crashed-bubble"
+    "--disable-session-crashed-bubble",
+    "--disable-features=msEdgeImportOnEachLaunch"
 )
 
 if (${customerDisplayFullscreen ? '$true' : '$false'}) {
