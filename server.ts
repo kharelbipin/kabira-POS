@@ -54,6 +54,7 @@ async function startServer() {
     app.disable('x-powered-by');
     app.use(express.json({ limit: '50mb' }));
     app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+    app.use(express.text({ type: 'text/plain', limit: '50mb' }));
 
     /*
      * Secure local Hardware Bridge proxy.
