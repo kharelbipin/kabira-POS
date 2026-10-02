@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from './db.js';
+import { getAuthUser } from './authSession.js';
 import {
   Shift,
   ShiftDenominationCount,
@@ -19,11 +20,6 @@ import {
 
 export const shiftAndCheckRouter = Router();
 
-function getAuthUser(req: Request): User {
-  const userId = (req.headers['x-user-id'] as string) || 'usr-1';
-  const user = db.users.find(u => u.id === userId && u.active);
-  return user || db.users[0];
-}
 
 function findActiveManagerByPin(pin: unknown): User | undefined {
   const normalizedPin = String(pin ?? '').trim();
