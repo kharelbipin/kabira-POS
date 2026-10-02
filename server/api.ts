@@ -3551,7 +3551,8 @@ apiRouter.get('/receipts/view/:token', asyncHandler(async (req: Request, res: Re
 
 // POST /api/cart/add-miscellaneous - Record audit trail for manual / miscellaneous item entry (Req 6)
 apiRouter.post('/cart/add-miscellaneous', asyncHandler(async (req: Request, res: Response) => {
-    const { amount, description, taxable, registerId, cashierName } = req.body;
+    const currentUser = getAuthUser(req);
+    const { amount, description, taxable, registerId } = req.body;
     const amtNum = parseFloat(amount);
 
     if (isNaN(amtNum) || amtNum <= 0) {
@@ -3560,11 +3561,11 @@ apiRouter.post('/cart/add-miscellaneous', asyncHandler(async (req: Request, res:
 
     const finalName = (description && description.trim()) ? description.trim() : 'Miscellaneous Item';
 
-    // Audit entry
+    // Audit entry must always use the authenticated operator.
     db.addAudit(
-        'usr-1',
-        cashierName || 'Cashier',
-        'Cashier',
+        currentUser.id,
+        currentUser.name,
+        currentUser.role,
         'CART_ADD_MISCELLANEOUS',
         'pos_sales',
         `MISC-${Date.now()}`,
