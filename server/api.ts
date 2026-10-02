@@ -323,17 +323,53 @@ apiRouter.get('/users', asyncHandler(async (req: Request, res: Response) => {
 
 apiRouter.post('/users', asyncHandler(async (req: Request, res: Response) => {
     const currentUser = getAuthUser(req);
+
     if (currentUser.role !== 'Admin') {
         return res.status(403).json({ error: 'Only Admins can create new users' });
     }
 
-    const { name, email, role, pin } = req.body;
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const role = String(req.body?.role || '').trim() as User['role'];
+    const pin = String(req.body?.pin || '').trim();
+    const password = String(req.body?.password || '');
+
     if (!name || !email || !role || !pin) {
-        return res.status(400).json({ error: 'Name, email, role, and 4-digit PIN are required' });
+        return res.status(400).json({
+            error: 'Name, email, role, and 4-digit PIN are required',
+        });
     }
 
-    if (db.users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-        return res.status(400).json({ error: 'A user with this email already exists' });
+    if (!['Admin', 'Manager', 'Cashier'].includes(role)) {
+        return res.status(400).json({ error: 'Invalid user role.' });
+    }
+
+    if (!/^\d{4}$/.test(pin)) {
+        return res.status(400).json({
+            error: 'Register PIN must be exactly 4 digits.',
+        });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ error: 'Enter a valid email address.' });
+    }
+
+    if (db.users.some(u => u.email.toLowerCase() === email)) {
+        return res.status(400).json({
+            error: 'A user with this email already exists',
+        });
+    }
+
+    if (db.users.some(u => u.pin === pin)) {
+        return res.status(400).json({
+            error: 'That register PIN is already assigned to another user.',
+        });
+    }
+
+    if (password && password.length < 8) {
+        return res.status(400).json({
+            error: 'Password must be at least 8 characters.',
+        });
     }
 
     const newUser: User = {
@@ -342,49 +378,214 @@ apiRouter.post('/users', asyncHandler(async (req: Request, res: Response) => {
         email,
         role,
         pin,
+        ...(password ? { password } : {}),
         active: true,
         createdAt: new Date().toISOString(),
     };
 
     db.users.push(newUser);
-    db.addAudit(currentUser.id, currentUser.name, currentUser.role, 'USER_CREATE', 'user', newUser.id, `Created ${role} account for ${name}`, null, newUser);
+
+    db.addAudit(
+        currentUser.id,
+        currentUser.name,
+        currentUser.role,
+        'USER_CREATE',
+        'user',
+        newUser.id,
+        `Created ${role} account for ${name}`,
+        null,
+        toPublicUser(newUser)
+    );
 
     res.status(201).json(toPublicUser(newUser));
 }));
 
 apiRouter.put('/users/:id', asyncHandler(async (req: Request, res: Response) => {
     const currentUser = getAuthUser(req);
+
     if (currentUser.role !== 'Admin') {
         return res.status(403).json({ error: 'Only Admins can edit users' });
     }
 
     const user = db.users.find(u => u.id === req.params.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const before = { ...user };
-    const { name, email, role, pin, active } = req.body;
-    if (name !== undefined) user.name = name;
-    if (email !== undefined) user.email = email;
-    if (role !== undefined) user.role = role;
-    if (pin !== undefined) user.pin = pin;
-    if (active !== undefined) user.active = active;
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
 
-    db.addAudit(currentUser.id, currentUser.name, currentUser.role, 'USER_UPDATE', 'user', user.id, `Updated user ${user.name}`, before, user);
+    const before = toPublicUser(user);
+
+    if (req.body?.name !== undefined) {
+        const name = String(req.body.name).trim();
+
+        if (!name) {
+            return res.status(400).json({ error: 'Name cannot be empty.' });
+        }
+
+        user.name = name;
+    }
+
+    if (req.body?.email !== undefined) {
+        const email = String(req.body.email).trim().toLowerCase();
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ error: 'Enter a valid email address.' });
+        }
+
+        if (
+            db.users.some(
+                u => u.id !== user.id && u.email.toLowerCase() === email
+            )
+        ) {
+            return res.status(400).json({
+                error: 'A user with this email already exists',
+            });
+        }
+
+        user.email = email;
+    }
+
+    if (req.body?.role !== undefined) {
+        const role = String(req.body.role).trim() as User['role'];
+
+        if (!['Admin', 'Manager', 'Cashier'].includes(role)) {
+            return res.status(400).json({ error: 'Invalid user role.' });
+        }
+
+        // Never allow the final active Admin account to lose Admin access.
+        if (
+            user.role === 'Admin' &&
+            role !== 'Admin' &&
+            user.active &&
+            db.users.filter(u => u.active && u.role === 'Admin').length <= 1
+        ) {
+            return res.status(400).json({
+                error: 'At least one active Admin account must remain.',
+            });
+        }
+
+        user.role = role;
+    }
+
+    if (req.body?.pin !== undefined) {
+        const pin = String(req.body.pin).trim();
+
+        if (!/^\d{4}$/.test(pin)) {
+            return res.status(400).json({
+                error: 'Register PIN must be exactly 4 digits.',
+            });
+        }
+
+        if (db.users.some(u => u.id !== user.id && u.pin === pin)) {
+            return res.status(400).json({
+                error: 'That register PIN is already assigned to another user.',
+            });
+        }
+
+        user.pin = pin;
+    }
+
+    if (req.body?.password !== undefined) {
+        const password = String(req.body.password);
+
+        if (password && password.length < 8) {
+            return res.status(400).json({
+                error: 'Password must be at least 8 characters.',
+            });
+        }
+
+        if (password) {
+            user.password = password;
+        }
+    }
+
+    if (req.body?.active !== undefined) {
+        const nextActive = Boolean(req.body.active);
+
+        if (
+            user.id === currentUser.id &&
+            user.active &&
+            !nextActive
+        ) {
+            return res.status(400).json({
+                error: 'You cannot deactivate your own signed-in account.',
+            });
+        }
+
+        if (
+            user.role === 'Admin' &&
+            user.active &&
+            !nextActive &&
+            db.users.filter(u => u.active && u.role === 'Admin').length <= 1
+        ) {
+            return res.status(400).json({
+                error: 'At least one active Admin account must remain.',
+            });
+        }
+
+        user.active = nextActive;
+    }
+
+    db.addAudit(
+        currentUser.id,
+        currentUser.name,
+        currentUser.role,
+        'USER_UPDATE',
+        'user',
+        user.id,
+        `Updated user ${user.name}`,
+        before,
+        toPublicUser(user)
+    );
+
     res.json(toPublicUser(user));
 }));
 
 apiRouter.patch('/users/:id/status', asyncHandler(async (req: Request, res: Response) => {
     const currentUser = getAuthUser(req);
+
     if (currentUser.role !== 'Admin') {
         return res.status(403).json({ error: 'Only Admins can modify user status' });
     }
 
     const user = db.users.find(u => u.id === req.params.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
 
-    user.active = !user.active;
-    db.addAudit(currentUser.id, currentUser.name, currentUser.role, user.active ? 'USER_REACTIVATE' : 'USER_DEACTIVATE', 'user', user.id, `${user.active ? 'Reactivated' : 'Deactivated'} account for ${user.name}`);
-    res.json(user);
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+
+    const nextActive = !user.active;
+
+    if (user.id === currentUser.id && !nextActive) {
+        return res.status(400).json({
+            error: 'You cannot deactivate your own signed-in account.',
+        });
+    }
+
+    if (
+        user.role === 'Admin' &&
+        user.active &&
+        !nextActive &&
+        db.users.filter(u => u.active && u.role === 'Admin').length <= 1
+    ) {
+        return res.status(400).json({
+            error: 'At least one active Admin account must remain.',
+        });
+    }
+
+    user.active = nextActive;
+
+    db.addAudit(
+        currentUser.id,
+        currentUser.name,
+        currentUser.role,
+        user.active ? 'USER_REACTIVATE' : 'USER_DEACTIVATE',
+        'user',
+        user.id,
+        `${user.active ? 'Reactivated' : 'Deactivated'} account for ${user.name}`
+    );
+
+    res.json(toPublicUser(user));
 }));
 
 // ----------------------------------------------------
