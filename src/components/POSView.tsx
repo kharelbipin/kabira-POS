@@ -155,15 +155,25 @@ export const POSView: React.FC<POSViewProps> = ({
       (sum, item) => sum + (item.discountAmount || 0),
       0
     );
-    const orderDiscountAmt =
-      orderDiscountAmount + (rawSubtotal * orderDiscountPercent) / 100;
+    const adjustedSubtotal = Math.max(0, rawSubtotal - itemDiscounts);
+    let orderDiscountAmt = 0;
+    if (orderDiscountPercent > 0) {
+      orderDiscountAmt = (adjustedSubtotal * orderDiscountPercent) / 100;
+    } else if (orderDiscountAmount > 0) {
+      orderDiscountAmt = Math.min(adjustedSubtotal, orderDiscountAmount);
+    }
     const discountTotalAll = itemDiscounts + orderDiscountAmt;
-    const discountedSubtotal = Math.max(0, rawSubtotal - discountTotalAll);
-    const defaultTaxRate = settings?.taxRate ?? 0.0825;
+    const discountedSubtotal = Math.max(0, adjustedSubtotal - orderDiscountAmt);
+    const defaultTaxRate = settings?.defaultTaxRate ?? 0.0825;
+    const orderDiscountFactor =
+      adjustedSubtotal > 0 ? discountedSubtotal / adjustedSubtotal : 0;
     const taxableAmount = cartItems.reduce((sum, item) => {
-      const lineTaxRate = item.product.taxRate !== undefined ? item.product.taxRate : defaultTaxRate;
-      const lineSubtotal = Math.max(0, item.unitPrice * item.quantity - (item.discountAmount || 0));
-      return sum + lineSubtotal * lineTaxRate;
+      const lineTaxRate = item.product.taxRate ?? defaultTaxRate;
+      const lineSubtotal = Math.max(
+        0,
+        item.unitPrice * item.quantity - (item.discountAmount || 0)
+      );
+      return sum + lineSubtotal * orderDiscountFactor * lineTaxRate;
     }, 0);
     const grandTotal = Math.max(0, discountedSubtotal + taxableAmount);
 
