@@ -4,6 +4,7 @@ import { api } from '../../utils/api';
 import { playBeep } from '../../utils/audio';
 import { PaymentAuditModal } from '../payment/PaymentAuditModal';
 import { WindowsPosManagerTab } from './WindowsPosManagerTab';
+import { hardwareStore } from '../../hardware';
 import {
   Settings,
   Store,
@@ -280,6 +281,10 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
     e.preventDefault();
     setIsSaving(true);
     try {
+      const displayModeChanged =
+        (settings?.customerDisplayFullscreen ?? true) !==
+        formData.customerDisplayFullscreen;
+
       await api.updateSettings({
         storeName: formData.storeName,
         tagline: formData.tagline,
@@ -321,6 +326,14 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
       try {
         localStorage.setItem(`pos_settings_scope_${scopeLevel}`, JSON.stringify(formData));
       } catch (e) {}
+
+      if (displayModeChanged && currentUser?.role === 'Admin') {
+        try {
+          await hardwareStore.restartCustomerDisplay();
+        } catch (error) {
+          console.warn('[Customer Display] Settings saved, but display restart failed:', error);
+        }
+      }
 
       playBeep('success');
       setSaveSuccess(true);
