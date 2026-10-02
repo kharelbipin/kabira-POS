@@ -311,8 +311,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     });
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xs p-4 select-none overflow-y-auto">
-            <div className="bg-[#0F0F0F] border border-[#262626] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden text-[#E5E5E5] animate-in fade-in zoom-in-95 duration-150 my-auto flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xs p-2 sm:p-4 select-none overflow-hidden">
+            <div className="bg-[#0F0F0F] border border-[#262626] rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] min-h-0 overflow-hidden text-[#E5E5E5] animate-in fade-in zoom-in-95 duration-150 flex flex-col">
                 {/* Header toolbar */}
                 <div className="bg-[#0A0A0A] px-5 py-3 border-b border-[#262626] flex items-center justify-between">
                     <div className="flex items-center space-x-2 text-[#C5A059] font-bold text-xs uppercase tracking-wider">
@@ -526,7 +526,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
                 {/* Printable Thermal Receipt Canvas (CA-08) */}
                 {showPaperPreview && (
-                    <div className="p-4 bg-[#0A0A0A] flex-1 overflow-y-auto max-h-[45vh] border-b border-[#262626]">
+                    <div className="p-3 sm:p-4 bg-[#0A0A0A] flex-1 min-h-0 overflow-y-auto border-b border-[#262626]">
                         <div
                             ref={receiptRef}
                             id="thermal-receipt"
@@ -782,7 +782,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 )}
 
                 {/* Footer actions */}
-                <div className="p-3.5 bg-[#121212] border-t border-[#262626] flex items-center justify-between">
+                <div className="p-3.5 bg-[#121212] border-t border-[#262626] flex items-center justify-between shrink-0">
                     <button
                         type="button"
                         onClick={handleSystemPrintFallback}
