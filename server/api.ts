@@ -162,11 +162,38 @@ apiRouter.get('/bridge/telemetry', (req: Request, res: Response) => {
     });
 });
 
-// Helper to authenticate request role from headers or payload (simple token/session simulation)
+// Resolve the signed-in operator from the local POS session header.
+// Never silently fall back to a Cashier/Admin account.
 function getAuthUser(req: Request): User {
-    const userId = (req.headers['x-user-id'] as string) || 'usr-3'; // Default to Elena (Cashier) or Sarah (Admin)
+    const userId = String(req.headers['x-user-id'] || '').trim();
+
+    if (!userId) {
+        const error: any = new Error('Authentication required.');
+        error.status = 401;
+        throw error;
+    }
+
     const user = db.users.find(u => u.id === userId && u.active);
-    return user || db.users[0]; // fallback to admin
+
+    if (!user) {
+        const error: any = new Error('Operator session is invalid or inactive.');
+        error.status = 401;
+        throw error;
+    }
+
+    return user;
+}
+
+function toPublicUser(user: User) {
+    return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        active: user.active,
+        avatar: user.avatar,
+        createdAt: user.createdAt,
+    };
 }
 
 function findActiveManagerByPin(pin: unknown): User | undefined {
@@ -193,39 +220,61 @@ const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextF
 // AU-01 & BE-01: Authentication & User Management
 // ----------------------------------------------------
 apiRouter.post('/auth/login', asyncHandler(async (req: Request, res: Response) => {
-    const { email, password, pin } = req.body;
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    const pin = String(req.body?.pin || '').trim();
 
     let user: User | undefined;
+    let loginMethod = 'PIN';
+
     if (pin) {
+        if (!/^\d{4,12}$/.test(pin)) {
+            return res.status(401).json({
+                error: 'Invalid credentials or account is deactivated.',
+            });
+        }
+
         user = db.users.find(u => u.pin === pin && u.active);
-    } else if (email) {
-        // Simple verification (accepts standard demo passwords or pin)
-        user = db.users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.active);
+    } else if (email && password) {
+        loginMethod = 'Email/Password';
+
+        user = db.users.find(
+            u =>
+                u.email.toLowerCase() === email &&
+                u.active &&
+                typeof u.password === 'string' &&
+                u.password.length > 0 &&
+                u.password === password
+        );
     }
 
     if (!user) {
-        return res.status(401).json({ error: 'Invalid credentials or account is deactivated.' });
+        return res.status(401).json({
+            error: 'Invalid credentials or account is deactivated.',
+        });
     }
 
     const token = `token-${user.id}-${Date.now()}`;
-    db.addAudit(user.id, user.name, user.role, 'LOGIN', 'user', user.id, `User logged in via ${pin ? 'PIN' : 'Email/Password'}`);
+
+    db.addAudit(
+        user.id,
+        user.name,
+        user.role,
+        'LOGIN',
+        'user',
+        user.id,
+        `User logged in via ${loginMethod}`
+    );
 
     res.json({
         token,
-        user: {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            pin: user.pin,
-            active: user.active,
-        },
+        user: toPublicUser(user),
     });
 }));
 
 apiRouter.get('/auth/me', asyncHandler(async (req: Request, res: Response) => {
     const user = getAuthUser(req);
-    res.json({ user });
+    res.json({ user: toPublicUser(user) });
 }));
 
 // Central manager/admin approval endpoint.
@@ -269,7 +318,7 @@ apiRouter.get('/users', asyncHandler(async (req: Request, res: Response) => {
     if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
         return res.status(403).json({ error: 'Access denied: Requires Manager or Admin role' });
     }
-    res.json(db.users);
+    res.json(db.users.map(toPublicUser));
 }));
 
 apiRouter.post('/users', asyncHandler(async (req: Request, res: Response) => {
@@ -300,7 +349,7 @@ apiRouter.post('/users', asyncHandler(async (req: Request, res: Response) => {
     db.users.push(newUser);
     db.addAudit(currentUser.id, currentUser.name, currentUser.role, 'USER_CREATE', 'user', newUser.id, `Created ${role} account for ${name}`, null, newUser);
 
-    res.status(201).json(newUser);
+    res.status(201).json(toPublicUser(newUser));
 }));
 
 apiRouter.put('/users/:id', asyncHandler(async (req: Request, res: Response) => {
@@ -321,7 +370,7 @@ apiRouter.put('/users/:id', asyncHandler(async (req: Request, res: Response) => 
     if (active !== undefined) user.active = active;
 
     db.addAudit(currentUser.id, currentUser.name, currentUser.role, 'USER_UPDATE', 'user', user.id, `Updated user ${user.name}`, before, user);
-    res.json(user);
+    res.json(toPublicUser(user));
 }));
 
 apiRouter.patch('/users/:id/status', asyncHandler(async (req: Request, res: Response) => {
