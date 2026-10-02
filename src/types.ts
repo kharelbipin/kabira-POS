@@ -428,6 +428,7 @@ export interface StoreSettings {
   defaultTaxRate: number; // e.g. 0.0825
   requireManagerDiscountAbove: number; // e.g. 20 (%)
   requireManagerToOpenDrawerNoSale?: boolean; // Default false: cashier can open drawer directly
+  customerDisplayFullscreen?: boolean; // Default true: launch customer display locked/borderless on Display 2
   allowedPaymentMethods?: {
     cash: boolean;
     card: boolean;
