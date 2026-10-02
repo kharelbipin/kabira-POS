@@ -18,13 +18,11 @@ import {
   Wifi,
   WifiOff,
   PauseCircle,
-  ScanBarcode,
   AlertTriangle,
   FileText,
   Coins,
   Landmark,
   Globe,
-  Search,
   HelpCircle,
   MapPin,
   Clock,
@@ -166,27 +164,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Center: Search Bar */}
-        <div className="flex-1 max-w-md mx-2">
-          <div className="relative flex items-center bg-[#1E293B] border border-slate-700/80 rounded-xl px-3 py-1.5 focus-within:border-amber-400 focus-within:ring-1 focus-within:ring-amber-400/30 transition-all">
-            <Search className="w-4 h-4 text-slate-400 shrink-0 mr-2" />
-            <input
-              type="text"
-              placeholder="Search by name, SKU, or barcode..."
-              value={searchQuery}
-              onChange={e => onSearchChange && onSearchChange(e.target.value)}
-              className="w-full bg-transparent border-none text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={onOpenScanner}
-              className="p-1 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
-              title="Barcode Scanner Gun Simulation"
-            >
-              <ScanBarcode className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <div className="flex-1" />
 
         {/* Right: Status, Quick actions, Help, Bell, User profile & Clock */}
         <div className="flex items-center space-x-3 shrink-0">
