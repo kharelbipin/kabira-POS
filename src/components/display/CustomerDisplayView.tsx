@@ -602,8 +602,7 @@ export const CustomerDisplayView: React.FC = () => {
 
               <div className="flex justify-between text-slate-300">
                 <span className="flex items-center space-x-1">
-                  <span>Texas Sales Tax</span>
-                  <span className="text-[10px] text-slate-500">(8.25%)</span>
+                  <span>Sales Tax</span>
                 </span>
                 <span className="font-mono font-bold">${displayState.taxTotal.toFixed(2)}</span>
               </div>
