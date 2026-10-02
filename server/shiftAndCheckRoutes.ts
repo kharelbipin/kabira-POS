@@ -1337,25 +1337,60 @@ shiftAndCheckRouter.post('/check-cashing/transactions/:id/manager-decision', (re
   const transaction = db.checkCashingTransactions.find(t => t.id === req.params.id);
   if (!transaction) return res.status(404).json({ error: 'Transaction not found' });
 
-  const { decision, note, managerPin } = req.body;
-  const manager = db.users.find(u => (u.role === 'Manager' || u.role === 'Admin') && u.pin === managerPin && u.active);
-  if (!manager) return res.status(401).json({ error: 'Invalid manager PIN' });
+  const {
+    decision,
+    note,
+    notes,
+    managerPin,
+  } = req.body;
 
+  const normalizedDecisionMap: Record<string, 'APPROVE' | 'DECLINE' | 'HOLD'> = {
+    approve: 'APPROVE',
+    approved: 'APPROVE',
+    APPROVE: 'APPROVE',
+    decline: 'DECLINE',
+    declined: 'DECLINE',
+    reject: 'DECLINE',
+    rejected: 'DECLINE',
+    DECLINE: 'DECLINE',
+    hold: 'HOLD',
+    HOLD: 'HOLD',
+  };
+
+  const normalizedDecision =
+    normalizedDecisionMap[String(decision ?? '').trim()];
+
+  if (!normalizedDecision) {
+    return res.status(400).json({
+      error: 'Decision must be approve, decline, or hold.',
+    });
+  }
+
+  const manager = findActiveManagerByPin(managerPin);
+
+  if (!manager) {
+    return res.status(401).json({
+      error: 'Valid Manager or Admin approval is required.',
+    });
+  }
+
+  const decisionNote = String(note ?? notes ?? '').trim() || undefined;
   const now = new Date().toISOString();
-  transaction.managerDecision = decision;
-  transaction.managerDecisionNote = note;
+
+  transaction.managerDecision = normalizedDecision;
+  transaction.managerDecisionNote = decisionNote;
   transaction.managerDecisionBy = manager.name;
   transaction.managerDecisionAt = now;
   transaction.updatedAt = now;
 
-  if (decision === 'APPROVE') {
+  if (normalizedDecision === 'APPROVE') {
     transaction.status = 'ready_for_deposit';
     transaction.paidAt = now;
     transaction.paidByUserId = manager.id;
     transaction.paidByUserName = manager.name;
-  } else if (decision === 'DECLINE') {
+  } else if (normalizedDecision === 'DECLINE') {
     transaction.status = 'declined';
-  } else if (decision === 'HOLD') {
+  } else {
     transaction.status = 'in_review';
   }
 
@@ -1366,10 +1401,14 @@ shiftAndCheckRouter.post('/check-cashing/transactions/:id/manager-decision', (re
     'CHECK_CASHING_MANAGER_DECISION',
     'security',
     transaction.id,
-    `Manager ${manager.name} made decision [${decision}] on ${transaction.transactionNumber}. Note: ${note || 'N/A'}`
+    `Manager ${manager.name} decision: ${normalizedDecision} on ${transaction.transactionNumber}${decisionNote ? `. Note: ${decisionNote}` : ''}`
   );
 
-  res.json({ success: true, transaction });
+  res.json({
+    success: true,
+    message: `Check cashing decision recorded as ${normalizedDecision}.`,
+    transaction,
+  });
 });
 
 // QR Session Generation and Mobile Simulation (Phase 2 CC-006, CC-036, CC-037)
