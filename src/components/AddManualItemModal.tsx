@@ -202,7 +202,7 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="bg-[#0F0F0F] border border-[#262626] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col">
+      <div className="bg-[#0F0F0F] border border-[#262626] rounded-2xl w-full max-w-lg max-h-[calc(100vh-1rem)] overflow-hidden shadow-2xl flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[#262626] flex items-center justify-between bg-[#141414]">
           <div className="flex items-center space-x-2.5">
@@ -295,7 +295,7 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
 
         {/* Mode 1: Quick Add Item with Integrated Touchscreen Numeric Keypad (Req 6 & 7) */}
         {mode === 'quick' && (
-          <div className="p-5 sm:p-6 space-y-4">
+          <div className="p-5 sm:p-6 space-y-4 overflow-y-auto min-h-0">
             {/* Amount Display */}
             <div className="space-y-1.5">
               <label className="block text-xs font-black uppercase tracking-wider text-[#A3A3A3]">
