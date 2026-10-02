@@ -535,7 +535,7 @@ export const UserActivityTrackerView: React.FC<UserActivityTrackerViewProps> = (
                               <span>Terminal PIN:</span>
                             </span>
                             <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
-                              {user.pin ? `•••• (${user.pin.length} digits)` : '1234'}
+                              {user.pin ? 'Configured' : 'Not configured'}
                             </span>
                           </div>
 
