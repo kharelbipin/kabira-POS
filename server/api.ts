@@ -1490,47 +1490,104 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
 
     // BA-01 & BA-03: Centralized Server Validation & Atomic Database Transactions
     let calculatedSubtotal = 0;
-    let calculatedTax = 0;
+    let itemDiscountTotal = 0;
     const processedItems: CartItem[] = [];
 
     for (const item of items) {
-        const product = db.products.find(p => p.id === item.product.id);
-        if (!product) {
+        const quantity = Math.floor(Number(item.quantity || 0));
+        if (!Number.isFinite(quantity) || quantity < 1) {
+            return res.status(400).json({ error: 'Each order item must have a positive quantity' });
+        }
+
+        const catalogProduct = db.products.find(p => p.id === item.product.id);
+        const isManualItem =
+            !catalogProduct &&
+            String(item.product?.id || '').startsWith('manual-') &&
+            String(item.product?.sku || '').startsWith('MISC-');
+
+        if (!catalogProduct && !isManualItem) {
             return res.status(400).json({ error: `Product ${item.product.name} no longer exists` });
         }
-        if (!product.active) {
-            return res.status(400).json({ error: `Product ${product.name} is deactivated and cannot be sold` });
+
+        if (catalogProduct && !catalogProduct.active) {
+            return res.status(400).json({ error: `Product ${catalogProduct.name} is deactivated and cannot be sold` });
         }
-        if (product.stockQuantity < item.quantity) {
+
+        if (catalogProduct && catalogProduct.stockQuantity < quantity) {
             return res.status(400).json({
-                error: `Insufficient stock for ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`,
+                error: `Insufficient stock for ${catalogProduct.name}. Available: ${catalogProduct.stockQuantity}, Requested: ${quantity}`,
             });
         }
 
-        const itemPrice = product.price;
-        const itemDiscount = Number(item.discountAmount || 0);
-        const lineSubtotal = (itemPrice * item.quantity) - itemDiscount;
-        const itemTax = lineSubtotal * (product.taxRate ?? db.settings.defaultTaxRate);
+        // Quick Custom Items are sale-only lines and intentionally are not saved
+        // to the permanent catalog. Only 0% or the configured store tax rate is
+        // accepted for these cashier-created lines.
+        const manualPrice = Number(item.unitPrice ?? item.product?.price);
+        if (isManualItem && (!Number.isFinite(manualPrice) || manualPrice <= 0)) {
+            return res.status(400).json({ error: 'Manual item must have a valid positive price' });
+        }
 
-        calculatedSubtotal += itemPrice * item.quantity;
-        calculatedTax += itemTax;
+        const product = catalogProduct
+            ? { ...catalogProduct }
+            : {
+                ...item.product,
+                price: manualPrice,
+                taxRate: Number(item.product?.taxRate) === 0 ? 0 : db.settings.defaultTaxRate,
+                active: true,
+            };
+
+        const itemPrice = Number(product.price);
+        const itemDiscount = Math.max(0, Number(item.discountAmount || 0));
+        const grossLineSubtotal = itemPrice * quantity;
+        const lineSubtotal = Math.max(0, grossLineSubtotal - itemDiscount);
+
+        calculatedSubtotal += grossLineSubtotal;
+        itemDiscountTotal += itemDiscount;
 
         processedItems.push({
             product: { ...product },
-            quantity: item.quantity,
+            quantity,
             unitPrice: itemPrice,
             discountAmount: itemDiscount,
             discountReason: item.discountReason,
-            taxAmount: Math.round(itemTax * 100) / 100,
-            lineTotal: Math.round((lineSubtotal + itemTax) * 100) / 100,
+            taxAmount: 0,
+            lineTotal: Math.round(lineSubtotal * 100) / 100,
         });
     }
 
-    // The base order discount includes promo/manual discounts.
-    // If pointsDiscount is separate, we subtract it as well
-    const baseOrderDiscount = Number(discountTotal || 0);
-    const totalOrderDiscount = baseOrderDiscount + (discountTotal?.toString().includes(String(validatedPointsDiscount)) ? 0 : validatedPointsDiscount);
-    const grandTotal = Math.max(0, Math.round((calculatedSubtotal - totalOrderDiscount + calculatedTax) * 100) / 100);
+    // Client discountTotal contains item discounts + order discount + loyalty
+    // redemption. Apply the order-level discount proportionally to taxable lines
+    // so mixed taxable/non-taxable carts match the register totals. Loyalty
+    // redemption remains a post-tax discount, matching the checkout UI.
+    const incomingDiscountTotal = Math.max(0, Number(discountTotal || 0));
+    const minimumDiscountTotal = itemDiscountTotal + validatedPointsDiscount;
+    const totalOrderDiscount = Math.max(incomingDiscountTotal, minimumDiscountTotal);
+    const orderLevelDiscount = Math.max(
+        0,
+        totalOrderDiscount - itemDiscountTotal - validatedPointsDiscount
+    );
+    const adjustedSubtotal = Math.max(0, calculatedSubtotal - itemDiscountTotal);
+    const subtotalAfterOrderDiscount = Math.max(0, adjustedSubtotal - orderLevelDiscount);
+    const orderDiscountFactor =
+        adjustedSubtotal > 0 ? subtotalAfterOrderDiscount / adjustedSubtotal : 0;
+
+    let calculatedTax = 0;
+    for (const item of processedItems) {
+        const lineSubtotal = Math.max(
+            0,
+            item.unitPrice * item.quantity - Number(item.discountAmount || 0)
+        );
+        const lineTaxRate = item.product.taxRate ?? db.settings.defaultTaxRate;
+        const itemTax = lineSubtotal * orderDiscountFactor * lineTaxRate;
+        item.taxAmount = Math.round(itemTax * 100) / 100;
+        item.lineTotal = Math.round((lineSubtotal * orderDiscountFactor + itemTax) * 100) / 100;
+        calculatedTax += itemTax;
+    }
+
+    const grandTotal = Math.max(
+        0,
+        Math.round((calculatedSubtotal - totalOrderDiscount + calculatedTax) * 100) / 100
+    );
 
     // CA-07 & US-MULTI-PAY: Payment verification (Single Tender or Multi-Payment Engine)
     const incomingPayments = (payments && Array.isArray(payments) && payments.length > 0)
@@ -1671,9 +1728,14 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
         else customer.loyaltyTier = 'Bronze';
     }
 
-    // IN-02: Atomically reduce inventory
+    // IN-02: Atomically reduce inventory for permanent catalog products.
+    // Quick Custom Items are transaction-only and have no inventory record.
     for (const item of processedItems) {
-        const product = db.products.find(p => p.id === item.product.id)!;
+        const product = db.products.find(p => p.id === item.product.id);
+        if (!product) {
+            continue;
+        }
+
         const oldQty = product.stockQuantity;
         product.stockQuantity -= item.quantity;
 
@@ -1723,6 +1785,7 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
             amount: grandTotal,
             cashTendered: payment.cashTendered,
             changeDue: payment.changeDue,
+            cashEntries: payment.cashEntries,
             cardLast4: payment.cardLast4,
             cardBrand: payment.cardBrand,
             authCode: payment.authCode,
