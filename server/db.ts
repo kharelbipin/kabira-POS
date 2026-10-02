@@ -589,6 +589,7 @@ class Database {
     defaultTaxRate: 0.0825,
     requireManagerDiscountAbove: 20, // Requires manager PIN if > 20%
     requireManagerToOpenDrawerNoSale: false, // Cashier opens drawer directly unless Admin enables approval
+    customerDisplayFullscreen: true, // Locked borderless customer display by default; Admin can disable
     allowedPaymentMethods: {
       cash: true,
       card: true,
