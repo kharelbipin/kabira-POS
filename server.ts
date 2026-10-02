@@ -5,6 +5,7 @@ import os from 'os';
 import { execFile } from 'child_process';
 import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/api.js';
+import { db } from './server/db.js';
 
 const BRIDGE_BASE_URL = 'http://127.0.0.1:5055';
 const BRIDGE_TOKEN_PATH = path.join(
@@ -155,6 +156,8 @@ async function startServer() {
         // as standalone customer-display mode.
         const customerDisplayUrl =
             'http://127.0.0.1:3000/customer-display';
+        const customerDisplayFullscreen =
+            db.settings.customerDisplayFullscreen !== false;
 
         const psScript = `
 Add-Type -AssemblyName System.Windows.Forms
@@ -208,9 +211,8 @@ if ($existing) {
     Start-Sleep -Milliseconds 500
 }
 
-Start-Process -FilePath $edge -ArgumentList @(
+$commonArgs = @(
     ('--user-data-dir="' + $profileDir + '"'),
-    "--app=${customerDisplayUrl}",
     "--window-position=$x,$y",
     "--window-size=$width,$height",
     "--new-window",
@@ -218,6 +220,23 @@ Start-Process -FilePath $edge -ArgumentList @(
     "--no-default-browser-check",
     "--disable-session-crashed-bubble"
 )
+
+if (${customerDisplayFullscreen ? '$true' : '$false'}) {
+    # Edge kiosk fullscreen removes normal window chrome so customers cannot
+    # minimize, maximize, resize, or close the customer display from Display 2.
+    $displayArgs = @(
+        "--kiosk=${customerDisplayUrl}",
+        "--edge-kiosk-type=fullscreen"
+    ) + $commonArgs
+} else {
+    # Admin-disabled lock mode: open as a normal app window with standard
+    # Windows controls available.
+    $displayArgs = @(
+        "--app=${customerDisplayUrl}"
+    ) + $commonArgs
+}
+
+Start-Process -FilePath $edge -ArgumentList $displayArgs
 `;
 
         execFile(
