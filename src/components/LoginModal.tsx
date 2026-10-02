@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User } from '../types';
 import { api } from '../utils/api';
 import { playBeep } from '../utils/audio';
-import { ShieldCheck, Delete, KeyRound, Mail, UserCheck, AlertCircle, Lock } from 'lucide-react';
+import { Delete, KeyRound, Mail, AlertCircle, Lock } from 'lucide-react';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -18,8 +18,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 }) => {
   const [mode, setMode] = useState<'pin' | 'email'>('pin');
   const [pin, setPin] = useState<string>('');
-  const [email, setEmail] = useState<string>('cashier@pos.local');
-  const [password, setPassword] = useState<string>('cashier123');
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -27,14 +27,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   const handlePinDigit = (digit: string) => {
     playBeep('click');
-    if (pin.length < 6) {
-      const nextPin = pin + digit;
-      setPin(nextPin);
-      setError(null);
-      if (nextPin.length === 4) {
-        // Auto submit 4-digit PIN for speed
-        submitPin(nextPin);
-      }
+
+    if (isLoading || pin.length >= 4) {
+      return;
+    }
+
+    const nextPin = pin + digit;
+    setPin(nextPin);
+    setError(null);
+
+    if (nextPin.length === 4) {
+      // Four-digit terminal PINs submit automatically for cashier speed.
+      void submitPin(nextPin);
     }
   };
 
@@ -62,7 +66,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       onClose();
     } catch (err: any) {
       playBeep('error');
-      setError(err.message || 'Invalid PIN. Try 1234, 5555, or 9999');
+      setError(err.message || 'Invalid PIN or inactive account.');
       setPin('');
     } finally {
       setIsLoading(false);
@@ -82,14 +86,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     } catch (err: any) {
       playBeep('error');
       setError(err.message || 'Invalid email or password');
+      setPassword('');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Quick switch presets for testing
-  const quickSwitch = (targetPin: string) => {
-    submitPin(targetPin);
   };
 
   return (
@@ -109,7 +109,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           <div className="flex bg-[#141414] p-0.5 rounded-lg border border-[#262626]">
             <button
               id="login-tab-pin"
-              onClick={() => { setMode('pin'); setError(null); }}
+              onClick={() => {
+                setMode('pin');
+                setError(null);
+                setPassword('');
+              }}
               className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-md transition-all cursor-pointer ${
                 mode === 'pin' ? 'bg-[#C5A059] text-black' : 'text-[#737373] hover:text-white'
               }`}
@@ -118,7 +122,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </button>
             <button
               id="login-tab-email"
-              onClick={() => { setMode('email'); setError(null); }}
+              onClick={() => {
+                setMode('email');
+                setError(null);
+                setPin('');
+              }}
               className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-md transition-all cursor-pointer ${
                 mode === 'email' ? 'bg-[#C5A059] text-black' : 'text-[#737373] hover:text-white'
               }`}
@@ -140,7 +148,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             <div>
               {/* PIN Display */}
               <div className="mb-5 text-center">
-                <p className="text-xs text-[#737373] mb-2 font-medium">Enter 4-digit Cashier / Manager / Admin PIN</p>
+                <p className="text-xs text-[#737373] mb-2 font-medium">Enter your 4-digit operator PIN</p>
                 <div className="flex justify-center space-x-3 my-3">
                   {[0, 1, 2, 3].map(i => (
                     <div
@@ -204,6 +212,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     id="login-email-input"
                     type="email"
                     required
+                    autoComplete="username"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     className="w-full bg-[#141414] border border-[#262626] rounded-lg pl-9 pr-3 py-2 text-sm text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
@@ -220,6 +229,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     id="login-password-input"
                     type="password"
                     required
+                    autoComplete="current-password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     className="w-full bg-[#141414] border border-[#262626] rounded-lg pl-9 pr-3 py-2 text-sm text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
@@ -239,43 +249,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </form>
           )}
 
-          {/* Quick Demo Switchers */}
-          <div className="mt-5 pt-4 border-t border-[#262626] text-xs">
-            <span className="text-[11px] font-bold text-[#737373] uppercase tracking-wider block mb-2">
-              Quick Role Test Logins:
-            </span>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                id="quick-login-cashier"
-                onClick={() => quickSwitch('1234')}
-                className="p-2.5 rounded-lg bg-[#141414] hover:bg-[#1A1A1A] border border-[#262626] hover:border-[#C5A059]/50 text-left transition-colors cursor-pointer"
-              >
-                <div className="font-semibold text-xs text-[#E5E5E5]">Elena (Cashier)</div>
-                <div className="text-[10px] text-[#C5A059] font-mono mt-0.5">PIN: 1234</div>
-              </button>
-
-              <button
-                type="button"
-                id="quick-login-manager"
-                onClick={() => quickSwitch('5555')}
-                className="p-2.5 rounded-lg bg-[#141414] hover:bg-[#1A1A1A] border border-[#262626] hover:border-[#C5A059]/50 text-left transition-colors cursor-pointer"
-              >
-                <div className="font-semibold text-xs text-[#E5E5E5]">Marcus (Mgr)</div>
-                <div className="text-[10px] text-[#C5A059] font-mono mt-0.5">PIN: 5555</div>
-              </button>
-
-              <button
-                type="button"
-                id="quick-login-admin"
-                onClick={() => quickSwitch('9999')}
-                className="p-2.5 rounded-lg bg-[#141414] hover:bg-[#1A1A1A] border border-[#262626] hover:border-[#C5A059]/50 text-left transition-colors cursor-pointer"
-              >
-                <div className="font-semibold text-xs text-[#E5E5E5]">Sarah (Admin)</div>
-                <div className="text-[10px] text-[#C5A059] font-mono mt-0.5">PIN: 9999</div>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
