@@ -9,6 +9,7 @@ interface ManualDrawerModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser?: User | null;
+  requiresManagerApproval?: boolean;
 }
 
 const REASONS = [
@@ -24,6 +25,7 @@ export const ManualDrawerModal: React.FC<ManualDrawerModalProps> = ({
   isOpen,
   onClose,
   currentUser,
+  requiresManagerApproval = false,
 }) => {
   const [selectedReason, setSelectedReason] = useState(REASONS[0]);
   const [customReason, setCustomReason] = useState('');
@@ -34,6 +36,7 @@ export const ManualDrawerModal: React.FC<ManualDrawerModalProps> = ({
   if (!isOpen) return null;
 
   const requiresManagerPin =
+    requiresManagerApproval &&
     currentUser?.role !== 'Admin' &&
     currentUser?.role !== 'Manager';
 
