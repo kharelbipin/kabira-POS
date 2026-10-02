@@ -411,9 +411,9 @@ export const CartPanel: React.FC<CartPanelProps> = ({
           id="cart-checkout-btn"
           onClick={onProceedToCheckout}
           disabled={items.length === 0}
-          className="w-full py-3 mt-1 bg-[#F3C067] hover:bg-[#F59E0B] active:scale-[0.99] text-slate-950 font-black rounded-xl uppercase tracking-wider text-xs shadow-xs flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full py-4 mt-1 bg-[#F3C067] hover:bg-[#F59E0B] active:scale-[0.99] text-slate-950 font-black rounded-xl uppercase tracking-wider text-sm shadow-xs flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <CheckCircle2 className="w-4 h-4 text-slate-950" />
+          <CheckCircle2 className="w-5 h-5 text-slate-950" />
           <span>Complete Checkout (F9)</span>
         </button>
 
@@ -423,7 +423,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
             id="cart-discount-btn"
             onClick={() => setShowDiscountModal(true)}
             disabled={items.length === 0}
-            className="flex-1 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-[11px] font-bold text-slate-700 transition-colors disabled:opacity-40 cursor-pointer text-center"
+            className="flex-1 py-2.5 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700 transition-colors disabled:opacity-40 cursor-pointer text-center"
           >
             % Discount
           </button>
@@ -442,7 +442,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
             id="cart-quick-clear-btn"
             onClick={() => setShowClearConfirm(true)}
             disabled={items.length === 0}
-            className="py-1.5 px-3 border border-rose-200 bg-white hover:bg-rose-50 rounded-xl text-[11px] font-bold text-rose-600 transition-colors disabled:opacity-40 cursor-pointer"
+            className="py-2.5 px-4 border border-rose-200 bg-white hover:bg-rose-50 rounded-xl text-xs font-bold text-rose-600 transition-colors disabled:opacity-40 cursor-pointer"
             title="Clear"
           >
             🗑 Clear
@@ -477,7 +477,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
               playBeep('click');
               onOpenDrawer();
             }}
-            className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold border border-slate-200 transition-colors cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed"
+            className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition-colors cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Open Drawer (F8)
           </button>
@@ -490,7 +490,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
               playBeep('click');
               onPrintLastReceipt();
             }}
-            className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold border border-slate-200 transition-colors cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed"
+            className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition-colors cursor-pointer text-center disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Last Receipt
           </button>
