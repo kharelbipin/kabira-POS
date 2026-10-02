@@ -756,12 +756,16 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
                     />
                   </div>
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <span className="text-xs font-medium text-slate-800">Require Manager Approval to Open Drawer (No Sale)</span>
+                    <div>
+                      <span className="text-xs font-medium text-slate-800 block">Require Manager Approval to Open Drawer (No Sale)</span>
+                      <span className="text-[11px] text-slate-500">Admin control. Default is OFF so cashiers can open the drawer directly.</span>
+                    </div>
                     <input
                       type="checkbox"
                       checked={formData.requireManagerToOpenDrawerNoSale}
                       onChange={e => setFormData({ ...formData, requireManagerToOpenDrawerNoSale: e.target.checked })}
-                      className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                      disabled={currentUser?.role !== 'Admin'}
+                      className="w-4 h-4 accent-amber-500 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
