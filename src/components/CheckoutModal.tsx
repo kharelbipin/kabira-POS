@@ -8,6 +8,7 @@ import {
   PaymentRecord,
 } from '../types';
 import { playBeep } from '../utils/audio';
+import { api } from '../utils/api';
 import { hardwareStore } from '../hardware';
 import { CardPaymentFallbackManager } from './payment/CardPaymentFallbackManager';
 import {
@@ -106,15 +107,43 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [managerPin, setManagerPin] = useState<string>('');
   const [managerApproved, setManagerApproved] = useState<boolean>(false);
   const [managerApprovalError, setManagerApprovalError] = useState<string | null>(null);
+  const [isVerifyingManager, setIsVerifyingManager] = useState<boolean>(false);
 
-  const handleVerifyManagerPin = () => {
-    if (managerPin === '5555' || managerPin === '9999') {
+  const handleVerifyManagerPin = async () => {
+    const normalizedPin = managerPin.trim();
+
+    if (!/^\d{4,12}$/.test(normalizedPin)) {
+      playBeep('error');
+      setManagerApprovalError('Enter a valid manager PIN.');
+      return;
+    }
+
+    setIsVerifyingManager(true);
+    setManagerApprovalError(null);
+
+    try {
+      const result = await api.verifyManagerPin(
+        normalizedPin,
+        `Checkout discount override: ${discountPercent}% discount`
+      );
+
+      if (!result.approved) {
+        playBeep('error');
+        setManagerApprovalError(result.error || 'Manager approval was denied.');
+        return;
+      }
+
       playBeep('success');
       setManagerApproved(true);
+      setManagerPin('');
       setManagerApprovalError(null);
-    } else {
+    } catch (error: any) {
       playBeep('error');
-      setManagerApprovalError('Invalid Manager PIN. Use 5555 or 9999');
+      setManagerApprovalError(
+        error?.message || 'Unable to verify manager approval.'
+      );
+    } finally {
+      setIsVerifyingManager(false);
     }
   };
 
@@ -173,6 +202,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setShowCancelWarning(false);
       setManagerApproved(false);
       setManagerPin('');
+      setManagerApprovalError(null);
+      setIsVerifyingManager(false);
       setApplyLoyaltyPoints(false);
       setPointsToRedeem(0);
     }
@@ -577,19 +608,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               <input
                 id="manager-override-pin"
                 type="password"
-                maxLength={4}
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={12}
                 value={managerPin}
-                onChange={e => setManagerPin(e.target.value)}
-                placeholder="Manager PIN (5555)"
-                className="w-36 bg-[#0A0A0A] border border-[#C5A059]/50 rounded-lg px-3 py-1 text-xs text-[#E5E5E5] placeholder:text-[#666666] focus:outline-hidden"
+                onChange={e => {
+                  setManagerPin(e.target.value.replace(/\D/g, ''));
+                  setManagerApprovalError(null);
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !isVerifyingManager) {
+                    e.preventDefault();
+                    void handleVerifyManagerPin();
+                  }
+                }}
+                placeholder="Manager PIN"
+                disabled={isVerifyingManager}
+                className="w-36 bg-[#0A0A0A] border border-[#C5A059]/50 rounded-lg px-3 py-1 text-xs text-[#E5E5E5] placeholder:text-[#666666] focus:outline-hidden disabled:opacity-60"
               />
               <button
                 id="manager-approve-btn"
                 type="button"
-                onClick={handleVerifyManagerPin}
-                className="px-3 py-1 rounded-lg bg-[#C5A059] hover:bg-[#D4B06A] text-black text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                onClick={() => void handleVerifyManagerPin()}
+                disabled={isVerifyingManager || managerPin.trim().length < 4}
+                className="px-3 py-1 rounded-lg bg-[#C5A059] hover:bg-[#D4B06A] text-black text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Approve
+                {isVerifyingManager ? 'Verifying…' : 'Approve'}
               </button>
               {managerApprovalError && (
                 <span className="text-xs text-red-400 font-medium">{managerApprovalError}</span>
