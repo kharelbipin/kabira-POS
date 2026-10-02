@@ -300,13 +300,11 @@ CREATE TABLE InventoryAdjustments (
 );
 
 -- ----------------------------------------------------------------------------
--- 12. INITIAL SEED DATA (CORE USERS & SYSTEM CONFIGURATION)
+-- 12. INITIAL SEED DATA (SYSTEM CONFIGURATION ONLY)
 -- ----------------------------------------------------------------------------
-INSERT INTO Users (UserId, Name, Email, Role, Pin, Active, CreatedAt) VALUES
-('usr-1', 'Sarah Connor (Admin)', 'admin@pos.local', 'Admin', '9999', 1, SYSDATETIMEOFFSET()),
-('usr-2', 'Marcus Rivera (Manager)', 'manager@pos.local', 'Manager', '5555', 1, SYSDATETIMEOFFSET()),
-('usr-3', 'Elena Rostova (Cashier)', 'cashier@pos.local', 'Cashier', '1234', 1, SYSDATETIMEOFFSET()),
-('usr-4', 'David Kim (Cashier)', 'david@pos.local', 'Cashier', '2345', 1, SYSDATETIMEOFFSET());
+-- Production operator accounts are intentionally NOT seeded here.
+-- The first Admin is created through the KaBiRa POS first-run setup flow.
+-- This prevents known/default PINs from being shipped with a new installation.
 
 INSERT INTO Categories (CategoryId, Name, Slug, DisplayOrder, Active, AgeRestricted, MinimumAge, DefaultTaxRate) VALUES
 ('cat-1', 'Whiskey & Bourbon', 'whiskey', 1, 1, 1, 21, 0.0825),
@@ -319,6 +317,5 @@ INSERT INTO Categories (CategoryId, Name, Slug, DisplayOrder, Active, AgeRestric
 ('cat-8', 'Accessories', 'accessories', 8, 1, 0, 0, 0.0825),
 ('cat-9', 'Lotto', 'lotto', 9, 1, 1, 18, 0.0000);
 
--- Initial audit log record for programmer / creator traceability
-INSERT INTO UserActivities (ActivityId, UserId, UserName, UserRole, Action, TargetType, TargetId, Details, Timestamp) VALUES
-('act-init-01', 'usr-1', 'Sarah Connor (Admin)', 'Admin', 'SYSTEM_INITIALIZATION', 'system', 'db-v1', 'Production relational database schema initialized with tables and security rules.', SYSDATETIMEOFFSET());
+-- No operator-specific audit rows are seeded.
+-- Audit history begins when a real Admin/operator performs an authenticated action.
