@@ -53,6 +53,7 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
   const [catalogPrice, setCatalogPrice] = useState<string>('');
   const [catalogCost, setCatalogCost] = useState<string>('');
   const [catalogStock, setCatalogStock] = useState<string>('10');
+  const [catalogTaxable, setCatalogTaxable] = useState<boolean>(true);
   const [addToCartAfterSave, setAddToCartAfterSave] = useState<boolean>(true);
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -124,7 +125,8 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
       categoryName: category?.name || 'Miscellaneous / Ad-Hoc',
       price: priceNum,
       cost: 0,
-      taxRate: quickTaxable ? (settings?.defaultTaxRate || 8.25) : 0,
+      taxRate: quickTaxable ? (settings?.defaultTaxRate ?? 0.0825) : 0,
+      taxCategory: quickTaxable ? 'Taxable' : 'Non-Taxable',
       size: 'Custom',
       stockQuantity: 9999, // Unconstrained inventory for manual services/items
       lowStockThreshold: 0,
@@ -172,6 +174,8 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
         cost: parseFloat(catalogCost) || 0,
         stockQuantity: parseInt(catalogStock) || 0,
         lowStockThreshold: 5,
+        taxRate: catalogTaxable ? (settings?.defaultTaxRate ?? 0.0825) : 0,
+        taxCategory: catalogTaxable ? 'Taxable' : 'Non-Taxable',
         size: 'Standard',
         imageUrl: 'https://images.unsplash.com/photo-1527281400683-1aae777175f8?w=500&auto=format&fit=crop&q=60',
         description: 'Added manually from POS terminal',
@@ -336,6 +340,37 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
               </p>
             </div>
 
+            {/* Tax Selection */}
+            <div className="pt-2 border-t border-[#262626] space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#A3A3A3]">
+                Tax
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setQuickTaxable(true)}
+                  className={`py-2.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
+                    quickTaxable
+                      ? 'bg-[#C5A059] border-[#C5A059] text-black'
+                      : 'bg-[#1A1A1A] border-[#333333] text-[#A3A3A3] hover:text-white'
+                  }`}
+                >
+                  Taxable ({(((settings?.defaultTaxRate ?? 0.0825) * 100)).toFixed(2)}%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickTaxable(false)}
+                  className={`py-2.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
+                    !quickTaxable
+                      ? 'bg-emerald-600 border-emerald-500 text-white'
+                      : 'bg-[#1A1A1A] border-[#333333] text-[#A3A3A3] hover:text-white'
+                  }`}
+                >
+                  No Tax
+                </button>
+              </div>
+            </div>
+
             {/* Cancel & Add Item Action Buttons */}
             <div className="pt-2 border-t border-[#262626] flex items-center justify-end space-x-3">
               <button
@@ -487,6 +522,36 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
                   onChange={e => setCatalogStock(e.target.value)}
                   className="w-full bg-[#1A1A1A] border border-[#262626] focus:border-[#C5A059] rounded-xl px-3 py-2 text-xs font-mono text-[#F5F5F5] focus:outline-hidden"
                 />
+              </div>
+            </div>
+
+            <div className="pt-2 space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#A3A3A3]">
+                Tax
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCatalogTaxable(true)}
+                  className={`py-2.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
+                    catalogTaxable
+                      ? 'bg-[#C5A059] border-[#C5A059] text-black'
+                      : 'bg-[#1A1A1A] border-[#333333] text-[#A3A3A3] hover:text-white'
+                  }`}
+                >
+                  Taxable ({(((settings?.defaultTaxRate ?? 0.0825) * 100)).toFixed(2)}%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogTaxable(false)}
+                  className={`py-2.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
+                    !catalogTaxable
+                      ? 'bg-emerald-600 border-emerald-500 text-white'
+                      : 'bg-[#1A1A1A] border-[#333333] text-[#A3A3A3] hover:text-white'
+                  }`}
+                >
+                  No Tax
+                </button>
               </div>
             </div>
 
