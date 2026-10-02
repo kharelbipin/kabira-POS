@@ -5,10 +5,14 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  pin: string; // 4-digit PIN for quick terminal switch
+
+  // Sensitive authentication fields exist only on the server-side user record.
+  // Public /auth and /users responses intentionally omit them.
+  pin?: string;
+  password?: string;
+
   active: boolean;
   avatar?: string;
-  password?: string;
   createdAt: string;
 }
 
