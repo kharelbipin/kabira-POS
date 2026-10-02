@@ -43,7 +43,13 @@ import {
     createAuthSession,
     getAuthUser,
     logoutRequest,
+    revokeUserSessions,
 } from './authSession.js';
+import {
+    hashCredential,
+    needsCredentialUpgrade,
+    verifyCredential,
+} from './credentialSecurity.js';
 
 export const apiRouter = express.Router();
 apiRouter.use(express.json());
@@ -193,6 +199,39 @@ function toPublicUser(user: User) {
     };
 }
 
+function upgradeCredentialIfNeeded(
+    user: User,
+    field: 'pin' | 'password',
+    suppliedValue: string
+) {
+    const storedValue = user[field];
+
+    if (needsCredentialUpgrade(storedValue)) {
+        user[field] = hashCredential(suppliedValue);
+    }
+}
+
+function findUserByPin(pin: string): User | undefined {
+    return db.users.find(
+        user =>
+            user.active &&
+            Boolean(user.pin) &&
+            verifyCredential(pin, user.pin)
+    );
+}
+
+function isPinAssignedToAnotherUser(
+    pin: string,
+    excludeUserId?: string
+): boolean {
+    return db.users.some(
+        user =>
+            user.id !== excludeUserId &&
+            Boolean(user.pin) &&
+            verifyCredential(pin, user.pin)
+    );
+}
+
 function findActiveManagerByPin(pin: unknown): User | undefined {
     const normalizedPin = String(pin ?? '').trim();
 
@@ -200,12 +239,19 @@ function findActiveManagerByPin(pin: unknown): User | undefined {
         return undefined;
     }
 
-    return db.users.find(
-        user =>
-            user.active &&
-            (user.role === 'Manager' || user.role === 'Admin') &&
-            user.pin === normalizedPin
+    const user = db.users.find(
+        candidate =>
+            candidate.active &&
+            (candidate.role === 'Manager' || candidate.role === 'Admin') &&
+            Boolean(candidate.pin) &&
+            verifyCredential(normalizedPin, candidate.pin)
     );
+
+    if (user) {
+        upgradeCredentialIfNeeded(user, 'pin', normalizedPin);
+    }
+
+    return user;
 }
 
 // Centralized error handler helper
@@ -259,8 +305,8 @@ apiRouter.post('/auth/bootstrap-admin', asyncHandler(async (req: Request, res: R
         name,
         email,
         role: 'Admin',
-        pin,
-        password,
+        pin: hashCredential(pin),
+        password: hashCredential(password),
         active: true,
         createdAt: new Date().toISOString(),
     };
@@ -310,7 +356,11 @@ apiRouter.post('/auth/login', asyncHandler(async (req: Request, res: Response) =
             });
         }
 
-        user = db.users.find(u => u.pin === pin && u.active);
+        user = findUserByPin(pin);
+
+        if (user) {
+            upgradeCredentialIfNeeded(user, 'pin', pin);
+        }
     } else if (email && password) {
         loginMethod = 'Email/Password';
 
@@ -320,8 +370,12 @@ apiRouter.post('/auth/login', asyncHandler(async (req: Request, res: Response) =
                 u.active &&
                 typeof u.password === 'string' &&
                 u.password.length > 0 &&
-                u.password === password
+                verifyCredential(password, u.password)
         );
+
+        if (user) {
+            upgradeCredentialIfNeeded(user, 'password', password);
+        }
     }
 
     if (!user) {
@@ -454,7 +508,7 @@ apiRouter.post('/users', asyncHandler(async (req: Request, res: Response) => {
         });
     }
 
-    if (db.users.some(u => u.pin === pin)) {
+    if (isPinAssignedToAnotherUser(pin)) {
         return res.status(400).json({
             error: 'That register PIN is already assigned to another user.',
         });
@@ -471,8 +525,8 @@ apiRouter.post('/users', asyncHandler(async (req: Request, res: Response) => {
         name,
         email,
         role,
-        pin,
-        ...(password ? { password } : {}),
+        pin: hashCredential(pin),
+        ...(password ? { password: hashCredential(password) } : {}),
         active: true,
         createdAt: new Date().toISOString(),
     };
@@ -570,13 +624,14 @@ apiRouter.put('/users/:id', asyncHandler(async (req: Request, res: Response) => 
             });
         }
 
-        if (db.users.some(u => u.id !== user.id && u.pin === pin)) {
+        if (isPinAssignedToAnotherUser(pin, user.id)) {
             return res.status(400).json({
                 error: 'That register PIN is already assigned to another user.',
             });
         }
 
-        user.pin = pin;
+        user.pin = hashCredential(pin);
+        revokeUserSessions(user.id);
     }
 
     if (req.body?.password !== undefined) {
@@ -589,7 +644,8 @@ apiRouter.put('/users/:id', asyncHandler(async (req: Request, res: Response) => 
         }
 
         if (password) {
-            user.password = password;
+            user.password = hashCredential(password);
+            revokeUserSessions(user.id);
         }
     }
 
@@ -3623,18 +3679,32 @@ apiRouter.post('/users/:id/reset-credentials', asyncHandler(async (req: Request,
     }
 
     if (newPin) {
-        if (!/^\d{4,6}$/.test(newPin)) {
-            return res.status(400).json({ error: 'Terminal PIN must be 4 to 6 numeric digits' });
+        const normalizedPin = String(newPin).trim();
+
+        if (!/^\d{4}$/.test(normalizedPin)) {
+            return res.status(400).json({ error: 'Terminal PIN must be exactly 4 numeric digits' });
         }
-        user.pin = newPin;
+
+        if (isPinAssignedToAnotherUser(normalizedPin, user.id)) {
+            return res.status(400).json({
+                error: 'That register PIN is already assigned to another user.',
+            });
+        }
+
+        user.pin = hashCredential(normalizedPin);
     }
 
     if (newPassword) {
-        if (newPassword.length < 6) {
-            return res.status(400).json({ error: 'Password must be at least 6 characters' });
+        const normalizedPassword = String(newPassword);
+
+        if (normalizedPassword.length < 8) {
+            return res.status(400).json({ error: 'Password must be at least 8 characters' });
         }
-        user.password = newPassword;
+
+        user.password = hashCredential(normalizedPassword);
     }
+
+    revokeUserSessions(user.id);
 
     db.addAudit(
         currentUser.id,
