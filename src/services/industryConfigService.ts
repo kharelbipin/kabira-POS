@@ -436,10 +436,9 @@ export function generateIndustryTemplateConfig(
   if (isLiquor) {
     quickActions = [
       { id: 'act-add-item', label: 'Add Item (F4)', shortcut: 'F4', actionKey: 'add_manual', icon: 'Plus', colorClass: 'bg-[#F3C067] text-slate-950', enabled: true, order: 1, size: 'normal' },
-      { id: 'act-scan', label: 'Scan (F3)', shortcut: 'F3', actionKey: 'open_scanner', icon: 'ScanBarcode', colorClass: 'bg-[#1E293B] text-white', enabled: true, order: 2, size: 'normal' },
-      { id: 'act-lotto-sale', label: 'Lotto Sale (F6)', shortcut: 'F6', actionKey: 'lotto_sale', icon: 'Ticket', colorClass: 'bg-[#059669] text-white', enabled: true, order: 3, size: 'normal' },
-      { id: 'act-lotto-payout', label: 'Lotto Payout (F7)', shortcut: 'F7', actionKey: 'lotto_payout', icon: 'DollarSign', colorClass: 'bg-[#E11D48] text-white', enabled: true, order: 4, size: 'normal' },
-      { id: 'act-customer', label: 'Customer (F8)', shortcut: 'F8', actionKey: 'select_customer', icon: 'UserCheck', colorClass: 'bg-white text-slate-800 border-slate-200', enabled: true, order: 5, size: 'normal' },
+      { id: 'act-lotto-sale', label: 'Lotto Sale (F6)', shortcut: 'F6', actionKey: 'lotto_sale', icon: 'Ticket', colorClass: 'bg-[#059669] text-white', enabled: true, order: 2, size: 'normal' },
+      { id: 'act-lotto-payout', label: 'Lotto Payout (F7)', shortcut: 'F7', actionKey: 'lotto_payout', icon: 'DollarSign', colorClass: 'bg-[#E11D48] text-white', enabled: true, order: 3, size: 'normal' },
+      { id: 'act-customer', label: 'Customer (F8)', shortcut: 'F8', actionKey: 'select_customer', icon: 'UserCheck', colorClass: 'bg-white text-slate-800 border-slate-200', enabled: true, order: 4, size: 'normal' },
       { id: 'act-price-check', label: 'Price Check', shortcut: 'F9', actionKey: 'price_check', icon: 'Search', colorClass: 'bg-white text-slate-800 border-slate-200', enabled: true, order: 6, size: 'normal' },
       { id: 'act-age-verify', label: 'Age Verify 21+', shortcut: 'F10', actionKey: 'age_verify', icon: 'ShieldCheck', colorClass: 'bg-amber-500 text-slate-950', enabled: true, order: 7, size: 'normal' },
       { id: 'act-allocated', label: 'Allocated Vault', shortcut: '', actionKey: 'allocated_vault', icon: 'Award', colorClass: 'bg-purple-900 text-purple-200', enabled: true, order: 8, size: 'normal', roleRequired: 'Manager' },
