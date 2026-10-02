@@ -1231,7 +1231,13 @@ export default function App() {
 
         {(currentTab === 'audit' || currentTab === 'audit-log') && <AuditLogsView />}
         {currentTab === 'user-activity' && (
-          <UserActivityTrackerView currentUser={currentUser || { id: 'usr-1', name: 'Sarah Connor (Admin)', email: 'admin@pos.local', role: 'Admin', active: true, pin: '9999', createdAt: '' }} />
+          {currentUser ? (
+          <UserActivityTrackerView currentUser={currentUser} />
+        ) : (
+          <div className="flex h-full items-center justify-center p-6 text-sm text-slate-500">
+            Sign in to view user activity.
+          </div>
+        )}
         )}
 
         {currentTab === 'online-store' && (
