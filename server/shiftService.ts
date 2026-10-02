@@ -68,7 +68,19 @@ export function calculateShiftSummary(shift: Shift): ShiftSummarySnapshot {
   // In POS environment, match orders during shift
   const shiftOrders = db.orders.filter(order => {
     const orderTime = new Date(order.createdAt).getTime();
-    return orderTime >= startTime && orderTime <= endTime;
+
+    // A shift summary must only include transactions for the cashier who owns
+    // this shift. Previously every order created anywhere in the store during
+    // the same time window was included, which could make expected drawer cash
+    // wildly incorrect (including negative expected balances).
+    const belongsToShiftCashier =
+      !shift.cashierId || order.cashierId === shift.cashierId;
+
+    return (
+      orderTime >= startTime &&
+      orderTime <= endTime &&
+      belongsToShiftCashier
+    );
   });
 
   let grossSales = 0;
