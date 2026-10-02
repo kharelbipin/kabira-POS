@@ -279,6 +279,9 @@ export class BridgeClient {
                 message?: string;
             }>(`/api/printers/${encodeURIComponent(deviceId)}/print`, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain; charset=utf-8',
+                },
                 body: receiptText,
             });
         } catch (err: any) {
