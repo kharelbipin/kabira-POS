@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from './db.js';
+import { getAuthUser } from './authSession.js';
 import {
   OnlineStoreConfig,
   OnlineProductSettings,
@@ -8,7 +9,6 @@ import {
   OnlineCoupon,
   StoreLocation,
   Order,
-  User,
   InventoryAdjustment,
 } from '../src/types.js';
 
@@ -273,12 +273,6 @@ export const onlineOrders: OnlineOrder[] = [
     updatedAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
   },
 ];
-
-function getAuthUser(req: Request): User {
-  const userId = (req.headers['x-user-id'] as string) || 'usr-1';
-  const user = db.users.find(u => u.id === userId && u.active);
-  return user || db.users[0];
-}
 
 // ----------------------------------------------------
 // WEB CONFIGURATION (WEB-001, WEB-002, WEB-003, WEB-051)
