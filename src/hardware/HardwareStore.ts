@@ -499,21 +499,89 @@ export class HardwareStore {
         }
 
         const opts = options || {};
+        const WIDTH = 42;
+        const divider = '-'.repeat(WIDTH);
+        const doubleDivider = '='.repeat(WIDTH);
+
         const money = (value: any): string => {
             const n = Number(value);
             return Number.isFinite(n) ? `$${n.toFixed(2)}` : '$0.00';
         };
+
         const value = (...candidates: any[]): any =>
             candidates.find((candidate) => candidate !== undefined && candidate !== null && candidate !== '');
 
+        const safeText = (input: any): string =>
+            String(input ?? '')
+                .replace(/[\r\n]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+        const center = (input: any): string => {
+            const text = safeText(input);
+            if (text.length >= WIDTH) return text;
+            return ' '.repeat(Math.max(0, Math.floor((WIDTH - text.length) / 2))) + text;
+        };
+
+        const leftRight = (left: any, right: any): string => {
+            const leftText = safeText(left);
+            const rightText = safeText(right);
+            const gap = WIDTH - leftText.length - rightText.length;
+            if (gap >= 1) return leftText + ' '.repeat(gap) + rightText;
+            return `${leftText.slice(0, Math.max(1, WIDTH - rightText.length - 1))} ${rightText}`;
+        };
+
+        const wrap = (input: any, indent = ''): string[] => {
+            const text = safeText(input);
+            if (!text) return [];
+            const maxWidth = Math.max(8, WIDTH - indent.length);
+            const words = text.split(' ');
+            const result: string[] = [];
+            let current = '';
+
+            for (const word of words) {
+                if (!current) {
+                    current = word;
+                    continue;
+                }
+                if ((current + ' ' + word).length <= maxWidth) {
+                    current += ' ' + word;
+                } else {
+                    result.push(indent + current);
+                    current = word;
+                }
+            }
+
+            if (current) result.push(indent + current);
+            return result;
+        };
+
+        const pushMultiline = (lines: string[], input: any, centered = false) => {
+            String(input ?? '')
+                .split(/\r?\n/)
+                .map(line => line.trim())
+                .filter(Boolean)
+                .forEach(line => {
+                    const wrapped = wrap(line);
+                    wrapped.forEach(part => lines.push(centered ? center(part) : part));
+                });
+        };
+
         const storeName = value(
-            opts.storeName,
-            receiptData.storeName,
-            receiptData.store?.name,
+            opts.receiptStoreName,
+            receiptData.store?.receiptStoreName,
             '377 SPIRITS'
         );
-        const storeAddress = value(opts.storeAddress, receiptData.storeAddress, receiptData.store?.address);
-        const storePhone = value(opts.storePhone, receiptData.storePhone, receiptData.store?.phone);
+        const posBrand = value(opts.posBrand, 'KaBiRa POS');
+        const tagline = value(
+            opts.tagline,
+            receiptData.store?.tagline,
+            'Fine Liquors, Craft Spirits, Wine & Beer'
+        );
+        const storeAddress = value(opts.address, opts.storeAddress, receiptData.storeAddress, receiptData.store?.address);
+        const storePhone = value(opts.phone, opts.storePhone, receiptData.storePhone, receiptData.store?.phone);
+        const taxId = value(opts.taxId, receiptData.taxId, receiptData.store?.taxId);
+
         const orderNumber = value(
             receiptData.orderNumber,
             receiptData.orderNo,
@@ -526,6 +594,10 @@ export class HardwareStore {
             receiptData.cashier?.name,
             receiptData.employeeName,
             receiptData.employee?.name
+        );
+        const customerName = value(
+            receiptData.customerName,
+            receiptData.customer?.name
         );
         const createdAt = value(
             receiptData.completedAt,
@@ -565,73 +637,180 @@ export class HardwareStore {
             0
         );
 
-        const paymentMethod = value(
-            receiptData.paymentMethod,
-            receiptData.payment?.method,
-            receiptData.paymentType
-        );
-        const lastFour = value(
-            receiptData.payment?.lastFour,
-            receiptData.cardLastFour,
-            receiptData.lastFour
-        );
-        const amountTendered = value(
-            receiptData.amountTendered,
-            receiptData.payment?.amountTendered,
-            receiptData.cashReceived
-        );
-        const changeDue = value(
-            receiptData.changeDue,
-            receiptData.payment?.changeDue
+        const payment = receiptData.payment || {};
+        const payments = Array.isArray(receiptData.payments) ? receiptData.payments : [];
+        const paymentMethod = value(receiptData.paymentMethod, payment.method, receiptData.paymentType, 'cash');
+        const footer = value(
+            opts.receiptFooter,
+            opts.footer,
+            receiptData.receiptFooter,
+            'Thank you for shopping! Please drink responsibly.'
         );
 
         const lines: string[] = [];
-        lines.push(String(storeName).toUpperCase());
-        if (storeAddress) lines.push(String(storeAddress));
-        if (storePhone) lines.push(String(storePhone));
-        lines.push('--------------------------------');
-        if (orderNumber) lines.push(`Receipt: ${orderNumber}`);
+
+        if (opts.isReprint) {
+            lines.push(doubleDivider);
+            lines.push(center('** REPRINT **'));
+            lines.push(doubleDivider);
+        }
+
+        // Store branding / logo equivalent from the on-screen receipt.
+        lines.push(center(posBrand));
+        lines.push(center(String(storeName).toUpperCase()));
+        pushMultiline(lines, tagline, true);
+        if (storeAddress) pushMultiline(lines, storeAddress, true);
+        if (storePhone) lines.push(center(storePhone));
+        if (taxId) lines.push(center(`Tax ID: ${taxId}`));
+
+        lines.push(divider);
+        if (orderNumber) lines.push(leftRight('ORDER:', orderNumber));
         if (createdAt) {
             const parsed = new Date(createdAt);
-            lines.push(`Date: ${Number.isNaN(parsed.getTime()) ? String(createdAt) : parsed.toLocaleString()}`);
+            const dateText = Number.isNaN(parsed.getTime()) ? String(createdAt) : parsed.toLocaleString();
+            lines.push(leftRight('DATE:', dateText));
         }
-        if (cashier) lines.push(`Cashier: ${cashier}`);
-        if (orderNumber || createdAt || cashier) lines.push('--------------------------------');
+        if (cashier) lines.push(leftRight('CASHIER:', cashier));
+        if (customerName) lines.push(leftRight('CUSTOMER:', customerName));
+
+        lines.push(divider);
+        lines.push(leftRight('ITEM', 'TOTAL'));
 
         for (const item of items) {
             const product = item?.product || {};
             const name = value(item?.name, product?.name, item?.description, 'Item');
-            const size = value(item?.size, product?.size);
+            const size = value(item?.size, product?.size, product?.volume);
             const quantity = Number(value(item?.quantity, item?.qty, 1)) || 1;
             const unitPrice = Number(value(item?.unitPrice, item?.price, product?.price, 0)) || 0;
             const lineDiscount = Number(value(item?.discountAmount, item?.discount, 0)) || 0;
-            const explicitLineTotal = value(item?.lineTotal, item?.total);
-            const lineTotal =
-                explicitLineTotal !== undefined && explicitLineTotal !== null
-                    ? Number(explicitLineTotal)
-                    : quantity * unitPrice - lineDiscount;
+            const previewLineTotal = Math.max(0, quantity * unitPrice - lineDiscount);
 
-            lines.push(size ? `${name} ${size}` : String(name));
-            lines.push(`${quantity} x ${money(unitPrice)}    ${money(lineTotal)}`);
-            if (lineDiscount > 0) lines.push(`  Discount: -${money(lineDiscount)}`);
+            const itemNameLines = wrap(name);
+            if (itemNameLines.length > 0) {
+                const lastNameLine = itemNameLines.pop()!;
+                itemNameLines.forEach(nameLine => lines.push(nameLine));
+                lines.push(leftRight(lastNameLine, money(previewLineTotal)));
+            }
+
+            const detail = `${quantity} x ${money(unitPrice)}${size ? ` (${size})` : ''}`;
+            lines.push(detail);
+            if (lineDiscount > 0) {
+                lines.push(leftRight('  Discount', `-${money(lineDiscount)}`));
+            }
         }
 
-        lines.push('--------------------------------');
-        lines.push(`Subtotal: ${money(subtotal)}`);
-        if (Number(discount) > 0) lines.push(`Discount: -${money(discount)}`);
-        lines.push(`Tax:      ${money(tax)}`);
-        lines.push(`TOTAL:    ${money(total)}`);
+        lines.push(divider);
+        lines.push(leftRight('Subtotal:', money(subtotal)));
+        if (Number(discount) > 0) lines.push(leftRight('Total Discount:', `-${money(discount)}`));
+        lines.push(leftRight('Sales Tax:', money(tax)));
+        lines.push(leftRight('TOTAL:', money(total)));
 
-        if (paymentMethod || lastFour || amountTendered !== undefined || changeDue !== undefined) {
-            lines.push('--------------------------------');
-            if (paymentMethod) lines.push(`Payment: ${paymentMethod}`);
-            if (lastFour) lines.push(`Card: ****${String(lastFour).slice(-4)}`);
-            if (amountTendered !== undefined) lines.push(`Tendered: ${money(amountTendered)}`);
-            if (changeDue !== undefined) lines.push(`Change:   ${money(changeDue)}`);
+        const hasLoyalty =
+            receiptData.pointsEarned !== undefined ||
+            (receiptData.pointsRedeemed !== undefined && Number(receiptData.pointsRedeemed) > 0) ||
+            receiptData.customerLoyaltyBalance !== undefined;
+
+        if (hasLoyalty) {
+            lines.push(divider);
+            lines.push(center('LOYALTY REWARDS'));
+            if (receiptData.customerLoyaltyBalance !== undefined) {
+                lines.push(leftRight('Balance:', `${receiptData.customerLoyaltyBalance} PTS`));
+            }
+            if (Number(receiptData.pointsRedeemed || 0) > 0) {
+                lines.push(
+                    leftRight(
+                        'Points Redeemed:',
+                        `-${receiptData.pointsRedeemed} PTS (-${money(receiptData.pointsDiscountAmount || 0)})`
+                    )
+                );
+            }
+            if (Number(receiptData.pointsEarned || 0) > 0) {
+                lines.push(leftRight('Points Earned Today:', `+${receiptData.pointsEarned} PTS`));
+            }
         }
 
-        lines.push('--------------------------------');
-        lines.push(value(opts.footer, receiptData.receiptFooter, 'Thank you for shopping with us!'));
+        lines.push(divider);
+
+        if (payments.length > 1) {
+            lines.push(`PAYMENT METHOD: MULTI-TENDER (${payments.length})`);
+            lines.push(`PAYMENTS RECORDED (${payments.length}):`);
+
+            payments.forEach((p: any, idx: number) => {
+                const method = String(p?.method || 'card').toLowerCase();
+                const label = method === 'cash'
+                    ? `#${idx + 1} CASH`
+                    : `#${idx + 1} ${safeText(p?.cardBrand || 'CARD')}${p?.cardLast4 ? ` ****${p.cardLast4}` : ''}`;
+
+                lines.push(leftRight(label + ':', money(p?.amount || 0)));
+                if (p?.authCode) {
+                    lines.push(leftRight(`  Auth: ${p.authCode}`, 'APPROVED'));
+                }
+                if (Number(p?.changeDue || 0) > 0) {
+                    lines.push(leftRight('  Change Tendered:', money(p.changeDue)));
+                }
+            });
+
+            const totalPaid = payments.reduce((sum: number, p: any) => sum + (Number(p?.amount) || 0), 0);
+            lines.push(leftRight('TOTAL PAID:', money(totalPaid)));
+        } else if (String(paymentMethod).toLowerCase() === 'cash') {
+            lines.push('PAYMENT METHOD: CASH');
+
+            if (Array.isArray(payment.cashEntries) && payment.cashEntries.length > 1) {
+                lines.push(`CASH TENDERS (${payment.cashEntries.length})`);
+                payment.cashEntries.forEach((entry: any, idx: number) => {
+                    const label = `Tender #${idx + 1}${entry?.time ? ` (${entry.time})` : ''}`;
+                    lines.push(leftRight(label + ':', `+${money(entry?.amount || 0)}`));
+                });
+            }
+
+            lines.push(
+                leftRight(
+                    'CASH TENDERED:',
+                    money(value(payment.cashTendered, payment.amountTendered, receiptData.amountTendered, total))
+                )
+            );
+            lines.push(leftRight('CHANGE DUE:', money(value(payment.changeDue, receiptData.changeDue, 0))));
+        } else if (String(paymentMethod).toLowerCase() === 'split') {
+            const split = payment.splitDetails || {};
+            if (split.splitType === 'two_cards') {
+                lines.push('PAYMENT METHOD: SPLIT (2 CARDS)');
+                lines.push(
+                    leftRight(
+                        `CARD 1 (${split.card1Brand || 'Card'}${split.card1Last4 ? ` ****${split.card1Last4}` : ''}):`,
+                        money(split.card1Amount || 0)
+                    )
+                );
+                lines.push(leftRight('AUTH 1:', split.card1Auth || 'Not provided'));
+                lines.push(
+                    leftRight(
+                        `CARD 2 (${split.card2Brand || 'Card'}${split.card2Last4 ? ` ****${split.card2Last4}` : ''}):`,
+                        money(split.card2Amount || 0)
+                    )
+                );
+                lines.push(leftRight('AUTH 2:', split.card2Auth || 'Not provided'));
+            } else {
+                lines.push('PAYMENT METHOD: SPLIT (CASH + CARD)');
+                lines.push(leftRight('CASH PORTION:', money(split.cashAmount || 0)));
+                lines.push(leftRight('CARD PORTION:', money(split.cardAmount || 0)));
+                lines.push(leftRight('AUTH CODE:', payment.authCode || 'Not provided'));
+            }
+        } else {
+            lines.push(`PAYMENT METHOD: ${String(paymentMethod).toUpperCase()}`);
+            const cardBrand = value(payment.cardBrand, receiptData.cardBrand, 'CARD');
+            const cardLast4 = value(payment.cardLast4, payment.lastFour, receiptData.cardLast4, receiptData.lastFour);
+            if (cardLast4) {
+                lines.push(leftRight('CARD:', `${cardBrand} **** ${String(cardLast4).slice(-4)}`));
+            }
+            if (payment.authCode) {
+                lines.push(leftRight('AUTH CODE:', payment.authCode));
+            }
+        }
+
+        lines.push(divider);
+        lines.push(center('||||||||||||||||||||||||'));
+        if (orderNumber) lines.push(center(orderNumber));
+        lines.push('');
+        pushMultiline(lines, footer, true);
         lines.push('');
         lines.push('');
 
