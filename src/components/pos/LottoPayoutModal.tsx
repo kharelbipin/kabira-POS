@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { DollarSign, X, CheckCircle2, AlertTriangle, Receipt } from 'lucide-react';
 import { Product, User } from '../../types';
 import { playBeep } from '../../utils/audio';
-import { hardwareStore } from '../../hardware';
 
 interface LottoPayoutModalProps {
   isOpen: boolean;
@@ -20,7 +19,6 @@ export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
 }) => {
   const [payoutStr, setPayoutStr] = useState('20.00');
   const [ticketNumber, setTicketNumber] = useState('');
-  const [kickDrawer, setKickDrawer] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -103,14 +101,6 @@ export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-
-    // If kick drawer enabled, trigger POS bridge pulse
-    if (kickDrawer) {
-      hardwareStore.openCashDrawer({
-        reason: `Texas Lotto Winning Ticket Payout: $${payoutAmount.toFixed(2)}`,
-        orderNumber: ticketNumber ? `TKT-${ticketNumber}` : undefined,
-      }).catch(console.error);
-    }
 
     onAddLottoPayout(payoutItem);
     onClose();
@@ -242,16 +232,9 @@ export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
                 </div>
               </div>
 
-              {/* Kick Drawer Checkbox */}
-              <label className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer bg-slate-950/60 p-2 rounded-xl border border-slate-800">
-                <input
-                  type="checkbox"
-                  checked={kickDrawer}
-                  onChange={e => setKickDrawer(e.target.checked)}
-                  className="w-4 h-4 accent-rose-500 rounded"
-                />
-                <span className="font-semibold">Pop Cash Drawer (Pulse)</span>
-              </label>
+              <div className="text-[11px] text-emerald-300 bg-emerald-950/40 border border-emerald-700/40 p-2 rounded-xl leading-tight">
+                Cash drawer opens only after the payout transaction is completed.
+              </div>
 
               <div className="text-[10px] text-slate-500 leading-tight">
                 Texas Lottery retail limit: Max $599.00 in-store payout per ticket.
