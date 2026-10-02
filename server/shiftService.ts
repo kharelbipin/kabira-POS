@@ -13,19 +13,49 @@ import {
 
 // Helper to convert denominations to dollar total
 export function calculateDenominationTotal(d: ShiftDenominationCount): number {
-  const total =
-    (d.d100 || 0) * 100 +
-    (d.d50 || 0) * 50 +
-    (d.d20 || 0) * 20 +
-    (d.d10 || 0) * 10 +
-    (d.d5 || 0) * 5 +
-    (d.d2 || 0) * 2 +
-    (d.d1 || 0) * 1 +
-    (d.c50 || 0) * 0.5 +
-    (d.c25 || 0) * 0.25 +
-    (d.c10 || 0) * 0.1 +
-    (d.c5 || 0) * 0.05 +
-    (d.c1 || 0) * 0.01;
+  // Current POS UI uses descriptive denomination names. Older stored
+  // reconciliation snapshots used d100/d50/c25 style keys, so support both.
+  const usesNamedDenominations =
+    d.hundreds !== undefined ||
+    d.fifties !== undefined ||
+    d.twenties !== undefined ||
+    d.tens !== undefined ||
+    d.fives !== undefined ||
+    d.ones !== undefined ||
+    d.halves !== undefined ||
+    d.quarters !== undefined ||
+    d.dimes !== undefined ||
+    d.nickels !== undefined ||
+    d.pennies !== undefined ||
+    d.rolls !== undefined;
+
+  const total = usesNamedDenominations
+    ? (d.hundreds || 0) * 100 +
+      (d.fifties || 0) * 50 +
+      (d.twenties || 0) * 20 +
+      (d.tens || 0) * 10 +
+      (d.fives || 0) * 5 +
+      (d.ones || 0) +
+      (d.halves || 0) * 0.5 +
+      (d.quarters || 0) * 0.25 +
+      (d.dimes || 0) * 0.1 +
+      (d.nickels || 0) * 0.05 +
+      (d.pennies || 0) * 0.01 +
+      // UI treats this field as a direct dollar amount for loose/rolled coin.
+      (d.rolls || 0)
+    : (d.d100 || 0) * 100 +
+      (d.d50 || 0) * 50 +
+      (d.d20 || 0) * 20 +
+      (d.d10 || 0) * 10 +
+      (d.d5 || 0) * 5 +
+      (d.d2 || 0) * 2 +
+      (d.d1 || 0) +
+      (d.c50 || 0) * 0.5 +
+      (d.c25 || 0) * 0.25 +
+      (d.c10 || 0) * 0.1 +
+      (d.c5 || 0) * 0.05 +
+      (d.c1 || 0) * 0.01;
+
   return Math.round(total * 100) / 100;
 }
 
@@ -118,13 +148,19 @@ export function calculateShiftSummary(shift: Shift): ShiftSummarySnapshot {
     }
   }
 
-  // Cash movements (Paid In / Payouts)
+  // Cash movements.
+  // cash_in increases the drawer, cash_drop removes drawer cash to the safe,
+  // and payout removes drawer cash for an expense/customer payout.
   let paidInTotal = 0;
   let payoutsTotal = 0;
+  let cashDropsTotal = 0;
+
   if (shift.cashMovements) {
     for (const mov of shift.cashMovements) {
-      if (mov.type === 'paid_in') {
+      if (mov.type === 'cash_in' || mov.type === 'paid_in') {
         paidInTotal += mov.amount;
+      } else if (mov.type === 'cash_drop') {
+        cashDropsTotal += mov.amount;
       } else if (mov.type === 'payout') {
         payoutsTotal += mov.amount;
       }
@@ -147,7 +183,16 @@ export function calculateShiftSummary(shift: Shift): ShiftSummarySnapshot {
     paidInTotal += cc.finalFee;
   }
 
-  const expectedCash = Math.round((shift.startingCash + cashSales - cashRefunds - payoutsTotal + paidInTotal) * 100) / 100;
+  const expectedCash = Math.round(
+    (
+      shift.startingCash +
+      cashSales -
+      cashRefunds -
+      payoutsTotal -
+      cashDropsTotal +
+      paidInTotal
+    ) * 100
+  ) / 100;
   const totalCompletedTransactions = shiftOrders.filter(o => o.status === 'completed').length;
   const grandTotalSales = Math.round((netSales + taxCollected) * 100) / 100;
 
@@ -182,7 +227,6 @@ export function calculateShiftSummary(shift: Shift): ShiftSummarySnapshot {
 
   const checksCashedVolume = shiftCashedChecks.reduce((sum, c) => sum + c.customerPayoutAmount, 0);
   const checksCashedCount = shiftCashedChecks.length;
-  const cashDropsTotal = shift.cashMovements?.filter(m => m.type === 'payout' || (m as any).type === 'cash_drop').reduce((sum, m) => sum + m.amount, 0) || 0;
 
   return {
     grossSales: Math.round(grossSales * 100) / 100,
