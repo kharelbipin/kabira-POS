@@ -2,124 +2,65 @@ import { Router, Request, Response } from 'express';
 import { GoogleGenAI } from '@google/genai';
 import { db } from './db.js';
 import { getAuthUser } from './authSession.js';
-import { Product, InventoryAdjustment, AiShelfCountSession, AiDetectedBottle, User } from '../src/types.js';
+import { Product, InventoryAdjustment, AiShelfCountSession, AiDetectedBottle } from '../src/types.js';
 
 export const inventoryAiRouter = Router();
 
 // Store past AI shelf count sessions in memory with persistence on server
-export const aiShelfCountSessions: AiShelfCountSession[] = [
-  {
-    id: 'ais-101',
-    shelfLocation: 'Aisle 3 - Bourbon & Rye Premium Top Shelf',
-    photoUrl: 'https://images.unsplash.com/photo-1527061011665-3652c757a4d4?w=800&q=80',
-    totalBottlesDetected: 26,
-    appliedToPos: true,
-    appliedAt: '2026-09-08T16:30:00Z',
-    operatorId: 'usr-2',
-    operatorName: 'Marcus Rivera (Manager)',
-    notes: 'Weekly cycle count - corrected Buffalo Trace (+2) and Woodford Reserve (-1)',
-    createdAt: '2026-09-08T16:25:00Z',
-    items: [
-      {
-        productId: 'prod-1',
-        productName: 'Buffalo Trace Kentucky Straight Bourbon',
-        matchedCatalogName: 'Buffalo Trace Kentucky Straight Bourbon 750ml',
-        size: '750ml',
-        detectedCount: 16,
-        currentPosStock: 14,
-        variance: 2,
-        confidence: 97,
-        brand: 'Buffalo Trace',
-        shelfSection: 'Row 1',
-      },
-      {
-        productId: 'prod-2',
-        productName: 'Eagle Rare 10 Year Bourbon',
-        matchedCatalogName: 'Eagle Rare 10 Year Bourbon 750ml',
-        size: '750ml',
-        detectedCount: 4,
-        currentPosStock: 4,
-        variance: 0,
-        confidence: 98,
-        brand: 'Buffalo Trace',
-        shelfSection: 'Row 1',
-      },
-      {
-        productId: 'prod-3',
-        productName: 'Woodford Reserve Kentucky Derby Edition',
-        matchedCatalogName: 'Woodford Reserve Kentucky Derby Edition 1L',
-        size: '1L',
-        detectedCount: 6,
-        currentPosStock: 7,
-        variance: -1,
-        confidence: 94,
-        brand: 'Woodford Reserve',
-        shelfSection: 'Row 2',
-      },
-    ],
-  },
-];
+export const aiShelfCountSessions: AiShelfCountSession[] = [];
 
-// Fallback heuristic bottle counter if Gemini API is unavailable or offline
-function heuristicBottleAnalysis(shelfLabel: string, products: Product[]): AiDetectedBottle[] {
-  const activeProducts = products.filter(p => p.active);
-  // Pick representative bottles from the catalog matching shelf category
-  const selected = activeProducts.slice(0, 4);
-
-  return selected.map((prod, idx) => {
-    // Realistic simulation variance: 0, +1, -1, or +2
-    const variance = idx === 0 ? 2 : idx === 2 ? -1 : 0;
-    const detected = Math.max(0, prod.stockQuantity + variance);
-    return {
-      productId: prod.id,
-      productName: prod.name,
-      matchedCatalogName: `${prod.name} (${prod.size})`,
-      size: prod.size,
-      detectedCount: detected,
-      currentPosStock: prod.stockQuantity,
-      variance: detected - prod.stockQuantity,
-      confidence: 92 + (idx * 2),
-      brand: prod.brandName || 'Top Shelf Spirits',
-      shelfSection: `Shelf Bay ${idx + 1}`,
-    };
-  });
-}
+// Production safety: never fabricate shelf counts when the vision service is
+// unavailable or cannot confidently return structured results.
 
 // POST /api/inventory/ai-shelf-count - Analyze shelf image and count bottles
 inventoryAiRouter.post('/inventory/ai-shelf-count', async (req: Request, res: Response) => {
   try {
+    getAuthUser(req);
+
     const { imageDataUrl, shelfLocation = 'Front Retail Shelf' } = req.body;
     const products = db.products;
 
-    let detectedBottles: AiDetectedBottle[] = [];
-    let detectedTotal = 0;
-    let confidenceScore = 95;
+    if (!imageDataUrl || typeof imageDataUrl !== 'string' || !imageDataUrl.startsWith('data:')) {
+      return res.status(400).json({
+        error: 'A valid shelf image is required for AI inventory counting.',
+      });
+    }
 
-    // Check if Gemini API key exists
-    if (process.env.GEMINI_API_KEY && imageDataUrl && imageDataUrl.startsWith('data:')) {
-      try {
-        const ai = new GoogleGenAI({
-          apiKey: process.env.GEMINI_API_KEY,
-          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
-        });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({
+        error: 'AI shelf counting is unavailable because the vision service is not configured.',
+      });
+    }
 
-        const matches = imageDataUrl.match(/^data:([^;]+);base64,(.+)$/);
-        if (matches) {
-          const mimeType = matches[1];
-          const base64Data = matches[2];
+    const matches = imageDataUrl.match(/^data:([^;]+);base64,(.+)$/);
 
-          // Provide compact catalog context to help Gemini accurately map bottles to catalog
-          const catalogSummary = products.slice(0, 30).map(p => ({
-            id: p.id,
-            name: p.name,
-            size: p.size,
-            brand: p.brandName,
-            currentStock: p.stockQuantity,
-          }));
+    if (!matches) {
+      return res.status(400).json({
+        error: 'Shelf image must be a valid base64 data URL.',
+      });
+    }
 
-          const prompt = `You are a high-precision computer vision model for liquor store inventory management at 377 Spirits.
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+    });
+
+    const catalogSummary = products.slice(0, 30).map(p => ({
+      id: p.id,
+      name: p.name,
+      size: p.size,
+      brand: p.brandName,
+      currentStock: p.stockQuantity,
+    }));
+
+    const prompt = `You are a high-precision computer vision model for liquor store inventory management at 377 Spirits.
 Analyze this shelf or display image carefully.
-Count the physical bottles or cans visible on the shelf, identify the brand/product name, and estimate quantity.
+Count only physical bottles or cans that are actually visible in the image.
+Do not estimate hidden products and do not invent quantities.
+Identify the brand/product name and visible quantity.
 
 Store catalog for reference:
 ${JSON.stringify(catalogSummary, null, 2)}
@@ -135,66 +76,122 @@ Return a JSON object strictly adhering to this schema:
       "detectedCount": number,
       "brand": "string",
       "shelfSection": "string (e.g. Row 1, Top Shelf, Front Left)",
-      "confidence": number (80 to 99)
+      "confidence": number (0 to 100)
     }
   ],
   "totalBottlesCounted": number,
   "confidenceScore": number
 }`;
 
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: {
-              parts: [
-                {
-                  inlineData: {
-                    mimeType,
-                    data: base64Data,
-                  },
-                },
-                { text: prompt },
-              ],
-            },
-            config: {
-              responseMimeType: 'application/json',
-            },
-          });
+    let response: any;
 
-          if (response.text) {
-            const parsed = JSON.parse(response.text);
-            if (Array.isArray(parsed.detectedItems) && parsed.detectedItems.length > 0) {
-              detectedBottles = parsed.detectedItems.map((item: any) => {
-                const matched = products.find(p => p.id === item.productId || p.name.toLowerCase().includes(item.productName.toLowerCase()));
-                const currentStock = matched ? matched.stockQuantity : 12;
-                return {
-                  productId: matched ? matched.id : item.productId || `prod-detected-${Date.now()}`,
-                  productName: item.productName || (matched ? matched.name : 'Unknown Spirit'),
-                  matchedCatalogName: matched ? `${matched.name} (${matched.size})` : item.matchedCatalogName,
-                  size: item.size || (matched ? matched.size : '750ml'),
-                  detectedCount: Number(item.detectedCount) || 1,
-                  currentPosStock: currentStock,
-                  variance: (Number(item.detectedCount) || 1) - currentStock,
-                  confidence: Number(item.confidence) || 94,
-                  brand: item.brand || (matched ? matched.brandName : 'Spirits'),
-                  shelfSection: item.shelfSection || 'Main Bay',
-                };
-              });
-              detectedTotal = parsed.totalBottlesCounted || detectedBottles.reduce((s, b) => s + b.detectedCount, 0);
-              confidenceScore = parsed.confidenceScore || 95;
-            }
-          }
+    try {
+      response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType,
+                data: base64Data,
+              },
+            },
+            { text: prompt },
+          ],
+        },
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+    } catch (geminiError: any) {
+      console.error('Gemini vision bottle counter error:', geminiError?.message || geminiError);
+
+      return res.status(502).json({
+        error: 'The AI vision service could not analyze this shelf image. Inventory was not changed.',
+      });
+    }
+
+    if (!response?.text) {
+      return res.status(422).json({
+        error: 'The AI vision service returned no usable shelf-count result. Inventory was not changed.',
+      });
+    }
+
+    let parsed: any;
+
+    try {
+      parsed = JSON.parse(response.text);
+    } catch {
+      return res.status(422).json({
+        error: 'The AI vision response was not valid structured data. Inventory was not changed.',
+      });
+    }
+
+    if (!Array.isArray(parsed.detectedItems)) {
+      return res.status(422).json({
+        error: 'The AI vision response did not contain a valid detected-items list. Inventory was not changed.',
+      });
+    }
+
+    const detectedBottles: AiDetectedBottle[] = parsed.detectedItems
+      .map((item: any) => {
+        const requestedName = String(item?.productName || '').trim();
+
+        const matched = products.find(
+          p =>
+            p.id === item?.productId ||
+            (requestedName.length > 0 &&
+              p.name.toLowerCase().includes(requestedName.toLowerCase()))
+        );
+
+        const detectedCount = Number(item?.detectedCount);
+        const confidence = Number(item?.confidence);
+
+        if (!Number.isFinite(detectedCount) || detectedCount < 0) {
+          return null;
         }
-      } catch (geminiError: any) {
-        console.warn('Gemini vision bottle counter error, falling back to heuristic engine:', geminiError.message);
-      }
+
+        const normalizedCount = Math.floor(detectedCount);
+        const currentStock = matched ? matched.stockQuantity : 0;
+
+        return {
+          productId: matched ? matched.id : String(item?.productId || ''),
+          productName: requestedName || (matched ? matched.name : 'Unmatched Product'),
+          matchedCatalogName: matched
+            ? `${matched.name} (${matched.size})`
+            : String(item?.matchedCatalogName || ''),
+          size: String(item?.size || (matched ? matched.size : '')),
+          detectedCount: normalizedCount,
+          currentPosStock: currentStock,
+          variance: normalizedCount - currentStock,
+          confidence: Number.isFinite(confidence)
+            ? Math.max(0, Math.min(100, confidence))
+            : 0,
+          brand: String(item?.brand || (matched ? matched.brandName || '' : '')),
+          shelfSection: String(item?.shelfSection || ''),
+        } as AiDetectedBottle;
+      })
+      .filter((item: AiDetectedBottle | null): item is AiDetectedBottle => item !== null);
+
+    if (detectedBottles.length === 0) {
+      return res.status(422).json({
+        error: 'No reliable visible inventory counts were returned. Inventory was not changed.',
+      });
     }
 
-    // Fallback if vision didn't extract or no key
-    if (detectedBottles.length === 0) {
-      detectedBottles = heuristicBottleAnalysis(shelfLocation, products);
-      detectedTotal = detectedBottles.reduce((s, b) => s + b.detectedCount, 0);
-      confidenceScore = 93;
-    }
+    const detectedTotal = detectedBottles.reduce(
+      (sum, bottle) => sum + bottle.detectedCount,
+      0
+    );
+
+    const rawConfidence = Number(parsed.confidenceScore);
+
+    const confidenceScore = Number.isFinite(rawConfidence)
+      ? Math.max(0, Math.min(100, rawConfidence))
+      : Math.round(
+          detectedBottles.reduce((sum, bottle) => sum + bottle.confidence, 0) /
+            detectedBottles.length
+        );
 
     res.json({
       success: true,
@@ -206,77 +203,142 @@ Return a JSON object strictly adhering to this schema:
     });
   } catch (err: any) {
     console.error('Error in /inventory/ai-shelf-count:', err);
-    res.status(500).json({ error: err.message || 'Failed to analyze shelf image' });
+
+    const status = Number(err?.status) || 500;
+
+    res.status(status).json({
+      error: err?.message || 'Failed to analyze shelf image',
+    });
   }
 });
 
 // POST /api/inventory/ai-shelf-count/apply - Apply AI counts to POS inventory
 inventoryAiRouter.post('/inventory/ai-shelf-count/apply', (req: Request, res: Response) => {
   const currentUser = getAuthUser(req);
-  const { shelfLocation, photoUrl, items = [], notes } = req.body;
+
+  const {
+    shelfLocation,
+    photoUrl,
+    items = [],
+    notes,
+  } = req.body;
 
   if (!Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: 'No items provided to update' });
+    return res.status(400).json({
+      error: 'No items provided to update',
+    });
+  }
+
+  // Validate every item before changing inventory.
+  // This prevents a partially-applied shelf recount.
+  const validatedItems = items.map((item: any) => {
+    const product = db.products.find(
+      p => p.id === item.productId
+    );
+
+    if (!product) {
+      return {
+        error: `Product ${String(item?.productId || 'unknown')} was not found. Inventory was not changed.`,
+      };
+    }
+
+    const detectedCount = Number(item.detectedCount);
+
+    if (!Number.isFinite(detectedCount) || detectedCount < 0) {
+      return {
+        error: `Invalid detected count for ${product.name}. Inventory was not changed.`,
+      };
+    }
+
+    return {
+      product,
+      detectedCount: Math.floor(detectedCount),
+      confidence: Number.isFinite(Number(item.confidence))
+        ? Math.max(0, Math.min(100, Number(item.confidence)))
+        : 0,
+      original: item,
+    };
+  });
+
+  const validationFailure = validatedItems.find(
+    (item: any) => 'error' in item
+  );
+
+  if (validationFailure && 'error' in validationFailure) {
+    return res.status(400).json({
+      error: validationFailure.error,
+    });
   }
 
   const updatedAdjustments: InventoryAdjustment[] = [];
 
-  for (const item of items) {
-    const product = db.products.find(p => p.id === item.productId);
-    if (product) {
-      const oldQty = product.stockQuantity;
-      const newQty = Math.max(0, Number(item.detectedCount));
-      const delta = newQty - oldQty;
+  for (const validated of validatedItems as any[]) {
+    const {
+      product,
+      detectedCount: newQty,
+      confidence,
+    } = validated;
 
-      product.stockQuantity = newQty;
-      product.updatedAt = new Date().toISOString();
+    const oldQty = product.stockQuantity;
+    const delta = newQty - oldQty;
 
-      const adjustment: InventoryAdjustment = {
-        id: `adj-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        productId: product.id,
-        productName: product.name,
-        sku: product.sku,
-        oldQuantity: oldQty,
-        newQuantity: newQty,
-        changeAmount: delta,
-        type: 'ai_shelf_count',
-        reason: `AI Visual Shelf Recount (${shelfLocation || 'Store Shelf'})`,
-        userId: currentUser.id,
-        userName: currentUser.name,
-        createdAt: new Date().toISOString(),
-        notes: notes || `AI Vision verified with ${item.confidence || 95}% confidence`,
-        confidence: item.confidence || 95,
-        shelfLocation,
-      };
+    product.stockQuantity = newQty;
+    product.updatedAt = new Date().toISOString();
 
-      db.inventoryAdjustments.unshift(adjustment);
-      updatedAdjustments.push(adjustment);
+    const adjustment: InventoryAdjustment = {
+      id: `adj-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      productId: product.id,
+      productName: product.name,
+      sku: product.sku,
+      oldQuantity: oldQty,
+      newQuantity: newQty,
+      changeAmount: delta,
+      type: 'ai_shelf_count',
+      reason: `AI Visual Shelf Recount (${shelfLocation || 'Store Shelf'})`,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      createdAt: new Date().toISOString(),
+      notes: notes || `AI Vision verified with ${confidence}% confidence`,
+      confidence,
+      shelfLocation,
+    };
 
-      // Add to global POS Audit Trail
-      db.addAudit(
-        currentUser.id,
-        currentUser.name,
-        currentUser.role,
-        'INVENTORY_ADJUST',
-        'inventory',
-        product.id,
-        `AI Shelf Recount for "${product.name}": ${oldQty} -> ${newQty} (delta: ${delta > 0 ? `+${delta}` : delta})`
-      );
-    }
+    db.inventoryAdjustments.unshift(adjustment);
+    updatedAdjustments.push(adjustment);
+
+    db.addAudit(
+      currentUser.id,
+      currentUser.name,
+      currentUser.role,
+      'INVENTORY_ADJUST',
+      'inventory',
+      product.id,
+      `AI Shelf Recount for "${product.name}": ${oldQty} -> ${newQty} (delta: ${delta > 0 ? `+${delta}` : delta})`
+    );
   }
 
-  // Create session record
+  const sessionItems = (validatedItems as any[]).map(
+    validated => ({
+      ...validated.original,
+      detectedCount: validated.detectedCount,
+      confidence: validated.confidence,
+    })
+  );
+
   const session: AiShelfCountSession = {
     id: `ais-${Date.now()}`,
     shelfLocation: shelfLocation || 'General Spirits Shelf',
-    photoUrl: photoUrl || 'https://images.unsplash.com/photo-1527061011665-3652c757a4d4?w=800&q=80',
-    totalBottlesDetected: items.reduce((s: number, b: any) => s + (Number(b.detectedCount) || 0), 0),
-    items,
+    photoUrl: typeof photoUrl === 'string' ? photoUrl : '',
+    totalBottlesDetected: sessionItems.reduce(
+      (sum: number, item: any) => sum + item.detectedCount,
+      0
+    ),
+    items: sessionItems,
     appliedToPos: true,
     appliedAt: new Date().toISOString(),
     operatorId: currentUser.id,
     operatorName: currentUser.name,
-    notes: notes || `Applied AI count update to ${items.length} products`,
+    notes: notes || `Applied AI count update to ${sessionItems.length} products`,
     createdAt: new Date().toISOString(),
   };
 
@@ -290,44 +352,85 @@ inventoryAiRouter.post('/inventory/ai-shelf-count/apply', (req: Request, res: Re
   });
 });
 
-// GET /api/inventory/ai-shelf-count/sessions - History of AI shelf count sessions
-inventoryAiRouter.get('/inventory/ai-shelf-count/sessions', (req: Request, res: Response) => {
-  res.json({ sessions: aiShelfCountSessions });
-});
+// GET /api/inventory/ai-shelf-count/sessions
+inventoryAiRouter.get(
+  '/inventory/ai-shelf-count/sessions',
+  (req: Request, res: Response) => {
+    getAuthUser(req);
+
+    res.json({
+      sessions: aiShelfCountSessions,
+    });
+  }
+);
 
 // Live mobile shelf photo staging store
-const liveShelfUploads: Record<string, { id: string; url: string; label: string; timestamp: number }[]> = {};
+const liveShelfUploads: Record<
+  string,
+  {
+    id: string;
+    url: string;
+    label: string;
+    timestamp: number;
+  }[]
+> = {};
 
-// POST /api/inventory/ai-shelf-count/sessions/:sessionId/photos - upload photos from smartphone camera
-inventoryAiRouter.post('/inventory/ai-shelf-count/sessions/:sessionId/photos', (req: Request, res: Response) => {
-  const { sessionId } = req.params;
-  const { photos, photoUrl, label } = req.body;
-  if (!liveShelfUploads[sessionId]) {
-    liveShelfUploads[sessionId] = [];
-  }
-  if (Array.isArray(photos)) {
-    photos.forEach((p: any, idx: number) => {
+// POST /api/inventory/ai-shelf-count/sessions/:sessionId/photos
+inventoryAiRouter.post(
+  '/inventory/ai-shelf-count/sessions/:sessionId/photos',
+  (req: Request, res: Response) => {
+    getAuthUser(req);
+
+    const { sessionId } = req.params;
+    const { photos, photoUrl, label } = req.body;
+
+    if (!liveShelfUploads[sessionId]) {
+      liveShelfUploads[sessionId] = [];
+    }
+
+    if (Array.isArray(photos)) {
+      photos.forEach((p: any, idx: number) => {
+        liveShelfUploads[sessionId].push({
+          id: p.id || `photo-${Date.now()}-${idx}`,
+          url: p.url || p,
+          label:
+            p.label ||
+            `Shot ${liveShelfUploads[sessionId].length + 1}`,
+          timestamp: Date.now(),
+        });
+      });
+    } else if (photoUrl) {
       liveShelfUploads[sessionId].push({
-        id: p.id || `photo-${Date.now()}-${idx}`,
-        url: p.url || p,
-        label: p.label || `Shot ${liveShelfUploads[sessionId].length + 1}`,
+        id: `photo-${Date.now()}`,
+        url: photoUrl,
+        label:
+          label ||
+          `Shot ${liveShelfUploads[sessionId].length + 1}`,
         timestamp: Date.now(),
       });
-    });
-  } else if (photoUrl) {
-    liveShelfUploads[sessionId].push({
-      id: `photo-${Date.now()}`,
-      url: photoUrl,
-      label: label || `Shot ${liveShelfUploads[sessionId].length + 1}`,
-      timestamp: Date.now(),
+    }
+
+    res.json({
+      success: true,
+      count: liveShelfUploads[sessionId].length,
+      photos: liveShelfUploads[sessionId],
     });
   }
-  res.json({ success: true, count: liveShelfUploads[sessionId].length, photos: liveShelfUploads[sessionId] });
-});
+);
 
-// GET /api/inventory/ai-shelf-count/sessions/:sessionId/photos - retrieve photos for session
-inventoryAiRouter.get('/inventory/ai-shelf-count/sessions/:sessionId/photos', (req: Request, res: Response) => {
-  const { sessionId } = req.params;
-  const photos = liveShelfUploads[sessionId] || [];
-  res.json({ success: true, photos });
-});
+// GET /api/inventory/ai-shelf-count/sessions/:sessionId/photos
+inventoryAiRouter.get(
+  '/inventory/ai-shelf-count/sessions/:sessionId/photos',
+  (req: Request, res: Response) => {
+    getAuthUser(req);
+
+    const { sessionId } = req.params;
+    const photos =
+      liveShelfUploads[sessionId] || [];
+
+    res.json({
+      success: true,
+      photos,
+    });
+  }
+);
