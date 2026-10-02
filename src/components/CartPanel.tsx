@@ -388,7 +388,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
         )}
 
         <div className="flex justify-between text-xs text-slate-600 font-medium">
-          <span>Tax ({((taxRate ?? 0) * 100).toFixed(2)}%)</span>
+          <span>Tax</span>
           <span className="font-mono text-slate-900 font-bold">${(taxTotal ?? 0).toFixed(2)}</span>
         </div>
 
