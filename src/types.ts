@@ -427,6 +427,7 @@ export interface StoreSettings {
   timezone?: string;
   defaultTaxRate: number; // e.g. 0.0825
   requireManagerDiscountAbove: number; // e.g. 20 (%)
+  requireManagerToOpenDrawerNoSale?: boolean; // Default false: cashier can open drawer directly
   allowedPaymentMethods?: {
     cash: boolean;
     card: boolean;
