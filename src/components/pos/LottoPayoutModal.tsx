@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DollarSign, X, CheckCircle2, AlertTriangle, Key, Receipt } from 'lucide-react';
+import { DollarSign, X, CheckCircle2, AlertTriangle, Receipt } from 'lucide-react';
 import { Product, User } from '../../types';
 import { playBeep } from '../../utils/audio';
 import { hardwareStore } from '../../hardware';
@@ -16,19 +16,16 @@ const QUICK_PAYOUTS = [5, 10, 20, 25, 40, 50, 100, 200, 500];
 export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
   isOpen,
   onClose,
-  currentUser,
   onAddLottoPayout,
 }) => {
   const [payoutStr, setPayoutStr] = useState('20.00');
   const [ticketNumber, setTicketNumber] = useState('');
   const [kickDrawer, setKickDrawer] = useState(true);
-  const [managerPin, setManagerPin] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const payoutAmount = Math.max(0, parseFloat(payoutStr) || 0);
-  const requiresManagerPin = payoutAmount >= 200 && currentUser?.role === 'Cashier';
 
   const handleQuickAmount = (val: number) => {
     playBeep('click');
@@ -82,14 +79,6 @@ export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
         'Texas Lottery rules prohibit in-store retail payouts over $599.00. Direct customer to the Texas Lottery Claim Center.'
       );
       return;
-    }
-
-    if (requiresManagerPin) {
-      if (managerPin !== '5555' && managerPin !== '9999') {
-        playBeep('error');
-        setErrorMsg('Manager PIN (5555 or 9999) required for payouts >= $200.00');
-        return;
-      }
     }
 
     playBeep('success');
@@ -263,24 +252,6 @@ export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
                 />
                 <span className="font-semibold">Pop Cash Drawer (Pulse)</span>
               </label>
-
-              {/* Manager PIN if high payout */}
-              {requiresManagerPin && (
-                <div className="bg-rose-950/40 border border-rose-800/50 p-2.5 rounded-xl space-y-1">
-                  <div className="flex items-center space-x-1.5 text-[11px] font-bold text-rose-400">
-                    <Key className="w-3.5 h-3.5" />
-                    <span>Manager PIN Required (&gt;=$200)</span>
-                  </div>
-                  <input
-                    type="password"
-                    maxLength={4}
-                    value={managerPin}
-                    onChange={e => setManagerPin(e.target.value)}
-                    placeholder="PIN (5555)"
-                    className="w-full bg-slate-950 border border-rose-700/60 rounded-lg px-2 py-1 text-xs text-center font-mono text-white"
-                  />
-                </div>
-              )}
 
               <div className="text-[10px] text-slate-500 leading-tight">
                 Texas Lottery retail limit: Max $599.00 in-store payout per ticket.
