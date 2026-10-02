@@ -562,7 +562,7 @@ export default function App() {
 
     const newHold: HeldOrder = {
       id: `hold_${Date.now()}`,
-      holdNumber: `HOLD-${Math.floor(100 + Math.random() * 900)}`,
+      holdNumber: `HOLD-${Date.now().toString().slice(-6)}`,
       createdAt: new Date().toISOString(),
       cashierId: currentUser?.id || 'cashier-1',
       cashierName: currentUser?.name || 'Cashier',
@@ -581,12 +581,24 @@ export default function App() {
   };
 
   const handleResumeHeldOrder = (held: HeldOrder) => {
+    // Never silently overwrite an active sale when resuming a parked order.
+    // The cashier must hold, complete, or clear the current transaction first.
+    if (cartItems.length > 0) {
+      playBeep('error', settings?.scannerSound);
+      window.alert(
+        'Current Order already has items. Hold, complete, or clear the current order before resuming a held order.'
+      );
+      return;
+    }
+
     setCartItems(held.items);
     setSelectedCustomer(held.customer || null);
     setOrderDiscountPercent(held.orderDiscountPercent);
     setOrderDiscountAmount(held.orderDiscountAmount);
     setHeldOrders(prev => prev.filter(h => h.id !== held.id));
+    setShowHeldOrdersModal(false);
     setCurrentTab('pos');
+    playBeep('success', settings?.scannerSound);
   };
 
   const handleDeleteHeldOrder = (id: string) => {
