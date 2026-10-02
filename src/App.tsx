@@ -280,52 +280,51 @@ export default function App() {
   // Load cashier-critical data first so the register becomes usable without
   // waiting for order history/customer history to finish loading.
   const loadAllData = useCallback(async () => {
-    // Start secondary requests immediately, but do not let them block POS startup.
-    const secondaryDataPromise = Promise.all([
-      api.getOrders().catch(() => []),
-      api.getCustomers().catch(() => []),
-    ]);
+    setIsAuthenticating(true);
 
     try {
-      const [u, prods, cats, usrs, setts] = await Promise.all([
-        api.getCurrentUser().catch(() => null),
+      // Always establish the operator session first. Never select a default user.
+      const u = await api.getCurrentUser().catch(() => null);
+
+      if (!u) {
+        setCurrentUser(null);
+        setShowLoginModal(true);
+        return;
+      }
+
+      setCurrentUser(u);
+
+      const [prods, cats, usrs, setts] = await Promise.all([
         api.getProducts().catch(() => []),
         api.getCategories().catch(() => []),
         api.getUsers().catch(() => []),
         api.getSettings().catch(() => null),
       ]);
 
-      if (u) {
-        setCurrentUser(u);
-      } else if (usrs && usrs.length > 0) {
-        // Default to first active user if session not established.
-        const defaultUser =
-          usrs.find(usr => usr.role === 'Cashier' && usr.active) || usrs[0];
-
-        setCurrentUser(defaultUser);
-        api.setUserId(defaultUser.id);
-      }
-
       setProducts(prods);
       setCategories(cats);
       setUsers(usrs);
       if (setts) setSettings(setts);
+
+      // History is useful, but should not block the selling screen.
+      void Promise.all([
+        api.getOrders().catch(() => []),
+        api.getCustomers().catch(() => []),
+      ])
+        .then(([ords, custs]) => {
+          setOrders(ords);
+          setCustomers(custs);
+        })
+        .catch(err => {
+          console.error('Failed to load background POS data:', err);
+        });
     } catch (err) {
       console.error('Failed to load critical POS data:', err);
+      setCurrentUser(null);
+      setShowLoginModal(true);
     } finally {
-      // The selling screen can become available now.
       setIsAuthenticating(false);
     }
-
-    // Finish non-critical history data in the background.
-    void secondaryDataPromise
-      .then(([ords, custs]) => {
-        setOrders(ords);
-        setCustomers(custs);
-      })
-      .catch(err => {
-        console.error('Failed to load background POS data:', err);
-      });
   }, []);
   useEffect(() => {
     if (isCustomerDisplayMode || checkUploadSession || shelfCameraSession || mobileSessionParam) {
@@ -564,14 +563,21 @@ export default function App() {
   // Hold / Resume Order (CA-09 & CA-10)
   const handleHoldOrder = () => {
     if (cartItems.length === 0) return;
+
+    if (!currentUser) {
+      playBeep('error', settings?.scannerSound);
+      setShowLoginModal(true);
+      return;
+    }
+
     playBeep('click', settings?.scannerSound);
 
     const newHold: HeldOrder = {
       id: `hold_${Date.now()}`,
       holdNumber: `HOLD-${Date.now().toString().slice(-6)}`,
       createdAt: new Date().toISOString(),
-      cashierId: currentUser?.id || 'cashier-1',
-      cashierName: currentUser?.name || 'Cashier',
+      cashierId: currentUser.id,
+      cashierName: currentUser.name,
       customer: selectedCustomer || undefined,
       items: [...cartItems],
       orderDiscountPercent,
@@ -987,6 +993,37 @@ export default function App() {
     return <CustomerDisplayView />;
   }
 
+  if (isAuthenticating) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#0A0A0A] text-[#E5E5E5]">
+        <div className="text-center">
+          <div className="mx-auto mb-3 h-10 w-10 rounded-full border-2 border-[#333333] border-t-[#C5A059] animate-spin" />
+          <p className="text-xs uppercase tracking-wider text-[#888888]">
+            Starting KaBiRa POS...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#0A0A0A]">
+        <LoginModal
+          isOpen={true}
+          onClose={() => {
+            // A register cannot be used without an authenticated operator.
+          }}
+          onLoginSuccess={user => {
+            setCurrentUser(user);
+            setShowLoginModal(false);
+            void loadAllData();
+          }}
+        />
+      </div>
+    );
+  }
+
   if (isQueueBusterMode) {
     return (
       <MobileQueueBusterView
@@ -1008,8 +1045,9 @@ export default function App() {
         setCurrentTab={setCurrentTab}
         currentUser={currentUser}
         onOpenLogin={() => setShowLoginModal(true)}
-        onLogout={() => {
-          api.logout();
+        onLogout={async () => {
+          await api.logout();
+          setCurrentUser(null);
           setShowLoginModal(true);
         }}
         heldOrdersCount={heldOrders.length}
@@ -1231,13 +1269,13 @@ export default function App() {
 
         {(currentTab === 'audit' || currentTab === 'audit-log') && <AuditLogsView />}
         {currentTab === 'user-activity' && (
-          {currentUser ? (
-          <UserActivityTrackerView currentUser={currentUser} />
-        ) : (
-          <div className="flex h-full items-center justify-center p-6 text-sm text-slate-500">
-            Sign in to view user activity.
-          </div>
-        )}
+          currentUser ? (
+            <UserActivityTrackerView currentUser={currentUser} />
+          ) : (
+            <div className="flex h-full items-center justify-center p-6 text-sm text-slate-500">
+              Sign in to view user activity.
+            </div>
+          )
         )}
 
         {currentTab === 'online-store' && (
@@ -1266,6 +1304,8 @@ export default function App() {
         onClose={() => setShowLoginModal(false)}
         onLoginSuccess={user => {
           setCurrentUser(user);
+          setShowLoginModal(false);
+          void loadAllData();
         }}
         currentUserId={currentUser?.id}
       />
