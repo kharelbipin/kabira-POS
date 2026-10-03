@@ -57,6 +57,7 @@ import { AdminPosDesigner } from './components/admin/AdminPosDesigner';
 import { StoreFeatureManagementModal } from './components/admin/StoreFeatureManagementModal';
 import { HardwareDeviceManager } from './components/admin/HardwareDeviceManager';
 import { AdminPortalNav } from './components/admin/AdminPortalNav';
+import { AdminHealthDashboard } from './components/admin/AdminHealthDashboard';
 
 const HELD_ORDERS_STORAGE_KEY = 'kabira_pos_held_orders_v1';
 
@@ -1121,14 +1122,23 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 min-h-0 overflow-hidden relative">
         {currentTab === 'dashboard' && (
-          <DashboardView
-            onNavigateToInventory={() => setCurrentTab('inventory')}
-            onNavigateToOrders={() => setCurrentTab('orders')}
-            onViewOrderDetails={order => {
-              setLastCompletedOrder(order);
-              setShowReceiptModal(true);
-            }}
-          />
+          currentUser.role === 'Admin' ? (
+            <AdminHealthDashboard
+              settings={settings}
+              onOpenHardware={() => setCurrentTab('hardware-manager')}
+              onOpenUsers={() => setCurrentTab('users')}
+              onOpenInventory={() => setCurrentTab('inventory')}
+            />
+          ) : (
+            <DashboardView
+              onNavigateToInventory={() => setCurrentTab('inventory')}
+              onNavigateToOrders={() => setCurrentTab('orders')}
+              onViewOrderDetails={order => {
+                setLastCompletedOrder(order);
+                setShowReceiptModal(true);
+              }}
+            />
+          )
         )}
 
         {currentTab === 'pos' && (
