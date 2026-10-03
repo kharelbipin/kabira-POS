@@ -1,16 +1,13 @@
 import React from 'react';
 import {
-  Activity,
   BarChart3,
   Boxes,
-  ClipboardList,
-  Gauge,
-  HardDrive,
+  Clock3,
+  LayoutDashboard,
   LogOut,
   Settings,
   ShoppingCart,
-  UserRoundCog,
-  WalletCards,
+  Users,
 } from 'lucide-react';
 import { StoreSettings, User } from '../../types';
 
@@ -23,16 +20,13 @@ interface ManagerPortalNavProps {
 }
 
 const navItems = [
-  { id: 'manager-dashboard', label: 'Dashboard', icon: Gauge },
-  { id: 'pos', label: 'POS Register', icon: ShoppingCart },
-  { id: 'orders', label: 'Transactions', icon: ClipboardList },
-  { id: 'shifts', label: 'Shifts & Cash', icon: WalletCards },
+  { id: 'manager-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'orders', label: 'Sales', icon: BarChart3 },
   { id: 'inventory', label: 'Inventory', icon: Boxes },
-  { id: 'users', label: 'Employees', icon: UserRoundCog },
-  { id: 'hardware-manager', label: 'Hardware', icon: HardDrive },
-  { id: 'reports', label: 'Reports', icon: BarChart3 },
-  { id: 'audit-log', label: 'Activity', icon: Activity },
-  { id: 'settings', label: 'Store Settings', icon: Settings },
+  { id: 'shifts', label: 'Shifts', icon: Clock3 },
+  { id: 'reports', label: 'Reports', icon: ShoppingCart },
+  { id: 'users', label: 'Users', icon: Users },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 export const ManagerPortalNav: React.FC<ManagerPortalNavProps> = ({
@@ -43,16 +37,16 @@ export const ManagerPortalNav: React.FC<ManagerPortalNavProps> = ({
   onLogout,
 }) => {
   return (
-    <aside className="w-64 shrink-0 h-full bg-slate-950 border-r border-slate-800 flex flex-col text-slate-200">
-      <div className="px-4 py-4 border-b border-slate-800">
-        <div className="text-[10px] uppercase tracking-[0.2em] font-black text-amber-400">KaBiRa POS</div>
-        <div className="text-lg font-black text-white mt-1">Manager Portal</div>
-        <div className="text-[11px] text-slate-400 mt-1 truncate">
-          {settings?.storeName || 'Store Operations'}
+    <aside className="w-[238px] shrink-0 h-full bg-[#061326] border-r border-slate-800 flex flex-col text-slate-200">
+      <div className="px-5 py-5 border-b border-slate-800">
+        <div className="text-xl font-black text-amber-300">KaBiRa <span className="text-white font-semibold">POS</span></div>
+        <div className="text-[10px] uppercase tracking-[0.22em] text-amber-400 mt-1">
+          {settings?.storeName || '377 Spirits'}
         </div>
+        <div className="text-[9px] text-slate-500 mt-0.5">Fine Liquors & Wine</div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+      <nav className="flex-1 py-4 px-2 space-y-1">
         {navItems.map(item => {
           const Icon = item.icon;
           const active = currentTab === item.id;
@@ -61,29 +55,36 @@ export const ManagerPortalNav: React.FC<ManagerPortalNavProps> = ({
               key={item.id}
               type="button"
               onClick={() => setCurrentTab(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-colors cursor-pointer ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-semibold transition-all cursor-pointer ${
                 active
-                  ? 'bg-amber-400 text-slate-950'
-                  : 'text-slate-300 hover:bg-slate-900 hover:text-white'
+                  ? 'bg-sky-950/80 text-white border border-sky-700 shadow-lg shadow-sky-950/30'
+                  : 'text-slate-300 hover:bg-slate-900 hover:text-white border border-transparent'
               }`}
             >
-              <Icon className="w-4 h-4 shrink-0" />
+              <Icon className={`w-5 h-5 ${active ? 'text-sky-300' : 'text-slate-400'}`} />
               <span>{item.label}</span>
             </button>
           );
         })}
       </nav>
 
-      <div className="p-3 border-t border-slate-800 space-y-2">
-        <div className="rounded-xl bg-slate-900 border border-slate-800 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-black">Signed in</div>
+      <div className="p-3 border-t border-slate-800">
+        <div className="rounded-xl bg-slate-950/60 border border-slate-800 px-3 py-3 mb-2">
+          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">Manager</div>
           <div className="text-xs font-black text-white mt-1 truncate">{currentUser.name}</div>
-          <div className="text-[10px] text-slate-400">Manager</div>
         </div>
         <button
           type="button"
+          onClick={() => setCurrentTab('pos')}
+          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-900 cursor-pointer"
+        >
+          <ShoppingCart className="w-4 h-4" />
+          Open POS Register
+        </button>
+        <button
+          type="button"
           onClick={onLogout}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-700 text-xs font-black text-slate-300 hover:bg-slate-900 hover:text-white cursor-pointer"
+          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:bg-slate-900 hover:text-white cursor-pointer"
         >
           <LogOut className="w-4 h-4" />
           Sign Out
