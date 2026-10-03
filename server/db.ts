@@ -637,6 +637,11 @@ class Database {
     autoUpdateProductCost: false, // Default require manager review before changing master cost
     targetProfitMarginPercent: 35, // Default target profit margin of 35% for retail recommendations
     defaultReceivingLocation: 'Main Liquor Storage',
+    scanDataSubscriptionActive: false,
+    scanDataSubscriptionProvider: '',
+    scanDataMonthlySubscriptionFee: 0,
+    scanDataRetailerAccountId: '',
+    scanDataDefaultExportFrequency: 'monthly',
   };
 
   vendors: Vendor[] = [
