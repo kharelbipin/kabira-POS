@@ -1555,6 +1555,17 @@ const customerPhoneToken = (phone?: string) => {
     return createHash('sha256').update(normalized).digest('hex').slice(0, 24);
 };
 
+const exportCustomerIdentifier = (tx: ScanDataTransaction) => {
+    const promo = db.promotions.find(p => p.id === tx.programId);
+    const mode = promo?.customerIdentifierMode || 'token';
+    if (mode === 'none') return '';
+    if (mode === 'raw_phone') {
+        const customer = tx.customerId ? db.customers.find(c => c.id === tx.customerId) : undefined;
+        return normalizePhone(customer?.phone);
+    }
+    return tx.customerPhoneToken || '';
+};
+
 const promotionIsActive = (promo: Promotion, now = new Date()) => {
     if (!promo.active) return false;
     if (promo.startDate && new Date(promo.startDate).getTime() > now.getTime()) return false;
@@ -1828,7 +1839,7 @@ apiRouter.post('/scan-data/export-batches', asyncHandler(async (req: Request, re
         t.manufacturerName, t.distributorName || '', t.programCode, t.programName, t.programType || '',
         t.quantity, t.regularPrice.toFixed(2), t.discountPerUnit.toFixed(2),
         t.manufacturerDiscountTotal.toFixed(2), t.customerPaid.toFixed(2),
-        t.expectedReimbursement.toFixed(2), t.customerPhoneToken || '', t.cashierName, t.registerId
+        t.expectedReimbursement.toFixed(2), exportCustomerIdentifier(t), t.cashierName, t.registerId
     ]);
     const csv = [headers, ...csvRows]
         .map(row => row.map(value => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(','))
@@ -1862,7 +1873,7 @@ apiRouter.get('/scan-data/export-batches/:id/csv', (req: Request, res: Response)
         t.manufacturerName, t.distributorName || '', t.programCode, t.programName, t.programType || '',
         t.quantity, t.regularPrice.toFixed(2), t.discountPerUnit.toFixed(2),
         t.manufacturerDiscountTotal.toFixed(2), t.customerPaid.toFixed(2),
-        t.expectedReimbursement.toFixed(2), t.customerPhoneToken || '', t.cashierName, t.registerId
+        t.expectedReimbursement.toFixed(2), exportCustomerIdentifier(t), t.cashierName, t.registerId
     ]);
     const csv = [headers, ...csvRows]
         .map(row => row.map(value => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(','))
@@ -3348,7 +3359,8 @@ apiRouter.post('/promotions', asyncHandler(async (req: Request, res: Response) =
         name, code, type, value, startDate, endDate, targetType, targetId, minSpend, maxDiscount,
         minPurchaseAmount, maxUsages, fundingSource, manufacturerName, distributorName,
         productHeading, programType, customerPhoneRequired, loyaltyRequired,
-        ageVerificationRequired, reimbursementPerUnit, reportingFrequency, exportTemplate
+        ageVerificationRequired, reimbursementPerUnit, reportingFrequency, exportTemplate,
+        customerIdentifierMode
     } = req.body;
     if (!name || !code || value === undefined) {
         return res.status(400).json({ error: 'Promotion name, code, and discount value are required' });
@@ -3397,6 +3409,7 @@ apiRouter.post('/promotions', asyncHandler(async (req: Request, res: Response) =
         reimbursementPerUnit: reimbursementPerUnit !== undefined ? Number(reimbursementPerUnit) : undefined,
         reportingFrequency: reportingFrequency || undefined,
         exportTemplate: exportTemplate || undefined,
+        customerIdentifierMode: customerIdentifierMode || 'token',
     };
 
     db.promotions.unshift(newPromo);
@@ -3437,7 +3450,8 @@ apiRouter.put('/promotions/:id', asyncHandler(async (req: Request, res: Response
     const extendedFields = [
         'minPurchaseAmount', 'maxUsages', 'fundingSource', 'manufacturerName', 'distributorName',
         'productHeading', 'programType', 'customerPhoneRequired', 'loyaltyRequired',
-        'ageVerificationRequired', 'reimbursementPerUnit', 'reportingFrequency', 'exportTemplate'
+        'ageVerificationRequired', 'reimbursementPerUnit', 'reportingFrequency', 'exportTemplate',
+        'customerIdentifierMode'
     ];
     extendedFields.forEach(field => {
         if (req.body[field] !== undefined) {
