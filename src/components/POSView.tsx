@@ -155,7 +155,7 @@ export const POSView: React.FC<POSViewProps> = ({
       (sum, item) => sum + (item.discountAmount || 0),
       0
     );
-    const adjustedSubtotal = Math.max(0, rawSubtotal - itemDiscounts);
+    const adjustedSubtotal = rawSubtotal - itemDiscounts;
     let orderDiscountAmt = 0;
     if (orderDiscountPercent > 0) {
       orderDiscountAmt = (adjustedSubtotal * orderDiscountPercent) / 100;
@@ -163,7 +163,7 @@ export const POSView: React.FC<POSViewProps> = ({
       orderDiscountAmt = Math.min(adjustedSubtotal, orderDiscountAmount);
     }
     const discountTotalAll = itemDiscounts + orderDiscountAmt;
-    const discountedSubtotal = Math.max(0, adjustedSubtotal - orderDiscountAmt);
+    const discountedSubtotal = adjustedSubtotal - orderDiscountAmt;
     const defaultTaxRate = settings?.defaultTaxRate ?? 0.0825;
     const orderDiscountFactor =
       adjustedSubtotal > 0 ? discountedSubtotal / adjustedSubtotal : 0;
@@ -175,7 +175,7 @@ export const POSView: React.FC<POSViewProps> = ({
       );
       return sum + lineSubtotal * orderDiscountFactor * lineTaxRate;
     }, 0);
-    const grandTotal = Math.max(0, discountedSubtotal + taxableAmount);
+    const grandTotal = discountedSubtotal + taxableAmount;
 
     hardwareStore.syncCartToCustomerDisplay(
       cartItems,
