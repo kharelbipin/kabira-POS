@@ -64,6 +64,7 @@ export interface Promotion {
   reimbursementPerUnit?: number;
   reportingFrequency?: 'daily' | 'weekly' | 'monthly' | 'custom';
   exportTemplate?: string;
+  customerIdentifierMode?: 'token' | 'raw_phone' | 'none';
 }
 
 export type ScanDataSaleStatus = 'sale' | 'void' | 'refund';
