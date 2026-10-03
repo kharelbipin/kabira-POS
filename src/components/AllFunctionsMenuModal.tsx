@@ -409,18 +409,6 @@ export const AllFunctionsMenuModal: React.FC<AllFunctionsMenuModalProps> = ({
 
       // Hardware & Settings
       {
-        id: 'pos-hardware-bridge',
-        title: 'POS Hardware Bridge Hub',
-        category: 'hardware',
-        categoryLabel: 'Hardware & Settings',
-        description: 'Configure and test Star/Epson thermal receipt printers, barcode scanners, and cash drawers.',
-        icon: Cpu,
-        action: () => {
-          onOpenModal('bridge-hub');
-          onClose();
-        },
-      },
-      {
         id: 'store-settings',
         title: 'Manager Settings Center',
         category: 'hardware',
