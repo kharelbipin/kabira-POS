@@ -36,6 +36,7 @@ import {
   Smartphone,
   LayoutGrid,
   ShieldAlert,
+  Printer,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -57,6 +58,7 @@ interface NavbarProps {
   onOpenHelp?: () => void;
   onOpenBridgeHub?: () => void;
   onOpenManagerPortal?: () => void;
+  onOpenPrintLabel?: () => void;
   onOpenCustomerDisplay?: () => void;
   onOpenAllFunctions?: () => void;
 }
@@ -80,6 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenHelp,
   onOpenBridgeHub,
   onOpenManagerPortal,
+  onOpenPrintLabel,
   onOpenCustomerDisplay,
   onOpenAllFunctions,
 }) => {
@@ -402,6 +405,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Landmark className={`w-3.5 h-3.5 ${currentTab === 'checks' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
             <span>Check Cashing</span>
           </button>
+
+          {/* PRINT LABEL */}
+          {onOpenPrintLabel && (
+            <button
+              id="tab-print-label"
+              type="button"
+              onClick={onOpenPrintLabel}
+              className="flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+              title="Scan item and print product label"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-500" />
+              <span>Print Label</span>
+            </button>
+          )}
 
           {/* SETTINGS - Manager/Admin */}
           {(role === 'Admin' || role === 'Manager') && (
