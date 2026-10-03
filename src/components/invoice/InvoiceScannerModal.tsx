@@ -28,7 +28,7 @@ export const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({
   onClose,
   onExtractionComplete,
 }) => {
-  const [activeMode, setActiveMode] = useState<'upload' | 'camera' | 'samples' | 'text'>('samples');
+  const [activeMode, setActiveMode] = useState<'upload' | 'camera' | 'samples' | 'text'>('upload');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -41,6 +41,7 @@ export const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Camera state
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -166,7 +167,7 @@ export const InvoiceScannerModal: React.FC<InvoiceScannerModalProps> = ({
 
     try {
       await new Promise(r => setTimeout(r, 400));
-      setProcessingStep('2/4: Gemini AI reading vendor, totals & line items...');
+      setProcessingStep('2/4: AI reading vendor, invoice number, date, items, quantities, costs & totals...');
       
       const invoice = await api.extractInvoice(payload);
 
@@ -283,22 +284,6 @@ Subtotal: $593.50  Tax: $49.00  Invoice Total: $642.50`,
 
         {/* Mode Selector Tabs */}
         <div className="flex border-b border-[#262626] bg-[#111111] px-6 pt-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              stopCamera();
-              setActiveMode('samples');
-            }}
-            className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors cursor-pointer ${
-              activeMode === 'samples'
-                ? 'border-[#C5A059] text-[#C5A059]'
-                : 'border-transparent text-[#888888] hover:text-white'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Preset Samples (1-Click)</span>
-          </button>
-
           <button
             type="button"
             onClick={() => {
@@ -443,6 +428,49 @@ Subtotal: $593.50  Tax: $49.00  Invoice Total: $642.50`,
                 }}
               />
 
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={e => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    handleFileChange(e.target.files[0]);
+                  }
+                }}
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="p-5 rounded-xl border border-[#C5A059]/50 bg-[#C5A059]/10 hover:bg-[#C5A059]/15 text-left cursor-pointer transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-[#C5A059]/20 flex items-center justify-center text-[#C5A059] mb-3">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <div className="text-sm font-bold text-white">Take Invoice Picture</div>
+                  <div className="text-xs text-[#888888] mt-1">
+                    Open the device camera and photograph the invoice.
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-5 rounded-xl border border-[#333333] bg-[#1A1A1A] hover:border-[#555555] text-left cursor-pointer transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-[#262626] flex items-center justify-center text-[#C5A059] mb-3">
+                    <UploadCloud className="w-5 h-5" />
+                  </div>
+                  <div className="text-sm font-bold text-white">Upload Invoice</div>
+                  <div className="text-xs text-[#888888] mt-1">
+                    Choose a PDF, JPG or PNG invoice from this device.
+                  </div>
+                </button>
+              </div>
+
               <div
                 onDragOver={e => {
                   e.preventDefault();
@@ -462,10 +490,10 @@ Subtotal: $593.50  Tax: $49.00  Invoice Total: $642.50`,
                     <UploadCloud className="w-6 h-6" />
                   </div>
                   <div className="text-sm font-semibold text-white">
-                    Click to browse or drag and drop invoice file
+                    Or drag and drop the invoice here
                   </div>
                   <p className="text-xs text-[#888888]">
-                    Supports PDF, JPG, PNG (up to 50MB)
+                    PDF, JPG or PNG. The original image/file is preserved with the receiving record.
                   </p>
                 </div>
               </div>
@@ -506,7 +534,7 @@ Subtotal: $593.50  Tax: $49.00  Invoice Total: $642.50`,
                       className="flex items-center space-x-1.5 px-4 py-2 bg-[#C5A059] hover:bg-[#D4AF37] text-black font-bold text-xs uppercase tracking-wider rounded-lg transition-colors shadow-md cursor-pointer"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>Start Extraction</span>
+                      <span>Read Invoice With AI</span>
                     </button>
                   </div>
                 </div>
