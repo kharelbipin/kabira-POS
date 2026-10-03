@@ -7,6 +7,7 @@ import {
   LogOut,
   Settings,
   ShoppingCart,
+  Tag,
   Users,
 } from 'lucide-react';
 import { StoreSettings, User } from '../../types';
@@ -23,6 +24,7 @@ const navItems = [
   { id: 'manager-dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'orders', label: 'Sales', icon: BarChart3 },
   { id: 'inventory', label: 'Inventory', icon: Boxes },
+  { id: 'manager-promotions', label: 'Promotions', icon: Tag },
   { id: 'shifts', label: 'Shifts', icon: Clock3 },
   { id: 'reports', label: 'Reports', icon: ShoppingCart },
   { id: 'users', label: 'Users', icon: Users },
