@@ -16,7 +16,7 @@ import {
   RotateCcw,
   HeartHandshake,
 } from 'lucide-react';
-import { CustomerDisplayState, CustomerReceiptPreference } from '../../types';
+import { CustomerDisplayState, CustomerReceiptPreference, StoreSettings } from '../../types';
 import { KabiraEmblem } from '../common/KabiraLogo';
 import { IdentifyDisplaysOverlay } from './IdentifyDisplaysOverlay';
 import { hardwareStore } from '../../hardware/HardwareStore';
@@ -35,7 +35,11 @@ const DEFAULT_DISPLAY_STATE: CustomerDisplayState = {
   promoBanner: 'Specials: Texas Whiskey & Garrison Brothers Bourbon 10% Off with Club Points!',
 };
 
-export const CustomerDisplayView: React.FC = () => {
+interface CustomerDisplayViewProps {
+  settings?: StoreSettings | null;
+}
+
+export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settings }) => {
   const [displayState, setDisplayState] = useState<CustomerDisplayState>(() => {
     try {
       const saved = localStorage.getItem('pos_customer_display_state');
@@ -241,6 +245,10 @@ export const CustomerDisplayView: React.FC = () => {
       id="customer-display-container"
       onClick={handleTouchContainerClick}
       className="h-screen w-screen overflow-hidden bg-[#0A0D14] text-slate-100 flex flex-col font-sans select-none antialiased relative"
+      style={{
+        zoom: (settings?.customerScreenZoomPercent ?? 100) / 100,
+        fontSize: `${settings?.customerScreenFontSizePx ?? 16}px`,
+      }}
     >
       {/* Identify Displays Overlay for Monitor 2 (WV-015) */}
       <IdentifyDisplaysOverlay currentDisplayNumber={2} />
@@ -518,7 +526,10 @@ export const CustomerDisplayView: React.FC = () => {
                     <div className="flex-1 min-w-0 pr-4">
                       <h4 className="text-lg font-bold text-white truncate">{item.name}</h4>
                       <p className="text-xs text-slate-400">
-                        {item.size ? `${item.size} • ` : ''}${item.unitPrice.toFixed(2)} each
+                        {item.size || ''}
+                        {(settings?.customerDisplayShowPrice ?? true) && (
+                          <>{item.size ? ' • ' : ''}${item.unitPrice.toFixed(2)} each</>
+                        )}
                       </p>
                     </div>
 
@@ -527,12 +538,14 @@ export const CustomerDisplayView: React.FC = () => {
                         <span className="text-xs text-slate-400 block font-semibold">QTY</span>
                         <span className="text-base font-black text-slate-200">{item.quantity}</span>
                       </div>
-                      <div className="text-right min-w-[90px]">
-                        <span className="text-xs text-slate-400 block font-semibold">TOTAL</span>
-                        <span className="text-xl font-mono font-black text-amber-400">
-                          ${item.lineTotal.toFixed(2)}
-                        </span>
-                      </div>
+                      {(settings?.customerDisplayShowPrice ?? true) && (
+                        <div className="text-right min-w-[90px]">
+                          <span className="text-xs text-slate-400 block font-semibold">TOTAL</span>
+                          <span className="text-xl font-mono font-black text-amber-400">
+                            ${item.lineTotal.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -587,36 +600,40 @@ export const CustomerDisplayView: React.FC = () => {
               Payment Summary
             </h3>
 
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between text-slate-300">
-                <span>Subtotal</span>
-                <span className="font-mono font-bold">${displayState.subtotal.toFixed(2)}</span>
-              </div>
-
-              {displayState.discountTotal > 0 && (
-                <div className="flex justify-between text-emerald-400 font-semibold">
-                  <span>Savings & Discounts</span>
-                  <span className="font-mono font-bold">-${displayState.discountTotal.toFixed(2)}</span>
+            {!(settings?.hideTotalDetails ?? false) && (
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between text-slate-300">
+                  <span>Subtotal</span>
+                  <span className="font-mono font-bold">${displayState.subtotal.toFixed(2)}</span>
                 </div>
-              )}
 
-              <div className="flex justify-between text-slate-300">
-                <span className="flex items-center space-x-1">
-                  <span>Sales Tax</span>
-                </span>
-                <span className="font-mono font-bold">${displayState.taxTotal.toFixed(2)}</span>
+                {displayState.discountTotal > 0 && (
+                  <div className="flex justify-between text-emerald-400 font-semibold">
+                    <span>Savings & Discounts</span>
+                    <span className="font-mono font-bold">-${displayState.discountTotal.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between text-slate-300">
+                  <span className="flex items-center space-x-1">
+                    <span>Sales Tax</span>
+                  </span>
+                  <span className="font-mono font-bold">${displayState.taxTotal.toFixed(2)}</span>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Grand Total Highlight */}
-            <div className="pt-4 border-t-2 border-slate-800 bg-slate-950/60 p-4 rounded-2xl border border-slate-800 text-right">
-              <span className="text-xs uppercase font-black tracking-wider text-slate-400 block mb-1">
-                Total Due
-              </span>
-              <div className="text-4xl font-black font-mono text-amber-400 tracking-tight">
-                ${displayState.grandTotal.toFixed(2)}
+            {(settings?.customerDisplayShowTotal ?? true) && (
+              <div className="pt-4 border-t-2 border-slate-800 bg-slate-950/60 p-4 rounded-2xl border border-slate-800 text-right">
+                <span className="text-xs uppercase font-black tracking-wider text-slate-400 block mb-1">
+                  Total Due
+                </span>
+                <div className="text-4xl font-black font-mono text-amber-400 tracking-tight">
+                  ${displayState.grandTotal.toFixed(2)}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* If Payment Tendered */}
             {displayState.tenderedAmount !== undefined && (
