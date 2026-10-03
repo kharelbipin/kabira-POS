@@ -58,6 +58,8 @@ import { StoreFeatureManagementModal } from './components/admin/StoreFeatureMana
 import { HardwareDeviceManager } from './components/admin/HardwareDeviceManager';
 import { AdminPortalNav } from './components/admin/AdminPortalNav';
 import { AdminHealthDashboard } from './components/admin/AdminHealthDashboard';
+import { ManagerPortalNav } from './components/manager/ManagerPortalNav';
+import { ManagerOperationsDashboard } from './components/manager/ManagerOperationsDashboard';
 
 const HELD_ORDERS_STORAGE_KEY = 'kabira_pos_held_orders_v1';
 
@@ -1037,7 +1039,13 @@ export default function App() {
           }}
           onLoginSuccess={user => {
             setCurrentUser(user);
-            setCurrentTab(user.role === 'Admin' ? 'dashboard' : 'pos');
+            setCurrentTab(
+              user.role === 'Admin'
+                ? 'dashboard'
+                : user.role === 'Manager'
+                ? 'manager-dashboard'
+                : 'pos'
+            );
             setShowLoginModal(false);
             void loadAllData();
           }}
@@ -1061,7 +1069,7 @@ export default function App() {
 
   return (
     <div
-      className={`flex ${currentUser.role === 'Admin' ? 'flex-row' : 'flex-col'} h-screen w-screen overflow-hidden bg-[#0A0A0A] font-sans text-[#E5E5E5] antialiased selection:bg-[#C5A059] selection:text-black`}
+      className={`flex ${currentUser.role === 'Admin' || currentUser.role === 'Manager' ? 'flex-row' : 'flex-col'} h-screen w-screen overflow-hidden bg-[#0A0A0A] font-sans text-[#E5E5E5] antialiased selection:bg-[#C5A059] selection:text-black`}
       style={{
         zoom: (settings?.windowZoomPercent ?? 100) / 100,
         fontSize: `${settings?.posScreenFontSizePx ?? 16}px`,
@@ -1074,6 +1082,19 @@ export default function App() {
           currentUser={currentUser}
           settings={settings}
           onOpenDesigner={() => setShowDesignerModal(true)}
+          onLogout={async () => {
+            await api.logout();
+            setCurrentUser(null);
+            setCurrentTab('pos');
+            setShowLoginModal(true);
+          }}
+        />
+      ) : currentUser.role === 'Manager' ? (
+        <ManagerPortalNav
+          currentTab={currentTab}
+          setCurrentTab={setCurrentTab}
+          currentUser={currentUser}
+          settings={settings}
           onLogout={async () => {
             await api.logout();
             setCurrentUser(null);
@@ -1121,6 +1142,13 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 min-h-0 overflow-hidden relative">
+        {currentTab === 'manager-dashboard' && currentUser.role === 'Manager' && (
+          <ManagerOperationsDashboard
+            settings={settings}
+            heldOrdersCount={heldOrders.length}
+            onNavigate={setCurrentTab}
+          />
+        )}
         {currentTab === 'dashboard' && (
           currentUser.role === 'Admin' ? (
             <AdminHealthDashboard
@@ -1365,7 +1393,13 @@ export default function App() {
         onClose={() => setShowLoginModal(false)}
         onLoginSuccess={user => {
           setCurrentUser(user);
-          setCurrentTab(user.role === 'Admin' ? 'dashboard' : 'pos');
+          setCurrentTab(
+              user.role === 'Admin'
+                ? 'dashboard'
+                : user.role === 'Manager'
+                ? 'manager-dashboard'
+                : 'pos'
+            );
           setShowLoginModal(false);
           void loadAllData();
         }}
@@ -1381,7 +1415,7 @@ export default function App() {
           if (user.role === 'Admin') {
             setCurrentTab('dashboard');
           } else {
-            setShowAllFunctionsModal(true);
+            setCurrentTab('manager-dashboard');
           }
           void loadAllData();
         }}
