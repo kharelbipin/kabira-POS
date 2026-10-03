@@ -1581,15 +1581,34 @@ export default function App() {
         )}
 
         {(currentTab === 'hardware-manager' || currentTab === 'device-manager') && (
-          <div className="h-full overflow-y-auto p-4 md:p-6 bg-[#0A0A0A]">
-            <div className="max-w-7xl mx-auto">
-              <HardwareDeviceManager
-                onOpenCustomerDisplay={() => {
-                  setShowCustomerDisplayModal(true);
-                }}
-              />
+          currentUser.role === 'Admin' ? (
+            <div className="h-full overflow-y-auto p-4 md:p-6 bg-[#0A0A0A]">
+              <div className="max-w-7xl mx-auto">
+                <HardwareDeviceManager
+                  onOpenCustomerDisplay={() => {
+                    setShowCustomerDisplayModal(true);
+                  }}
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="h-full flex items-center justify-center bg-[#0A0A0A] p-6">
+              <div className="max-w-md w-full rounded-2xl border border-red-900/50 bg-[#141414] p-8 text-center">
+                <ShieldAlert className="w-10 h-10 text-red-400 mx-auto mb-3" />
+                <h2 className="text-lg font-black text-white uppercase tracking-wider">Admin Only</h2>
+                <p className="text-sm text-slate-400 mt-2">
+                  POS Hardware Bridge and device configuration are restricted to Admin accounts.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab(currentUser.role === 'Manager' ? 'manager-dashboard' : 'pos')}
+                  className="mt-5 px-5 py-2.5 rounded-xl bg-amber-400 text-slate-950 text-xs font-black uppercase tracking-wider cursor-pointer"
+                >
+                  Return
+                </button>
+              </div>
+            </div>
+          )
         )}
       </main>
 
