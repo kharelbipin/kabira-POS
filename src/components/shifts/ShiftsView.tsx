@@ -1090,6 +1090,8 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [activeDenomField, setActiveDenomField] = useState<keyof ShiftDenominationCount | null>(null);
+  const [denomInputValue, setDenomInputValue] = useState<string>('');
 
   // Calculate live total from entered counts
   const totalCounted =
