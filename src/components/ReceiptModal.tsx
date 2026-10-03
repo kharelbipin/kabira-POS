@@ -586,12 +586,21 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                                     <div key={idx} className="space-y-0.5">
                                         <div className="flex justify-between font-semibold">
                                             <span className="truncate max-w-[180px]">{item.product.name}</span>
-                                            <span>${(((item.unitPrice ?? 0) * item.quantity) - (item.discountAmount ?? 0)).toFixed(2)}</span>
+                                            <span>${(
+                                              ((item.unitPrice ?? 0) * item.quantity) -
+                                              Number(item.discountAmount ?? 0) -
+                                              Number(item.manufacturerDiscountAmount ?? 0)
+                                            ).toFixed(2)}</span>
                                         </div>
                                         <div className="flex justify-between text-[10px] text-slate-500">
                                             <span>
                                                 {item.quantity} x ${(item.unitPrice ?? 0).toFixed(2)} ({item.product.size})
                                             </span>
+                                            {Number(item.manufacturerDiscountAmount || 0) > 0 && (
+                                                <span className="text-sky-700 font-medium">
+                                                  Manufacturer promo: -${Number(item.manufacturerDiscountAmount || 0).toFixed(2)}
+                                                </span>
+                                            )}
                                             {(item.discountAmount ?? 0) > 0 && (
                                                 <span className="text-emerald-700 font-medium">
                                                     Disc -${(item.discountAmount ?? 0).toFixed(2)}
