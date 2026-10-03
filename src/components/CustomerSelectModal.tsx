@@ -30,8 +30,20 @@ export const CustomerSelectModal: React.FC<CustomerSelectModalProps> = ({
   const filtered = customers.filter(c => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
-    return c.name.toLowerCase().includes(q) || c.phone.includes(q) || (c.email && c.email.toLowerCase().includes(q));
+    const normalizedSearch = search.replace(/\D/g, '');
+    const normalizedPhone = c.phone.replace(/\D/g, '');
+    return (
+      c.name.toLowerCase().includes(q) ||
+      c.phone.includes(q) ||
+      (normalizedSearch.length >= 4 && normalizedPhone.includes(normalizedSearch)) ||
+      (c.email && c.email.toLowerCase().includes(q))
+    );
   });
+
+  const normalizedSearchPhone = search.replace(/\D/g, '');
+  const exactPhoneMatch = customers.some(
+    c => c.phone.replace(/\D/g, '') === normalizedSearchPhone
+  );
 
   const handleCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,6 +184,26 @@ export const CustomerSelectModal: React.FC<CustomerSelectModalProps> = ({
                   </button>
                 ))}
               </div>
+
+              {normalizedSearchPhone.length >= 10 && !exactPhoneMatch && (
+                <div className="rounded-xl border border-violet-800/50 bg-violet-950/30 p-3">
+                  <div className="text-xs font-bold text-violet-200">Phone not enrolled yet</div>
+                  <div className="text-[10px] text-violet-300/70 mt-0.5">
+                    Enroll this phone as a loyalty/promotion customer so eligible manufacturer offers can apply.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewPhone(search);
+                      setNewName(`Promo Customer (${normalizedSearchPhone.slice(-4)})`);
+                      setShowCreateInline(true);
+                    }}
+                    className="mt-2 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                  >
+                    Enroll Phone & Apply Offer
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
