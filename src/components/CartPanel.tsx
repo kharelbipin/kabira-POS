@@ -74,7 +74,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
   // Financial calculations
   const rawSubtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const itemDiscountsTotal = items.reduce((sum, item) => sum + item.discountAmount, 0);
-  const adjustedSubtotal = Math.max(0, rawSubtotal - itemDiscountsTotal);
+  const adjustedSubtotal = rawSubtotal - itemDiscountsTotal;
 
   let calculatedOrderDiscount = 0;
   if (orderDiscountPercent > 0) {
@@ -83,7 +83,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
     calculatedOrderDiscount = Math.min(adjustedSubtotal, orderDiscountAmount);
   }
 
-  const subtotalAfterDiscounts = Math.max(0, adjustedSubtotal - calculatedOrderDiscount);
+  const subtotalAfterDiscounts = adjustedSubtotal - calculatedOrderDiscount;
   const defaultTaxRate = settings?.defaultTaxRate ?? 0.0825;
   const orderDiscountFactor =
     adjustedSubtotal > 0 ? subtotalAfterDiscounts / adjustedSubtotal : 0;
