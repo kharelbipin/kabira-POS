@@ -1672,7 +1672,16 @@ export default function App() {
         onClose={() => setShowScannerModal(false)}
         products={products}
         cartCount={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
-        cartTotal={cartItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity - (item.discountAmount || 0)), 0)}
+        cartTotal={cartItems.reduce(
+          (sum, item) =>
+            sum +
+            (
+              item.unitPrice * item.quantity -
+              Number(item.discountAmount || 0) -
+              Number(item.manufacturerDiscountAmount || 0)
+            ),
+          0
+        )}
         onScanBarcode={code => {
           handleBarcodeScanned(code, 'Barcode Scanner Terminal Modal');
         }}
