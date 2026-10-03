@@ -11,6 +11,7 @@ import {
   Server,
   Store,
   UserRound,
+  Users,
 } from 'lucide-react';
 import { AuditLog, Order, StoreSettings } from '../../types';
 import { api } from '../../utils/api';
