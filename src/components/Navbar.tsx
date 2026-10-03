@@ -388,6 +388,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Check Cashing</span>
           </button>
 
+          {/* SETTINGS - Manager/Admin */}
+          {(role === 'Admin' || role === 'Manager') && (
+            <button
+              id="tab-settings"
+              onClick={() => setCurrentTab('settings')}
+              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                currentTab === 'settings'
+                  ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+              title="General POS Settings"
+            >
+              <Settings className={`w-3.5 h-3.5 ${currentTab === 'settings' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
+              <span>Settings</span>
+            </button>
+          )}
+
           {/* REPORTS - Manager/Admin or permitted Cashier */}
           {(role === 'Admin' || role === 'Manager' || settings?.cashierPermissions?.allowReports) && (
             <button
