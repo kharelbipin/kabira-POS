@@ -1289,6 +1289,56 @@ export default function App() {
           />
         )}
 
+        {currentTab === 'inventory-add' && (
+          <InventoryView
+            products={products}
+            categories={categories}
+            currentUser={currentUser}
+            settings={settings}
+            onRefresh={() => api.getProducts().then(setProducts)}
+            initialSubTab="catalog"
+            initialAction="add"
+            onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
+          />
+        )}
+
+        {currentTab === 'inventory-import' && (
+          <InventoryView
+            products={products}
+            categories={categories}
+            currentUser={currentUser}
+            settings={settings}
+            onRefresh={() => api.getProducts().then(setProducts)}
+            initialSubTab="catalog"
+            initialAction="import"
+            onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
+          />
+        )}
+
+        {currentTab === 'inventory-vendors' && (
+          <InventoryView
+            products={products}
+            categories={categories}
+            currentUser={currentUser}
+            settings={settings}
+            onRefresh={() => api.getProducts().then(setProducts)}
+            initialSubTab="vendors"
+            onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
+          />
+        )}
+
+        {currentTab === 'inventory-count' && (
+          <InventoryView
+            products={products}
+            categories={categories}
+            currentUser={currentUser}
+            settings={settings}
+            onRefresh={() => api.getProducts().then(setProducts)}
+            initialSubTab="ats"
+            onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
+          />
+        )}
+
         {currentTab === 'inventory-history' && (
           <InventoryView
             products={products}
