@@ -590,6 +590,24 @@ class Database {
     requireManagerDiscountAbove: 20, // Requires manager PIN if > 20%
     requireManagerToOpenDrawerNoSale: false, // Cashier opens drawer directly unless Admin enables approval
     customerDisplayFullscreen: true, // Locked borderless customer display by default; Admin can disable
+    useOnScreenKeypad: true,
+    showFixedKeypad: false,
+    autoLaunchCustomerScreen: true,
+    customerDisplayShowTotal: true,
+    customerDisplayShowPrice: true,
+    customerDisplayShowCustomerNumber: true,
+    customerDisplayShowSaleNotes: false,
+    alwaysShowShortcuts: false,
+    webOrderNotificationsEnabled: false,
+    hideTotalDetails: false,
+    tasklistNotificationSound: 'beep',
+    searchFontSizePx: 13,
+    windowZoomPercent: 100,
+    posScreenFontSizePx: 16,
+    customerScreenFontSizePx: 16,
+    customerScreenZoomPercent: 100,
+    applicationVersionLabel: '1.0.0',
+    electronAppVersionLabel: '1.0.30',
     allowedPaymentMethods: {
       cash: true,
       card: true,
