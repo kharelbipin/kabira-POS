@@ -453,21 +453,37 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* USER & SYSTEM ACTIVITY TRACKER - Admin only (removed from Manager portal) */}
+          {/* USER & SYSTEM ACTIVITY TRACKER - Admin only */}
           {role === 'Admin' && (
-            <button
-              id="tab-user-activity"
-              onClick={() => setCurrentTab('user-activity')}
-              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-                currentTab === 'user-activity' || currentTab === 'audit-log' || currentTab === 'users'
-                  ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-              title="Track All User Activities, Cashier Actions & System Users"
-            >
-              <UserCheck className={`w-3.5 h-3.5 ${currentTab === 'user-activity' || currentTab === 'audit-log' || currentTab === 'users' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
-              <span>User Activity</span>
-            </button>
+            <>
+              <button
+                id="tab-user-activity"
+                onClick={() => setCurrentTab('user-activity')}
+                className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                  currentTab === 'user-activity' || currentTab === 'audit-log'
+                    ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title="Track All User Activities and Audit Logs"
+              >
+                <UserCheck className={`w-3.5 h-3.5 ${currentTab === 'user-activity' || currentTab === 'audit-log' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
+                <span>User Activity</span>
+              </button>
+
+              <button
+                id="tab-users"
+                onClick={() => setCurrentTab('users')}
+                className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                  currentTab === 'users'
+                    ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title="Manage Cashier, Manager and Admin accounts"
+              >
+                <UserRoundCog className={`w-3.5 h-3.5 ${currentTab === 'users' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
+                <span>Manage Users</span>
+              </button>
+            </>
           )}
 
           {/* MORE DROPDOWN - Manager and Admin portal only */}
@@ -505,17 +521,30 @@ export const Navbar: React.FC<NavbarProps> = ({
                   )}
 
                   {role === 'Admin' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrentTab('user-activity');
-                        setShowMoreMenu(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center space-x-2 cursor-pointer"
-                    >
-                      <UserCheck className="w-4 h-4 text-amber-600" />
-                      <span>User Activity & Audit</span>
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentTab('user-activity');
+                          setShowMoreMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center space-x-2 cursor-pointer"
+                      >
+                        <UserCheck className="w-4 h-4 text-amber-600" />
+                        <span>User Activity & Audit</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentTab('users');
+                          setShowMoreMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center space-x-2 cursor-pointer"
+                      >
+                        <UserRoundCog className="w-4 h-4 text-sky-600" />
+                        <span>Manage Users</span>
+                      </button>
+                    </>
                   )}
 
                   <button
