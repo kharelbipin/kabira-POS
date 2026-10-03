@@ -66,6 +66,93 @@ export interface Promotion {
   exportTemplate?: string;
 }
 
+export type ScanDataSaleStatus = 'sale' | 'void' | 'refund';
+export type ScanDataSubmissionStatus =
+  | 'pending'
+  | 'batched'
+  | 'submitted'
+  | 'accepted'
+  | 'paid'
+  | 'rejected'
+  | 'excluded';
+
+export interface ScanDataTransaction {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  orderCreatedAt: string;
+  storeId: string;
+  registerId: string;
+  cashierId: string;
+  cashierName: string;
+  customerId?: string;
+  customerPhoneToken?: string;
+  productId: string;
+  upc: string;
+  productName: string;
+  brandName?: string;
+  productHeading: string;
+  manufacturerName: string;
+  distributorName?: string;
+  programId: string;
+  programCode: string;
+  programName: string;
+  programType?: Promotion['programType'];
+  quantity: number;
+  regularPrice: number;
+  discountPerUnit: number;
+  manufacturerDiscountTotal: number;
+  customerPaid: number;
+  expectedReimbursement: number;
+  phoneRequired: boolean;
+  loyaltyRequired: boolean;
+  ageVerificationRequired: boolean;
+  saleStatus: ScanDataSaleStatus;
+  submissionStatus: ScanDataSubmissionStatus;
+  exportBatchId?: string;
+  reimbursementStatus?: 'pending' | 'expected' | 'paid' | 'disputed' | 'rejected';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScanDataExportBatch {
+  id: string;
+  batchNumber: string;
+  manufacturerName?: string;
+  productHeading?: string;
+  programId?: string;
+  programName?: string;
+  startDate?: string;
+  endDate?: string;
+  transactionIds: string[];
+  transactionCount: number;
+  expectedReimbursement: number;
+  paidAmount?: number;
+  exportTemplate: string;
+  fileName: string;
+  status: 'draft' | 'validated' | 'downloaded' | 'submitted' | 'accepted' | 'paid' | 'rejected';
+  notes?: string;
+  createdByUserId: string;
+  createdByUserName: string;
+  createdAt: string;
+  updatedAt: string;
+  submittedAt?: string;
+  acceptedAt?: string;
+  paidAt?: string;
+}
+
+export interface ManufacturerReimbursementSummary {
+  manufacturerName: string;
+  transactionCount: number;
+  eligibleUnits: number;
+  discountsGiven: number;
+  expectedReimbursement: number;
+  submittedAmount: number;
+  acceptedAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+}
+
 export interface Device {
   id: string;
   name: string;
@@ -164,6 +251,13 @@ export interface CartItem {
   unitPrice: number;
   discountAmount: number; // discount per item or total line discount
   discountReason?: string;
+  manufacturerDiscountAmount?: number;
+  manufacturerProgramId?: string;
+  manufacturerProgramName?: string;
+  manufacturerCompany?: string;
+  manufacturerReimbursementExpected?: number;
+  manufacturerOfferAvailable?: boolean;
+  manufacturerEligibilityMessage?: string;
   taxAmount?: number;
   lineTotal?: number;
 }
