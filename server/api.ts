@@ -1193,6 +1193,11 @@ apiRouter.post('/products', asyncHandler(async (req: Request, res: Response) => 
         description,
         vendor,
         vendorSku,
+        productHeading,
+        manufacturerName,
+        distributorName,
+        scanDataEligible,
+        defaultProgramId,
         inventoryTracking,
         channelAvailability,
         sellOnline,
@@ -1248,6 +1253,11 @@ apiRouter.post('/products', asyncHandler(async (req: Request, res: Response) => 
         description: description || '',
         vendor: vendor || undefined,
         vendorSku: vendorSku || undefined,
+        productHeading: productHeading || undefined,
+        manufacturerName: manufacturerName || undefined,
+        distributorName: distributorName || undefined,
+        scanDataEligible: Boolean(scanDataEligible),
+        defaultProgramId: defaultProgramId || undefined,
         inventoryTracking: inventoryTracking !== false,
         channelAvailability: channelAvailability || {
             pos: sellInStore !== false,
@@ -1355,6 +1365,11 @@ apiRouter.put('/products/:id', asyncHandler(async (req: Request, res: Response) 
     if (data.description !== undefined) product.description = data.description;
     if (data.vendor !== undefined) product.vendor = data.vendor;
     if (data.vendorSku !== undefined) product.vendorSku = data.vendorSku;
+    if (data.productHeading !== undefined) product.productHeading = data.productHeading;
+    if (data.manufacturerName !== undefined) product.manufacturerName = data.manufacturerName;
+    if (data.distributorName !== undefined) product.distributorName = data.distributorName;
+    if (data.scanDataEligible !== undefined) product.scanDataEligible = Boolean(data.scanDataEligible);
+    if (data.defaultProgramId !== undefined) product.defaultProgramId = data.defaultProgramId || undefined;
     if (data.inventoryTracking !== undefined) product.inventoryTracking = Boolean(data.inventoryTracking);
     if (data.channelAvailability !== undefined) product.channelAvailability = data.channelAvailability;
     if (data.sellOnline !== undefined) product.sellOnline = Boolean(data.sellOnline);
@@ -2821,11 +2836,16 @@ apiRouter.get('/promotions', (req: Request, res: Response) => {
 
 apiRouter.post('/promotions', asyncHandler(async (req: Request, res: Response) => {
     const currentUser = getAuthUser(req);
-    if (currentUser.role !== 'Admin') {
-        return res.status(403).json({ error: 'Only Admins can create promotions' });
+    if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
+        return res.status(403).json({ error: 'Only Managers and Admins can create promotions' });
     }
 
-    const { name, code, type, value, startDate, endDate, targetType, targetId, minSpend, maxDiscount } = req.body;
+    const {
+        name, code, type, value, startDate, endDate, targetType, targetId, minSpend, maxDiscount,
+        minPurchaseAmount, maxUsages, fundingSource, manufacturerName, distributorName,
+        productHeading, programType, customerPhoneRequired, loyaltyRequired,
+        ageVerificationRequired, reimbursementPerUnit, reportingFrequency, exportTemplate
+    } = req.body;
     if (!name || !code || value === undefined) {
         return res.status(400).json({ error: 'Promotion name, code, and discount value are required' });
     }
@@ -2858,7 +2878,21 @@ apiRouter.post('/promotions', asyncHandler(async (req: Request, res: Response) =
         targetName,
         minSpend: minSpend ? Number(minSpend) : 0,
         maxDiscount: maxDiscount ? Number(maxDiscount) : undefined,
+        minPurchaseAmount: minPurchaseAmount ? Number(minPurchaseAmount) : 0,
+        maxUsages: maxUsages ? Number(maxUsages) : undefined,
         usageCount: 0,
+        currentUsages: 0,
+        fundingSource: fundingSource || 'store',
+        manufacturerName: manufacturerName || undefined,
+        distributorName: distributorName || undefined,
+        productHeading: productHeading || undefined,
+        programType: programType || undefined,
+        customerPhoneRequired: Boolean(customerPhoneRequired),
+        loyaltyRequired: Boolean(loyaltyRequired),
+        ageVerificationRequired: Boolean(ageVerificationRequired),
+        reimbursementPerUnit: reimbursementPerUnit !== undefined ? Number(reimbursementPerUnit) : undefined,
+        reportingFrequency: reportingFrequency || undefined,
+        exportTemplate: exportTemplate || undefined,
     };
 
     db.promotions.unshift(newPromo);
@@ -2868,8 +2902,8 @@ apiRouter.post('/promotions', asyncHandler(async (req: Request, res: Response) =
 
 apiRouter.put('/promotions/:id', asyncHandler(async (req: Request, res: Response) => {
     const currentUser = getAuthUser(req);
-    if (currentUser.role !== 'Admin') {
-        return res.status(403).json({ error: 'Only Admins can edit promotions' });
+    if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
+        return res.status(403).json({ error: 'Only Managers and Admins can edit promotions' });
     }
 
     const promo = db.promotions.find(p => p.id === req.params.id);
@@ -2896,6 +2930,23 @@ apiRouter.put('/promotions/:id', asyncHandler(async (req: Request, res: Response
     }
     if (minSpend !== undefined) promo.minSpend = Number(minSpend);
     if (maxDiscount !== undefined) promo.maxDiscount = Number(maxDiscount);
+    const extendedFields = [
+        'minPurchaseAmount', 'maxUsages', 'fundingSource', 'manufacturerName', 'distributorName',
+        'productHeading', 'programType', 'customerPhoneRequired', 'loyaltyRequired',
+        'ageVerificationRequired', 'reimbursementPerUnit', 'reportingFrequency', 'exportTemplate'
+    ];
+    extendedFields.forEach(field => {
+        if (req.body[field] !== undefined) {
+            const value = req.body[field];
+            if (field === 'reimbursementPerUnit' || field === 'minPurchaseAmount' || field === 'maxUsages') {
+                (promo as any)[field] = Number(value);
+            } else if (field === 'customerPhoneRequired' || field === 'loyaltyRequired' || field === 'ageVerificationRequired') {
+                (promo as any)[field] = Boolean(value);
+            } else {
+                (promo as any)[field] = value;
+            }
+        }
+    });
 
     db.addAudit(currentUser.id, currentUser.name, currentUser.role, 'PROMOTION_UPDATE', 'settings', promo.id, `Updated promotion "${promo.name}"`);
     res.json(promo);
@@ -2903,8 +2954,8 @@ apiRouter.put('/promotions/:id', asyncHandler(async (req: Request, res: Response
 
 apiRouter.delete('/promotions/:id', asyncHandler(async (req: Request, res: Response) => {
     const currentUser = getAuthUser(req);
-    if (currentUser.role !== 'Admin') {
-        return res.status(403).json({ error: 'Only Admins can delete promotions' });
+    if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
+        return res.status(403).json({ error: 'Only Managers and Admins can delete promotions' });
     }
 
     const promo = db.promotions.find(p => p.id === req.params.id);
