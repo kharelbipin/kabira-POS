@@ -44,6 +44,7 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [bridgeHealth, setBridgeHealth] = useState(hardwareStore.getHealth());
   const [configuredHardware, setConfiguredHardware] = useState(hardwareStore.getConfiguredHardware());
+  const [selectedRegister, setSelectedRegister] = useState<RegisterRow | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -380,7 +381,12 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
               { id: 'reg-1', name: 'Terminal #01 (Front Register)', location: 'Main Checkout Counter', status: 'active', currentCashier: null, activeShiftId: null },
               { id: 'reg-2', name: 'Terminal #02 (Express / Drive-Thru)', location: 'Secondary Express Counter', status: 'active', currentCashier: null, activeShiftId: null },
             ]).map(register => (
-              <div key={register.id} className="px-4 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <button
+                key={register.id}
+                type="button"
+                onClick={() => setSelectedRegister(register)}
+                className="w-full px-4 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-left hover:bg-slate-50 cursor-pointer"
+              >
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center">
                     <Monitor className="w-5 h-5 text-sky-600" />
@@ -397,8 +403,11 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
                     </div>
                   </div>
                 </div>
-                {statusPill(register.status === 'active', 'ONLINE', 'OFFLINE')}
-              </div>
+                <div className="flex items-center gap-3">
+                  {statusPill(register.status === 'active', 'ONLINE', 'OFFLINE')}
+                  <span className="text-[10px] font-black uppercase tracking-wider text-sky-700">View Details</span>
+                </div>
+              </button>
             ))}
           </div>
         </div>
@@ -443,6 +452,124 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {selectedRegister && (
+        <div className="fixed inset-0 z-[120] bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-slate-200">
+            <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-5 py-4 flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Monitor className="w-5 h-5 text-sky-600" />
+                  <h2 className="text-lg font-black">{selectedRegister.name}</h2>
+                  {statusPill(selectedRegister.status === 'active', 'ONLINE', 'OFFLINE')}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">{selectedRegister.location}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedRegister(null)}
+                className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-black cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Cashier</div>
+                  <div className="text-sm font-black mt-1">{selectedRegister.currentCashier || 'None'}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Shift</div>
+                  <div className="text-sm font-black mt-1">{selectedRegister.activeShiftId ? 'Open' : 'Closed'}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Bridge</div>
+                  <div className={`text-sm font-black mt-1 ${bridgeOnline ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {bridgeOnline ? 'Online' : 'Offline'}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Health Score</div>
+                  <div className="text-sm font-black mt-1">{healthScore}%</div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                  <h3 className="text-sm font-black">Live Diagnostics</h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Current device readiness for this POS installation.</p>
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                  {[
+                    ['POS Bridge', bridgeOnline, bridgeHealth.version || 'Local bridge service', `Port ${bridgeHealth.port || 5055}`],
+                    ['Receipt Printer', printerConfigured, configuredHardware.receipt_printer?.deviceName || 'Not configured', configuredHardware.receipt_printer?.connectionType || 'No connection'],
+                    ['Cash Drawer', drawerConfigured, configuredHardware.cash_drawer?.deviceName || 'Not configured', configuredHardware.cash_drawer?.drawerConnectionMethod || 'No connection'],
+                    ['Barcode Scanner', scannerConfigured, configuredHardware.barcode_scanner?.deviceName || 'Not configured', configuredHardware.barcode_scanner?.connectionType || 'No connection'],
+                    ['Customer Display', customerDisplayConfigured, configuredHardware.customer_display?.deviceName || 'Not configured', configuredHardware.customer_display?.displayId || 'No display assigned'],
+                  ].map(([label, ok, detail, meta]: any) => (
+                    <div key={label} className="px-4 py-3 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {ok ? (
+                          <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                        ) : (
+                          <CircleAlert className="w-5 h-5 text-rose-500 shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-xs font-black">{label}</div>
+                          <div className="text-[11px] text-slate-500 truncate">{String(detail)}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{String(meta)}</div>
+                        </div>
+                      </div>
+                      {statusPill(Boolean(ok), 'READY', 'ATTENTION')}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <h3 className="text-sm font-black">Register Activity</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 text-xs">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Register ID</div>
+                    <div className="font-mono font-bold mt-1">{selectedRegister.id}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Last Health Refresh</div>
+                    <div className="font-bold mt-1">{lastUpdated || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Bridge Heartbeat</div>
+                    <div className="font-bold mt-1">{bridgeHealth.lastHeartbeat || 'Never'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => void refresh()}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-xs font-black cursor-pointer"
+                >
+                  Refresh Diagnostics
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRegister(null);
+                    onOpenHardware();
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black cursor-pointer"
+                >
+                  Open Hardware Manager
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <button onClick={onOpenUsers} className="bg-white border border-slate-200 rounded-2xl p-4 text-left hover:border-sky-300 shadow-sm cursor-pointer">
