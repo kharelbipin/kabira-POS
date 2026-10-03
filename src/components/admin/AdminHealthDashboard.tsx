@@ -45,6 +45,8 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
   const [bridgeHealth, setBridgeHealth] = useState(hardwareStore.getHealth());
   const [configuredHardware, setConfiguredHardware] = useState(hardwareStore.getConfiguredHardware());
   const [selectedRegister, setSelectedRegister] = useState<RegisterRow | null>(null);
+  const [quickAction, setQuickAction] = useState<string | null>(null);
+  const [quickActionMessage, setQuickActionMessage] = useState<{ success: boolean; message: string } | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -196,6 +198,49 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
 
   const criticalAlertCount = alerts.filter(a => a.severity === 'critical').length;
   const warningAlertCount = alerts.filter(a => a.severity === 'warning').length;
+
+  const runQuickAction = async (
+    action: 'scan' | 'printer' | 'drawer' | 'display'
+  ) => {
+    setQuickAction(action);
+    setQuickActionMessage(null);
+
+    try {
+      if (action === 'scan') {
+        const devices = await hardwareStore.scanHardware();
+        setConfiguredHardware(hardwareStore.getConfiguredHardware());
+        setBridgeHealth(hardwareStore.getHealth());
+        setQuickActionMessage({
+          success: true,
+          message: `Device refresh complete. ${devices.length} device${devices.length === 1 ? '' : 's'} detected.`,
+        });
+      }
+
+      if (action === 'printer') {
+        const result = await hardwareStore.testDevice('receipt_printer');
+        setQuickActionMessage({ success: result.success, message: result.message });
+      }
+
+      if (action === 'drawer') {
+        const result = await hardwareStore.testDevice('cash_drawer');
+        setQuickActionMessage({ success: result.success, message: result.message });
+      }
+
+      if (action === 'display') {
+        const result = await hardwareStore.restartCustomerDisplay();
+        setQuickActionMessage({ success: result.success, message: result.message });
+      }
+
+      await refresh();
+    } catch (error: any) {
+      setQuickActionMessage({
+        success: false,
+        message: error?.message || 'Troubleshooting action failed.',
+      });
+    } finally {
+      setQuickAction(null);
+    }
+  };
 
   const statusPill = (ok: boolean, trueLabel = 'ONLINE', falseLabel = 'NEEDS ATTENTION') => (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
@@ -545,6 +590,61 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
                     <div className="font-bold mt-1">{bridgeHealth.lastHeartbeat || 'Never'}</div>
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+                  <h3 className="text-sm font-black">Quick Troubleshooting</h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Run safe local diagnostics without leaving this register.</p>
+                </div>
+
+                <div className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    disabled={quickAction !== null}
+                    onClick={() => void runQuickAction('scan')}
+                    className="px-3 py-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 text-xs font-black cursor-pointer"
+                  >
+                    {quickAction === 'scan' ? 'Refreshing…' : 'Refresh Devices'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={quickAction !== null || !printerConfigured}
+                    onClick={() => void runQuickAction('printer')}
+                    className="px-3 py-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 text-xs font-black cursor-pointer"
+                  >
+                    {quickAction === 'printer' ? 'Testing…' : 'Test Printer'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={quickAction !== null || !drawerConfigured}
+                    onClick={() => void runQuickAction('drawer')}
+                    className="px-3 py-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 text-xs font-black cursor-pointer"
+                  >
+                    {quickAction === 'drawer' ? 'Testing…' : 'Test Drawer'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={quickAction !== null || !customerDisplayConfigured}
+                    onClick={() => void runQuickAction('display')}
+                    className="px-3 py-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-50 text-xs font-black cursor-pointer"
+                  >
+                    {quickAction === 'display' ? 'Launching…' : 'Relaunch Display'}
+                  </button>
+                </div>
+
+                {quickActionMessage && (
+                  <div className={`mx-4 mb-4 p-3 rounded-xl border text-xs font-bold ${
+                    quickActionMessage.success
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-rose-50 border-rose-200 text-rose-800'
+                  }`}>
+                    {quickActionMessage.message}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2 justify-end">
