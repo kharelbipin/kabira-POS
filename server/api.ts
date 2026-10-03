@@ -1911,11 +1911,21 @@ apiRouter.patch('/scan-data/export-batches/:id/status', asyncHandler(async (req:
     batch.updatedAt = now;
     if (req.body?.notes !== undefined) batch.notes = String(req.body.notes || '');
     if (req.body?.paidAmount !== undefined) batch.paidAmount = Math.max(0, Number(req.body.paidAmount || 0));
+    if (status === 'validated') {
+        batch.submittedAt = undefined;
+        batch.acceptedAt = undefined;
+        batch.paidAt = undefined;
+        batch.paidAmount = undefined;
+    }
     if (status === 'submitted') batch.submittedAt = now;
     if (status === 'accepted') batch.acceptedAt = now;
     if (status === 'paid') batch.paidAt = now;
 
     for (const tx of db.scanDataTransactions.filter(t => batch.transactionIds.includes(t.id))) {
+        if (status === 'validated') {
+            tx.submissionStatus = 'batched';
+            tx.reimbursementStatus = 'pending';
+        }
         if (status === 'submitted') tx.submissionStatus = 'submitted';
         if (status === 'accepted') {
             tx.submissionStatus = 'accepted';
