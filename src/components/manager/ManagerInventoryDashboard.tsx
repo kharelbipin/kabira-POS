@@ -20,6 +20,8 @@ interface ManagerInventoryDashboardProps {
   categories: Category[];
   settings: StoreSettings | null;
   onNavigate: (tab: string) => void;
+  onOpenPrintLabel: () => void;
+  onSettingsUpdated: (settings: StoreSettings) => void;
 }
 
 const money = (value: number) =>
@@ -30,12 +32,15 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
   categories,
   settings,
   onNavigate,
+  onOpenPrintLabel,
+  onSettingsUpdated,
 }) => {
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('all');
   const [vendor, setVendor] = useState('all');
   const [status, setStatus] = useState('all');
   const [recentInvoices, setRecentInvoices] = useState<ScannedInvoice[]>([]);
+  const [savingLabelSettings, setSavingLabelSettings] = useState(false);
 
   useEffect(() => {
     api
@@ -105,6 +110,18 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
     { label: 'Vendors', icon: Users, tab: 'inventory-vendors' },
     { label: 'Reports', icon: BarChart3, tab: 'reports' },
   ];
+
+  const saveLabelSetting = async (patch: Partial<StoreSettings>) => {
+    setSavingLabelSettings(true);
+    try {
+      const updated = await api.updateSettings(patch);
+      onSettingsUpdated(updated);
+    } catch (error: any) {
+      alert(error?.message || 'Failed to save label printing preference.');
+    } finally {
+      setSavingLabelSettings(false);
+    }
+  };
 
   const handleDownloadInventory = async () => {
     try {
@@ -177,6 +194,55 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
             <button type="button" onClick={handleDownloadInventory} className="h-11 px-4 rounded-lg bg-white border border-[#25467b] text-[#10234a] text-xs font-black flex items-center gap-2 cursor-pointer">
               <Download className="w-4 h-4" />
               Download Inventory
+            </button>
+            <button type="button" onClick={onOpenPrintLabel} className="h-11 px-4 rounded-lg bg-white border border-[#25467b] text-[#10234a] text-xs font-black flex items-center gap-2 cursor-pointer">
+              <PackageCheck className="w-4 h-4" />
+              Print Label
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-black text-[#10234a]">Label Printing</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">
+              Managers can print labels manually anytime, or auto-print when a new item is created or the retail price changes.
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-[#33476b]">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={Boolean(settings?.autoPrintLabelOnNewItem)}
+                disabled={savingLabelSettings}
+                onChange={e => saveLabelSetting({ autoPrintLabelOnNewItem: e.target.checked })}
+                className="accent-[#c78d20]"
+              />
+              Auto print for new item
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={Boolean(settings?.autoPrintLabelOnPriceChange)}
+                disabled={savingLabelSettings}
+                onChange={e => saveLabelSetting({ autoPrintLabelOnPriceChange: e.target.checked })}
+                className="accent-[#c78d20]"
+              />
+              Auto print on price change
+            </label>
+            <label className="flex items-center gap-2">
+              Copies
+              <select
+                value={settings?.autoPrintLabelCopies || 1}
+                disabled={savingLabelSettings}
+                onChange={e => saveLabelSetting({ autoPrintLabelCopies: Number(e.target.value) })}
+                className="h-8 rounded-md border border-slate-300 bg-white px-2"
+              >
+                {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <button type="button" onClick={onOpenPrintLabel} className="h-8 px-3 rounded-md bg-[#08274d] text-white cursor-pointer">
+              Manual Print
             </button>
           </div>
         </div>
