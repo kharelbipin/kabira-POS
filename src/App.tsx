@@ -207,6 +207,7 @@ export default function App() {
   const [showCustomerDisplayModal, setShowCustomerDisplayModal] = useState<boolean>(false);
   const [showPaymentFallbackModal, setShowPaymentFallbackModal] = useState<boolean>(false);
   const [showAllFunctionsModal, setShowAllFunctionsModal] = useState<boolean>(false);
+  const [showManagerPortalLogin, setShowManagerPortalLogin] = useState<boolean>(false);
   const [showStartupHealthModal, setShowStartupHealthModal] = useState<boolean>(false);
   const [showScaleModal, setShowScaleModal] = useState<boolean>(false);
   const [showKdsModal, setShowKdsModal] = useState<boolean>(false);
@@ -1083,6 +1084,14 @@ export default function App() {
         onToggleOffline={handleToggleOffline}
         settings={settings}
         onOpenBridgeHub={() => setShowBridgeHubModal(true)}
+        onOpenManagerPortal={() => {
+          if (currentUser?.role === 'Manager' || currentUser?.role === 'Admin') {
+            setShowAllFunctionsModal(true);
+            return;
+          }
+
+          setShowManagerPortalLogin(true);
+        }}
         onOpenCustomerDisplay={() => {
           setShowCustomerDisplayModal(true);
         }}
@@ -1330,6 +1339,21 @@ export default function App() {
           void loadAllData();
         }}
         currentUserId={currentUser?.id}
+      />
+
+      <LoginModal
+        isOpen={showManagerPortalLogin}
+        onClose={() => setShowManagerPortalLogin(false)}
+        onLoginSuccess={user => {
+          setCurrentUser(user);
+          setShowManagerPortalLogin(false);
+          setShowAllFunctionsModal(true);
+          void loadAllData();
+        }}
+        currentUserId={currentUser?.id}
+        managerOnly={true}
+        title="Manager Portal Login"
+        subtitle="Enter Manager/Admin credentials to access POS backend functions"
       />
 
       <CheckoutModal
