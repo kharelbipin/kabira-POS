@@ -61,6 +61,7 @@ import { AdminHealthDashboard } from './components/admin/AdminHealthDashboard';
 import { ManagerPortalNav } from './components/manager/ManagerPortalNav';
 import { ManagerOperationsDashboard } from './components/manager/ManagerOperationsDashboard';
 import { ManagerInventoryDashboard } from './components/manager/ManagerInventoryDashboard';
+import { ManagerReportsCenter } from './components/manager/ManagerReportsCenter';
 
 const HELD_ORDERS_STORAGE_KEY = 'kabira_pos_held_orders_v1';
 
@@ -1391,7 +1392,12 @@ export default function App() {
         )}
 
         {currentTab === 'reports' && (
-          currentUser?.role === 'Cashier' && !settings?.cashierPermissions?.allowReports ? (
+          currentUser?.role === 'Manager' ? (
+            <ManagerReportsCenter
+              orders={orders}
+              products={products}
+            />
+          ) : currentUser?.role === 'Cashier' && !settings?.cashierPermissions?.allowReports ? (
             <div className="h-full flex flex-col items-center justify-center bg-[#0D0D0D] text-[#E5E5E5] p-6">
               <div className="max-w-md w-full bg-[#141414] border border-[#262626] rounded-2xl p-8 text-center space-y-4 shadow-xl">
                 <div className="w-16 h-16 rounded-full bg-amber-950/40 border border-amber-800/40 text-amber-400 mx-auto flex items-center justify-center">
