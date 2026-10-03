@@ -258,13 +258,16 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       <div className="flex-1 flex flex-col h-[calc(100vh-84px)] overflow-hidden bg-[#0A0A0A] text-[#E5E5E5] select-none">
         <InvoiceReviewView
           invoice={activeReviewInvoice}
+          products={products}
           categories={categories}
           currentUser={currentUser}
-          onClose={() => setActiveReviewInvoice(null)}
-          onCommitted={() => {
+          settings={settings}
+          onCancel={() => setActiveReviewInvoice(null)}
+          onConfirmed={() => {
             setActiveReviewInvoice(null);
-            setSuccessBanner('Invoice successfully committed to inventory!');
+            setSuccessBanner('Inventory received successfully. Cashier POS and online store now use the updated shared stock.');
             onRefresh();
+            window.dispatchEvent(new CustomEvent('kabira:inventory-updated'));
             setSubTab('ledger');
           }}
         />
@@ -444,7 +447,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#C5A059] to-[#E3C47E] hover:from-[#D4AF65] hover:to-[#F0D597] text-black text-xs font-bold uppercase tracking-wider shadow-md transition-all cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5 text-black" />
-            <span>Scan Invoice</span>
+            <span>Take / Upload Invoice</span>
           </button>
         </div>
       </div>
