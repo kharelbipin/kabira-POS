@@ -374,12 +374,12 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
         managerSettings: formData,
         directReceiptPrinting: {
           ...(settings?.directReceiptPrinting || {}),
-          enabled: true,
-          autoPrintOnSale: formData.autoOpenDrawerOnCash,
+          enabled: settings?.directReceiptPrinting?.enabled ?? true,
+          autoPrintOnSale: settings?.directReceiptPrinting?.autoPrintOnSale ?? true,
           primaryPrinterName: formData.activePrinterModel,
           printCustomerCopy: formData.printCustomerCopyCard,
           printMerchantCopy: formData.printMerchantCopyCard,
-          cutPaperAfterPrint: true,
+          cutPaperAfterPrint: settings?.directReceiptPrinting?.cutPaperAfterPrint ?? true,
         },
       });
 
