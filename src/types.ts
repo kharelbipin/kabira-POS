@@ -487,6 +487,9 @@ export interface StoreSettings {
   autoUpdateProductCost?: boolean; // When true, automatically update master cost on confirmation; when false, require manager approval
   targetProfitMarginPercent?: number; // Target markup margin (e.g. 35%) for recommended selling price
   defaultReceivingLocation?: string; // Default stockroom location (e.g. "Main Liquor Storage", "Front Sales Floor")
+  autoPrintLabelOnNewItem?: boolean; // Auto-print item label when a manager creates a new inventory item
+  autoPrintLabelOnPriceChange?: boolean; // Auto-print updated label when a manager changes retail price
+  autoPrintLabelCopies?: number; // Number of labels to auto-print per trigger
   // Admin Pos Button Visibility & Delegation
   adminAllowedPosButtons?: {
     allowScaleForCashier?: boolean;
