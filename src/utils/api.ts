@@ -582,6 +582,12 @@ class ApiService {
     return this.request('/bridge/telemetry');
   }
 
+  async restartBridgeService(): Promise<{ success: boolean; message: string }> {
+    return this.request('/bridge/restart-service', {
+      method: 'POST',
+    });
+  }
+
   // Dashboard Overview (AP-DB-01 to AP-DB-04)
   async getDashboardOverview(params?: { period?: string; startDate?: string; endDate?: string }) {
     const q = new URLSearchParams();
