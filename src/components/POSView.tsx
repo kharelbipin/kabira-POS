@@ -422,9 +422,9 @@ export const POSView: React.FC<POSViewProps> = ({
               playBeep('click');
               setShowAddManualModal(true);
             }}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#F3C067] hover:bg-[#F59E0B] text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
+            className="flex items-center space-x-2 px-4 py-2.5 min-h-[46px] bg-[#F3C067] hover:bg-[#F59E0B] text-slate-950 font-black text-sm uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
           >
-            <Plus className="w-4 h-4 text-slate-950 stroke-[3]" />
+            <Plus className="w-5 h-5 text-slate-950 stroke-[3]" />
             <span>Add Item (F4)</span>
           </button>
 
@@ -445,9 +445,9 @@ export const POSView: React.FC<POSViewProps> = ({
           <button
             type="button"
             onClick={handleLottoSale}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#059669] hover:bg-[#047857] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
+            className="flex items-center space-x-2 px-4 py-2.5 min-h-[46px] bg-[#059669] hover:bg-[#047857] text-white font-black text-sm uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
           >
-            <Ticket className="w-4 h-4" />
+            <Ticket className="w-5 h-5" />
             <span>Lotto Sale (F6)</span>
           </button>
 
@@ -455,9 +455,9 @@ export const POSView: React.FC<POSViewProps> = ({
           <button
             type="button"
             onClick={handleLottoPayout}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#E11D48] hover:bg-[#BE123C] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
+            className="flex items-center space-x-2 px-4 py-2.5 min-h-[46px] bg-[#E11D48] hover:bg-[#BE123C] text-white font-black text-sm uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
           >
-            <DollarSign className="w-4 h-4" />
+            <DollarSign className="w-5 h-5" />
             <span>Lotto Payout (F7)</span>
           </button>
 
@@ -468,9 +468,9 @@ export const POSView: React.FC<POSViewProps> = ({
               playBeep('click');
               onOpenCustomerModal();
             }}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
+            className="flex items-center space-x-2 px-4 py-2.5 min-h-[46px] bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-sm uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
           >
-            <UserCheck className="w-4 h-4 text-slate-600" />
+            <UserCheck className="w-5 h-5 text-slate-600" />
             <span>Customer (F8)</span>
           </button>
 
@@ -481,9 +481,9 @@ export const POSView: React.FC<POSViewProps> = ({
               playBeep('click');
               setPriceCheckModal(true);
             }}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
+            className="flex items-center space-x-2 px-4 py-2.5 min-h-[46px] bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-sm uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
           >
-            <Search className="w-4 h-4 text-slate-600" />
+            <Search className="w-5 h-5 text-slate-600" />
             <span>Price Check</span>
           </button>
 
@@ -495,10 +495,10 @@ export const POSView: React.FC<POSViewProps> = ({
               playBeep('click');
               setShowCartTransferModal(true);
             }}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-bold text-xs uppercase tracking-wider rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
+            className="flex items-center space-x-2 px-4 py-2.5 min-h-[46px] bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-bold text-sm uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
             title="Import or Export queue-busting carts via QR/code (US-013 & US-014)"
           >
-            <ScanBarcode className="w-4 h-4 text-amber-700" />
+            <ScanBarcode className="w-5 h-5 text-amber-700" />
             <span>Mobile Cart</span>
           </button>
 
