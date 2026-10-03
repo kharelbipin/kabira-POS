@@ -721,8 +721,11 @@ export const ManagerPromotionScanDataCenter: React.FC<ManagerPromotionScanDataCe
                               <td className="px-3 py-3">
                                 <div className="flex flex-wrap gap-1.5">
                                   <button onClick={() => void handleDownloadBatch(batch)} className="px-2 py-1 rounded bg-slate-100 font-bold cursor-pointer">Download</button>
-                                  {!['submitted','accepted','paid'].includes(batch.status) && (
+                                  {!['submitted','accepted','paid','rejected'].includes(batch.status) && (
                                     <button onClick={() => void handleBatchStatus(batch, 'submitted')} className="px-2 py-1 rounded bg-sky-100 text-sky-800 font-bold cursor-pointer">Submitted</button>
+                                  )}
+                                  {batch.status === 'rejected' && (
+                                    <button onClick={() => void handleBatchStatus(batch, 'validated')} className="px-2 py-1 rounded bg-violet-100 text-violet-800 font-bold cursor-pointer">Reopen</button>
                                   )}
                                   {batch.status === 'submitted' && (
                                     <button onClick={() => void handleBatchStatus(batch, 'accepted')} className="px-2 py-1 rounded bg-amber-100 text-amber-800 font-bold cursor-pointer">Accepted</button>
