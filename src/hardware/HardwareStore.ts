@@ -682,7 +682,9 @@ export class HardwareStore {
             const size = value(item?.size, product?.size, product?.volume);
             const quantity = Number(value(item?.quantity, item?.qty, 1)) || 1;
             const unitPrice = Number(value(item?.unitPrice, item?.price, product?.price, 0)) || 0;
-            const lineDiscount = Number(value(item?.discountAmount, item?.discount, 0)) || 0;
+            const lineDiscount =
+                (Number(value(item?.discountAmount, item?.discount, 0)) || 0) +
+                (Number(item?.manufacturerDiscountAmount || 0) || 0);
             const previewLineTotal = Math.max(0, quantity * unitPrice - lineDiscount);
 
             const itemNameLines = wrap(name);
@@ -1038,7 +1040,10 @@ export class HardwareStore {
                 size: it.product?.size || '',
                 quantity: it.quantity,
                 unitPrice: it.unitPrice,
-                lineTotal: it.unitPrice * it.quantity - (it.discountAmount || 0),
+                lineTotal:
+                    it.unitPrice * it.quantity -
+                    Number(it.discountAmount || 0) -
+                    Number(it.manufacturerDiscountAmount || 0),
             })),
             subtotal: rawSubtotal,
             discountTotal: discountTotal,
