@@ -17,12 +17,18 @@ interface LoginModalProps {
   onClose: () => void;
   onLoginSuccess: (user: User) => void;
   currentUserId?: string;
+  managerOnly?: boolean;
+  title?: string;
+  subtitle?: string;
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({
   isOpen,
   onClose,
   onLoginSuccess,
+  managerOnly = false,
+  title,
+  subtitle,
 }) => {
   const [mode, setMode] = useState<'pin' | 'email'>('pin');
 
@@ -154,6 +160,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           pin: enteredPin,
         });
 
+      if (managerOnly && result.user.role !== 'Manager' && result.user.role !== 'Admin') {
+        playBeep('error');
+        setError('Manager or Admin credentials are required for this portal.');
+        setPin('');
+        return;
+      }
+
       playBeep('success');
 
       api.setUserId(
@@ -195,6 +208,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           email,
           password,
         });
+
+      if (managerOnly && result.user.role !== 'Manager' && result.user.role !== 'Admin') {
+        playBeep('error');
+        setError('Manager or Admin credentials are required for this portal.');
+        setPassword('');
+        return;
+      }
 
       playBeep('success');
 
@@ -349,13 +369,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               <h2 className="font-serif italic font-bold text-[#F5F5F5] text-lg">
                 {requiresSetup
                   ? 'Initial Admin Setup'
-                  : 'Terminal Login / Switch'}
+                  : title || (managerOnly ? 'Manager Portal Login' : 'Terminal Login / Switch')}
               </h2>
 
               <p className="text-xs text-[#737373] mt-0.5">
                 {requiresSetup
                   ? 'Create the first secure KaBiRa POS administrator account'
-                  : 'Authenticate operator credentials'}
+                  : subtitle || (managerOnly
+                    ? 'Manager/Admin authentication required for backend POS controls'
+                    : 'Authenticate operator credentials')}
               </p>
             </div>
 
