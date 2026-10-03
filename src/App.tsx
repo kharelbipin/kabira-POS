@@ -1006,7 +1006,7 @@ export default function App() {
   }
 
   if (isCustomerDisplayMode) {
-    return <CustomerDisplayView />;
+    return <CustomerDisplayView settings={settings} />;
   }
 
   if (isAuthenticating) {
@@ -1054,7 +1054,13 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0A0A0A] font-sans text-[#E5E5E5] antialiased selection:bg-[#C5A059] selection:text-black">
+    <div
+      className="flex flex-col h-screen w-screen overflow-hidden bg-[#0A0A0A] font-sans text-[#E5E5E5] antialiased selection:bg-[#C5A059] selection:text-black"
+      style={{
+        zoom: (settings?.windowZoomPercent ?? 100) / 100,
+        fontSize: `${settings?.posScreenFontSizePx ?? 16}px`,
+      }}
+    >
       {/* Top Navbar */}
       <Navbar
         currentTab={currentTab}
@@ -1404,7 +1410,7 @@ export default function App() {
               </button>
             </div>
             <div className="flex-1 overflow-hidden relative">
-              <CustomerDisplayView />
+              <CustomerDisplayView settings={settings} />
             </div>
           </div>
         </div>
@@ -1623,7 +1629,7 @@ export default function App() {
       />
 
       {/* Auto-Open Customer Display 2 Screen Banner & Floating Controller (Webform & Dual-Display) */}
-      {!isCustomerDisplayMode && !checkUploadSession && !shelfCameraSession && !mobileSessionParam && (
+      {(settings?.autoLaunchCustomerScreen ?? true) && !isCustomerDisplayMode && !checkUploadSession && !shelfCameraSession && !mobileSessionParam && (
         <CustomerDisplayAutoBanner
           onOpenCustomerDisplayModal={() => setShowCustomerDisplayModal(true)}
         />
