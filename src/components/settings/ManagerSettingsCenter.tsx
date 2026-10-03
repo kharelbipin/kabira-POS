@@ -127,6 +127,26 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
     timezone: 'America/Chicago (CST)',
     currency: 'USD ($)',
 
+    // General POS display & usability
+    useOnScreenKeypad: settings?.useOnScreenKeypad ?? true,
+    showFixedKeypad: settings?.showFixedKeypad ?? false,
+    autoLaunchCustomerScreen: settings?.autoLaunchCustomerScreen ?? true,
+    customerDisplayShowTotal: settings?.customerDisplayShowTotal ?? true,
+    customerDisplayShowPrice: settings?.customerDisplayShowPrice ?? true,
+    customerDisplayShowCustomerNumber: settings?.customerDisplayShowCustomerNumber ?? true,
+    customerDisplayShowSaleNotes: settings?.customerDisplayShowSaleNotes ?? false,
+    alwaysShowShortcuts: settings?.alwaysShowShortcuts ?? false,
+    webOrderNotificationsEnabled: settings?.webOrderNotificationsEnabled ?? false,
+    hideTotalDetails: settings?.hideTotalDetails ?? false,
+    tasklistNotificationSound: settings?.tasklistNotificationSound ?? 'beep',
+    searchFontSizePx: settings?.searchFontSizePx ?? 13,
+    windowZoomPercent: settings?.windowZoomPercent ?? 100,
+    posScreenFontSizePx: settings?.posScreenFontSizePx ?? 16,
+    customerScreenFontSizePx: settings?.customerScreenFontSizePx ?? 16,
+    customerScreenZoomPercent: settings?.customerScreenZoomPercent ?? 100,
+    applicationVersionLabel: settings?.applicationVersionLabel ?? '1.0.0',
+    electronAppVersionLabel: settings?.electronAppVersionLabel ?? '1.0.30',
+
     // Register & Checkout
     defaultTerminalName: 'Terminal #01 (Main Register)',
     promptCustomerAtStart: true,
@@ -301,6 +321,24 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
         requireManagerDiscountAbove: formData.requireManagerDiscountAbove,
         requireManagerToOpenDrawerNoSale: formData.requireManagerToOpenDrawerNoSale,
         customerDisplayFullscreen: formData.customerDisplayFullscreen,
+        useOnScreenKeypad: formData.useOnScreenKeypad,
+        showFixedKeypad: formData.showFixedKeypad,
+        autoLaunchCustomerScreen: formData.autoLaunchCustomerScreen,
+        customerDisplayShowTotal: formData.customerDisplayShowTotal,
+        customerDisplayShowPrice: formData.customerDisplayShowPrice,
+        customerDisplayShowCustomerNumber: formData.customerDisplayShowCustomerNumber,
+        customerDisplayShowSaleNotes: formData.customerDisplayShowSaleNotes,
+        alwaysShowShortcuts: formData.alwaysShowShortcuts,
+        webOrderNotificationsEnabled: formData.webOrderNotificationsEnabled,
+        hideTotalDetails: formData.hideTotalDetails,
+        tasklistNotificationSound: formData.tasklistNotificationSound,
+        searchFontSizePx: formData.searchFontSizePx,
+        windowZoomPercent: formData.windowZoomPercent,
+        posScreenFontSizePx: formData.posScreenFontSizePx,
+        customerScreenFontSizePx: formData.customerScreenFontSizePx,
+        customerScreenZoomPercent: formData.customerScreenZoomPercent,
+        applicationVersionLabel: formData.applicationVersionLabel,
+        electronAppVersionLabel: formData.electronAppVersionLabel,
         enableCash: formData.enableCash,
         enableCard: formData.enableCard,
         enableContactless: formData.enableContactless,
@@ -594,6 +632,123 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
                       onChange={e => setFormData({ ...formData, email: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-400"
                     />
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-200 pt-5 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                      General POS Display & Usability
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      These options control the register screen, touchscreen behavior, and customer display.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[
+                      ['useOnScreenKeypad', 'Use On-Screen Keypad'],
+                      ['showFixedKeypad', 'Show Fixed Keypad'],
+                      ['autoLaunchCustomerScreen', 'Auto Launch Customer Screen'],
+                      ['customerDisplayShowTotal', 'Show Total On Customer Screen'],
+                      ['customerDisplayShowPrice', 'Show Price On Customer Screen'],
+                      ['customerDisplayShowCustomerNumber', 'Show Customer Number'],
+                      ['customerDisplayShowSaleNotes', 'Show Sale Notes'],
+                      ['alwaysShowShortcuts', 'Always Show Shortcuts'],
+                      ['webOrderNotificationsEnabled', 'Enable Weborder Notifications'],
+                      ['hideTotalDetails', 'Hide Total Details'],
+                    ].map(([key, label]) => (
+                      <label key={key} className="flex items-center justify-between gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
+                        <span className="text-xs font-semibold text-slate-800">{label}</span>
+                        <input
+                          type="checkbox"
+                          checked={Boolean((formData as any)[key])}
+                          onChange={e => setFormData({ ...formData, [key]: e.target.checked })}
+                          className="w-4 h-4 accent-sky-600 rounded cursor-pointer"
+                        />
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">Tasklist Notification Sound</label>
+                      <select
+                        value={formData.tasklistNotificationSound}
+                        onChange={e => setFormData({ ...formData, tasklistNotificationSound: e.target.value as 'none' | 'beep' | 'chime' })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                      >
+                        <option value="none">None</option>
+                        <option value="beep">Beep</option>
+                        <option value="chime">Chime</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">Search Font Size</label>
+                      <select
+                        value={formData.searchFontSizePx}
+                        onChange={e => setFormData({ ...formData, searchFontSizePx: Number(e.target.value) })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                      >
+                        {[12,13,14,15,16,18].map(v => <option key={v} value={v}>{v}px</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">Window Zoom %</label>
+                      <select
+                        value={formData.windowZoomPercent}
+                        onChange={e => setFormData({ ...formData, windowZoomPercent: Number(e.target.value) })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                      >
+                        {[75,80,90,100,110,125].map(v => <option key={v} value={v}>{v}%</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">POS Screen Font Size</label>
+                      <select
+                        value={formData.posScreenFontSizePx}
+                        onChange={e => setFormData({ ...formData, posScreenFontSizePx: Number(e.target.value) })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                      >
+                        {[14,15,16,17,18,20].map(v => <option key={v} value={v}>{v}px</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">Customer Screen Font Size</label>
+                      <select
+                        value={formData.customerScreenFontSizePx}
+                        onChange={e => setFormData({ ...formData, customerScreenFontSizePx: Number(e.target.value) })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                      >
+                        {[14,16,18,20,22,24].map(v => <option key={v} value={v}>{v}px</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">Customer Screen Zoom</label>
+                      <select
+                        value={formData.customerScreenZoomPercent}
+                        onChange={e => setFormData({ ...formData, customerScreenZoomPercent: Number(e.target.value) })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                      >
+                        {[80,90,100,110,125].map(v => <option key={v} value={v}>{v}%</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[11px] text-slate-500 block">Application Version</span>
+                      <span className="text-sm font-mono font-bold text-slate-900">{formData.applicationVersionLabel}</span>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[11px] text-slate-500 block">Electron App Version</span>
+                      <span className="text-sm font-mono font-bold text-slate-900">{formData.electronAppVersionLabel}</span>
+                    </div>
                   </div>
                 </div>
               </div>
