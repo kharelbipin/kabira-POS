@@ -18,6 +18,7 @@ import {
   Promotion,
   ScanDataExportBatch,
   ScanDataTransaction,
+  StoreSettings,
 } from '../../types';
 import { api } from '../../utils/api';
 import { PromotionsSettings } from '../PromotionsSettings';
@@ -29,11 +30,14 @@ type CenterTab =
   | 'transactions'
   | 'exports'
   | 'reimbursements'
-  | 'errors';
+  | 'errors'
+  | 'settings';
 
 interface ManagerPromotionScanDataCenterProps {
   products: Product[];
+  settings: StoreSettings | null;
   onNavigate: (tab: string) => void;
+  onSettingsUpdated: (settings: StoreSettings) => void;
 }
 
 const money = (value: number) =>
@@ -64,7 +68,9 @@ const downloadBlob = (fileName: string, blob: Blob) => {
 
 export const ManagerPromotionScanDataCenter: React.FC<ManagerPromotionScanDataCenterProps> = ({
   products,
+  settings,
   onNavigate,
+  onSettingsUpdated,
 }) => {
   const [tab, setTab] = useState<CenterTab>('overview');
   const [promotions, setPromotions] = useState<Promotion[]>([]);
@@ -84,6 +90,14 @@ export const ManagerPromotionScanDataCenter: React.FC<ManagerPromotionScanDataCe
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [subscriptionForm, setSubscriptionForm] = useState({
+    active: settings?.scanDataSubscriptionActive ?? false,
+    provider: settings?.scanDataSubscriptionProvider || '',
+    monthlyFee: Number(settings?.scanDataMonthlySubscriptionFee || 0),
+    retailerAccountId: settings?.scanDataRetailerAccountId || '',
+    defaultFrequency: settings?.scanDataDefaultExportFrequency || 'monthly',
+  });
 
   const [companyFilter, setCompanyFilter] = useState('all');
   const [headingFilter, setHeadingFilter] = useState('all');
@@ -118,6 +132,16 @@ export const ManagerPromotionScanDataCenter: React.FC<ManagerPromotionScanDataCe
   useEffect(() => {
     void loadAll();
   }, []);
+
+  useEffect(() => {
+    setSubscriptionForm({
+      active: settings?.scanDataSubscriptionActive ?? false,
+      provider: settings?.scanDataSubscriptionProvider || '',
+      monthlyFee: Number(settings?.scanDataMonthlySubscriptionFee || 0),
+      retailerAccountId: settings?.scanDataRetailerAccountId || '',
+      defaultFrequency: settings?.scanDataDefaultExportFrequency || 'monthly',
+    });
+  }, [settings]);
 
   const manufacturerPrograms = useMemo(
     () => promotions.filter(p => p.fundingSource && p.fundingSource !== 'store'),
@@ -317,6 +341,24 @@ export const ManagerPromotionScanDataCenter: React.FC<ManagerPromotionScanDataCe
     }
   };
 
+  const saveSubscriptionSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const updated = await api.updateSettings({
+        scanDataSubscriptionActive: subscriptionForm.active,
+        scanDataSubscriptionProvider: subscriptionForm.provider.trim(),
+        scanDataMonthlySubscriptionFee: Math.max(0, Number(subscriptionForm.monthlyFee || 0)),
+        scanDataRetailerAccountId: subscriptionForm.retailerAccountId.trim(),
+        scanDataDefaultExportFrequency: subscriptionForm.defaultFrequency as 'daily' | 'weekly' | 'monthly',
+      });
+      onSettingsUpdated(updated);
+    } catch (error: any) {
+      alert(error?.message || 'Could not save scan-data service settings.');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const tabs: { id: CenterTab; label: string }[] = [
     { id: 'overview', label: 'Dashboard' },
     { id: 'programs', label: 'Programs & Promotions' },
@@ -325,6 +367,7 @@ export const ManagerPromotionScanDataCenter: React.FC<ManagerPromotionScanDataCe
     { id: 'exports', label: 'Exports' },
     { id: 'reimbursements', label: 'Reimbursements' },
     { id: 'errors', label: 'Errors / Exceptions' },
+    { id: 'settings', label: 'Settings' },
   ];
 
   return (
@@ -374,12 +417,14 @@ export const ManagerPromotionScanDataCenter: React.FC<ManagerPromotionScanDataCe
           <>
             {tab === 'overview' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
                   {[
                     ['Eligible Transactions', String(summary?.totals.transactions || 0)],
                     ['Eligible Units', String(summary?.totals.eligibleUnits || 0)],
                     ['Discounts Given', money(summary?.totals.discountsGiven || 0)],
                     ['Expected Reimbursement', money(summary?.totals.expectedReimbursement || 0)],
+                    ['Paid Reimbursement', money((summary?.byManufacturer || []).reduce((sum, row) => sum + row.paidAmount, 0))],
+                    ['Monthly Service Fee', money(settings?.scanDataMonthlySubscriptionFee || 0)],
                     ['Pending Export', String(summary?.totals.pendingTransactions || 0)],
                     ['Exceptions', String((summary?.totals.errorTransactions || 0) + mappingErrors.length)],
                   ].map(([label, value]) => (
@@ -388,6 +433,46 @@ export const ManagerPromotionScanDataCenter: React.FC<ManagerPromotionScanDataCe
                       <div className="text-xl font-black mt-2">{value}</div>
                     </div>
                   ))}
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black">Scan Data Subscription Coverage</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        Compare manufacturer money received with the monthly scan-data service cost.
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-right">
+                      <div>
+                        <div className="text-[9px] uppercase font-black text-slate-400">Paid Back</div>
+                        <div className="text-lg font-black text-emerald-700">
+                          {money((summary?.byManufacturer || []).reduce((sum, row) => sum + row.paidAmount, 0))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] uppercase font-black text-slate-400">Monthly Fee</div>
+                        <div className="text-lg font-black">
+                          {money(settings?.scanDataMonthlySubscriptionFee || 0)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] uppercase font-black text-slate-400">Net After Fee</div>
+                        <div className={
+                          'text-lg font-black ' +
+                          ((summary?.byManufacturer || []).reduce((sum, row) => sum + row.paidAmount, 0) -
+                            Number(settings?.scanDataMonthlySubscriptionFee || 0) >= 0
+                            ? 'text-emerald-700'
+                            : 'text-amber-700')
+                        }>
+                          {money(
+                            (summary?.byManufacturer || []).reduce((sum, row) => sum + row.paidAmount, 0) -
+                              Number(settings?.scanDataMonthlySubscriptionFee || 0)
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -764,6 +849,116 @@ export const ManagerPromotionScanDataCenter: React.FC<ManagerPromotionScanDataCe
                 </div>
               </div>
             )}
+            {tab === 'settings' && (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+                  <div>
+                    <div className="text-base font-black">Scan Data Service</div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      Track the service/provider used to submit scan data and compare its fee with manufacturer reimbursements.
+                    </div>
+                  </div>
+
+                  <label className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
+                    <div>
+                      <div className="text-xs font-black">Subscription Active</div>
+                      <div className="text-[10px] text-slate-500">Enable when this store is enrolled with a scan-data provider or manufacturer program.</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={subscriptionForm.active}
+                      onChange={e => setSubscriptionForm({ ...subscriptionForm, active: e.target.checked })}
+                    />
+                  </label>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">Provider / Service</label>
+                      <input
+                        value={subscriptionForm.provider}
+                        onChange={e => setSubscriptionForm({ ...subscriptionForm, provider: e.target.value })}
+                        placeholder="e.g. scan-data provider name"
+                        className="w-full h-10 rounded-lg border border-slate-300 px-3 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">Retailer / Account ID</label>
+                      <input
+                        value={subscriptionForm.retailerAccountId}
+                        onChange={e => setSubscriptionForm({ ...subscriptionForm, retailerAccountId: e.target.value })}
+                        placeholder="Optional account/reference ID"
+                        className="w-full h-10 rounded-lg border border-slate-300 px-3 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">Monthly Subscription Fee ($)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={subscriptionForm.monthlyFee}
+                        onChange={e => setSubscriptionForm({ ...subscriptionForm, monthlyFee: Number(e.target.value || 0) })}
+                        className="w-full h-10 rounded-lg border border-slate-300 px-3 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">Default Reporting Frequency</label>
+                      <select
+                        value={subscriptionForm.defaultFrequency}
+                        onChange={e => setSubscriptionForm({ ...subscriptionForm, defaultFrequency: e.target.value as 'daily' | 'weekly' | 'monthly' })}
+                        className="w-full h-10 rounded-lg border border-slate-300 px-3 text-xs bg-white"
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={savingSettings}
+                    onClick={() => void saveSubscriptionSettings()}
+                    className="h-10 px-4 rounded-lg bg-[#08274d] text-white text-xs font-black cursor-pointer disabled:opacity-60"
+                  >
+                    {savingSettings ? 'Saving...' : 'Save Scan Data Settings'}
+                  </button>
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                  <div className="text-base font-black">Current Economics</div>
+                  <div className="text-xs text-slate-500 mt-1 mb-4">
+                    Reimbursement tracking is separate from customer discounts so you can see whether the program is covering its service cost.
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Expected reimbursement</span>
+                      <span className="font-black">{money(summary?.totals.expectedReimbursement || 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Actually paid</span>
+                      <span className="font-black text-emerald-700">
+                        {money((summary?.byManufacturer || []).reduce((sum, row) => sum + row.paidAmount, 0))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Monthly service fee</span>
+                      <span className="font-black">{money(subscriptionForm.monthlyFee)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm border-t border-slate-200 pt-3">
+                      <span className="font-black">Paid minus monthly fee</span>
+                      <span className="font-black">
+                        {money(
+                          (summary?.byManufacturer || []).reduce((sum, row) => sum + row.paidAmount, 0) -
+                            Number(subscriptionForm.monthlyFee || 0)
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </>
         )}
       </div>
