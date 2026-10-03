@@ -53,6 +53,17 @@ export interface Promotion {
   usageCount?: number;
   currentUsages?: number;
   maxUsages?: number;
+  fundingSource?: 'store' | 'manufacturer' | 'vendor';
+  manufacturerName?: string;
+  distributorName?: string;
+  productHeading?: string;
+  programType?: 'scan_data' | 'buydown' | 'rebate' | 'loyalty' | 'multipack' | 'vendor_promotion';
+  customerPhoneRequired?: boolean;
+  loyaltyRequired?: boolean;
+  ageVerificationRequired?: boolean;
+  reimbursementPerUnit?: number;
+  reportingFrequency?: 'daily' | 'weekly' | 'monthly' | 'custom';
+  exportTemplate?: string;
 }
 
 export interface Device {
@@ -126,6 +137,11 @@ export interface Product {
   vendor?: string;
   vendorId?: string;
   vendorSku?: string;
+  productHeading?: string;
+  manufacturerName?: string;
+  distributorName?: string;
+  scanDataEligible?: boolean;
+  defaultProgramId?: string;
   inventoryTracking?: boolean; // inventory tracking flag
   channelAvailability?: ProductChannelAvailability; // POS, Website, Mobile, Delivery
   sellOnline?: boolean;
