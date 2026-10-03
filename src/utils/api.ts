@@ -563,6 +563,25 @@ class ApiService {
     }>(`/users/${id}/activity`);
   }
 
+  async getRegisters(): Promise<{ registers: Array<{
+    id: string;
+    name: string;
+    location: string;
+    status: string;
+    currentCashier: string | null;
+    activeShiftId: string | null;
+  }> }> {
+    return this.request('/registers');
+  }
+
+  async getBridgeTelemetry(): Promise<{
+    terminals: any[];
+    count: number;
+    serverTime: string;
+  }> {
+    return this.request('/bridge/telemetry');
+  }
+
   // Dashboard Overview (AP-DB-01 to AP-DB-04)
   async getDashboardOverview(params?: { period?: string; startDate?: string; endDate?: string }) {
     const q = new URLSearchParams();
