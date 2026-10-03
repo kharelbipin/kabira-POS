@@ -200,7 +200,7 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
   const warningAlertCount = alerts.filter(a => a.severity === 'warning').length;
 
   const runQuickAction = async (
-    action: 'scan' | 'printer' | 'drawer' | 'display'
+    action: 'scan' | 'printer' | 'drawer' | 'display' | 'bridge'
   ) => {
     setQuickAction(action);
     setQuickActionMessage(null);
@@ -229,6 +229,23 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
       if (action === 'display') {
         const result = await hardwareStore.restartCustomerDisplay();
         setQuickActionMessage({ success: result.success, message: result.message });
+      }
+
+      if (action === 'bridge') {
+        const confirmed = window.confirm(
+          'Restart the KaBiRa Hardware Bridge service?\n\nPrinter, drawer, scanner, and customer-display hardware access may be unavailable for a few seconds.'
+        );
+
+        if (!confirmed) {
+          setQuickAction(null);
+          return;
+        }
+
+        const result = await api.restartBridgeService();
+        setQuickActionMessage({ success: result.success, message: result.message });
+
+        await new Promise(resolve => window.setTimeout(resolve, 2000));
+        await hardwareStore.refreshHealth();
       }
 
       await refresh();
@@ -598,7 +615,16 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
                   <p className="text-[11px] text-slate-500 mt-0.5">Run safe local diagnostics without leaving this register.</p>
                 </div>
 
-                <div className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-2">
+                <div className="p-4 grid grid-cols-2 lg:grid-cols-5 gap-2">
+                  <button
+                    type="button"
+                    disabled={quickAction !== null}
+                    onClick={() => void runQuickAction('bridge')}
+                    className="px-3 py-3 rounded-xl border border-rose-300 bg-rose-50 hover:bg-rose-100 disabled:opacity-50 text-xs font-black text-rose-800 cursor-pointer"
+                  >
+                    {quickAction === 'bridge' ? 'Restarting…' : 'Restart Bridge'}
+                  </button>
+
                   <button
                     type="button"
                     disabled={quickAction !== null}
