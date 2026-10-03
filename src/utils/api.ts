@@ -396,9 +396,9 @@ class ApiService {
 
   async exportProductsCSV(): Promise<string> {
     const products = await this.getProducts();
-    let csv = 'Name,SKU,Barcode,Category,Price,Cost,Stock,Size,LowStockThreshold\n';
+    let csv = 'Name,SKU,Barcode,Category,Price,Cost,Stock,Size,LowStockThreshold,ProductHeading,Manufacturer,Distributor,ScanDataEligible,DefaultProgramId\n';
     products.forEach(p => {
-      csv += `"${p.name.replace(/"/g, '""')}","${p.sku}","${p.barcode}","${p.categoryName || ''}",${p.price},${p.costPrice || p.cost || 0},${p.stockQuantity},"${p.size}",${p.lowStockThreshold}\n`;
+      csv += `"${p.name.replace(/"/g, '""')}","${p.sku}","${p.barcode}","${p.categoryName || ''}",${p.price},${p.costPrice || p.cost || 0},${p.stockQuantity},"${p.size}",${p.lowStockThreshold},"${p.productHeading || ''}","${p.manufacturerName || ''}","${p.distributorName || ''}",${p.scanDataEligible ? 'true' : 'false'},"${p.defaultProgramId || ''}"\n`;
     });
     return csv;
   }
