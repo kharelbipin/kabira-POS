@@ -238,6 +238,7 @@ export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settin
   };
 
   const hasItems = displayState.items && displayState.items.length > 0;
+  const isIdleAdvertising = !hasItems && displayState.screenState === 'welcome';
   const currentPromo = PROMO_SLIDES[promoIndex];
 
   return (
@@ -253,6 +254,9 @@ export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settin
       {/* Identify Displays Overlay for Monitor 2 (WV-015) */}
       <IdentifyDisplaysOverlay currentDisplayNumber={2} />
 
+      {/* Hide transaction chrome while idle so advertising uses the full customer screen. */}
+      {!isIdleAdvertising && (
+      <>
       {/* Top Store Banner */}
       <header className="bg-[#0F172A] border-b border-slate-800 px-8 py-4 flex items-center justify-between shadow-xl">
         <div className="flex items-center space-x-4">
@@ -301,11 +305,19 @@ export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settin
 
         </div>
       </header>
+      </>
+      )}
 
       {/* Main Body */}
-      <main className="flex-1 overflow-hidden p-6 flex gap-6">
+      <main className={`flex-1 overflow-hidden flex ${
+        isIdleAdvertising ? 'p-0' : 'p-6 gap-6'
+      }`}>
         {/* Left Column: Cart items, Welcome Hero, Payment State, or Thank You */}
-        <div className="flex-1 flex flex-col bg-[#0F172A]/90 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative">
+        <div className={`flex-1 flex flex-col overflow-hidden relative ${
+          isIdleAdvertising
+            ? 'bg-[#0A0D14]'
+            : 'bg-[#0F172A]/90 border border-slate-800 rounded-3xl shadow-2xl'
+        }`}>
           {/* Loyalty Phone Keypad Overlay (WV-050) */}
           {showLoyaltyKeypad && (
             <div className="absolute inset-0 z-30 bg-black/90 p-8 flex flex-col items-center justify-center animate-in fade-in">
@@ -548,7 +560,7 @@ export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settin
             </>
           ) : (
             /* SCREEN STATE: WELCOME / IDLE DISPLAY */
-            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center relative overflow-hidden">
+            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center relative overflow-hidden min-h-screen">
               <div className="absolute inset-0 bg-radial from-amber-500/5 to-transparent pointer-events-none" />
 
               <div className="p-3 rounded-3xl bg-[#0B132B] border border-sky-500/40 flex items-center justify-center mb-6 shadow-2xl shadow-sky-950/60">
@@ -587,6 +599,9 @@ export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settin
           )}
         </div>
 
+        {/* Running totals appear only after the cashier scans/adds the first item. */}
+        {!isIdleAdvertising && (
+        <>
         {/* Right Column: Running Order Totals & Texas Legal Notices (WV-024) */}
         <div className="w-96 flex flex-col justify-between space-y-6">
           {/* Totals Panel */}
@@ -658,6 +673,8 @@ export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settin
             </p>
           </div>
         </div>
+        </>
+        )}
       </main>
     </div>
   );
