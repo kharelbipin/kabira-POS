@@ -422,10 +422,10 @@ export const AllFunctionsMenuModal: React.FC<AllFunctionsMenuModalProps> = ({
       },
       {
         id: 'store-settings',
-        title: 'Store Settings & Tax Configuration',
+        title: 'Manager Settings Center',
         category: 'hardware',
         categoryLabel: 'Hardware & Settings',
-        description: 'Set Texas sales tax, store address, receipt branding, sound effects, and manager override PINs.',
+        description: 'Manage store profile, register behavior, payments, receipts, devices, loyalty, security, taxes, integrations, backup, and audit controls in one place.',
         icon: Settings,
         action: () => {
           onNavigateTab('settings');
