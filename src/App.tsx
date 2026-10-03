@@ -20,7 +20,6 @@ import { CustomersView } from './components/CustomersView';
 import { ReportsView } from './components/ReportsView';
 import { DashboardView } from './components/DashboardView';
 import { UsersView } from './components/UsersView';
-import { SettingsView } from './components/SettingsView';
 import { AuditLogsView } from './components/AuditLogsView';
 import { UserActivityTrackerView } from './components/UserActivityTrackerView';
 import { ShiftsView } from './components/shifts/ShiftsView';
