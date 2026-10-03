@@ -104,11 +104,21 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   // Live POS Bridge Health
   const [bridgeHealth, setBridgeHealth] = useState(hardwareStore.getHealth());
+  const [configuredHardware, setConfiguredHardware] = useState(hardwareStore.getConfiguredHardware());
+  const [discoveredDevices, setDiscoveredDevices] = useState(hardwareStore.getDiscoveredDevices());
+
   useEffect(() => {
     return hardwareStore.subscribe(() => {
       setBridgeHealth(hardwareStore.getHealth());
+      setConfiguredHardware(hardwareStore.getConfiguredHardware());
+      setDiscoveredDevices(hardwareStore.getDiscoveredDevices());
     });
   }, []);
+
+  const display2Detected =
+    discoveredDevices.some(device => device.category === 'customer_display') ||
+    Boolean(configuredHardware.customer_display?.deviceId);
+  const display2Connected = bridgeHealth.status === 'running' && display2Detected;
 
   // Live Clock
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
@@ -197,6 +207,28 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="hidden sm:inline">Low Stock ({lowStockCount})</span>
             </button>
           )}
+
+          {/* Customer Display 2 connection status - view only */}
+          <button
+            type="button"
+            disabled
+            aria-label={display2Connected ? 'Display 2 Connected' : 'Display 2 Offline'}
+            title={
+              display2Connected
+                ? 'Customer Display 2 is connected'
+                : 'Customer Display 2 is not currently detected'
+            }
+            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold shadow-2xs cursor-default ${
+              display2Connected
+                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                : 'bg-slate-500/15 border-slate-500/40 text-slate-400'
+            }`}
+          >
+            <Monitor className={`w-3.5 h-3.5 ${display2Connected ? 'text-emerald-400' : 'text-slate-500'}`} />
+            <span className="hidden sm:inline">
+              {display2Connected ? 'Display 2 Connected' : 'Display 2 Offline'}
+            </span>
+          </button>
 
           {/* Manager Portal login / backend access */}
           {onOpenManagerPortal && (
