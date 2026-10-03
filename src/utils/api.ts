@@ -42,6 +42,9 @@ import {
   PaymentSession,
   PaymentAuditLog,
   CardFallbackMethod,
+  ScanDataTransaction,
+  ScanDataExportBatch,
+  ManufacturerReimbursementSummary,
 } from '../types';
 
 // Client-side API caller
