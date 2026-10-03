@@ -42,6 +42,8 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
   const [quickName, setQuickName] = useState<string>('');
   const [quickPrice, setQuickPrice] = useState<string>('');
   const [quickQty, setQuickQty] = useState<number>(1);
+  const [quickEntryTarget, setQuickEntryTarget] = useState<'price' | 'quantity'>('price');
+  const [quickQtyInput, setQuickQtyInput] = useState<string>('1');
   const [quickCategoryId, setQuickCategoryId] = useState<string>(categories[0]?.id || 'cat-1');
   const [quickTaxable, setQuickTaxable] = useState<boolean>(true);
 
@@ -92,7 +94,9 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
       return;
     }
 
-    if (quickQty < 1) {
+    const normalizedQty = Math.max(1, parseInt(quickQtyInput, 10) || quickQty || 1);
+
+    if (normalizedQty < 1) {
       setErrorMsg('Quantity must be at least 1');
       playBeep('error');
       return;
@@ -138,7 +142,7 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
     };
 
     playBeep('scan');
-    onAddCustomItemToCart(customProduct, quickQty);
+    onAddCustomItemToCart(customProduct, normalizedQty);
     onClose();
   };
 
@@ -296,30 +300,128 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
         {/* Mode 1: Quick Add Item with Integrated Touchscreen Numeric Keypad (Req 6 & 7) */}
         {mode === 'quick' && (
           <div className="p-5 sm:p-6 space-y-4 overflow-y-auto min-h-0">
-            {/* Amount Display */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-black uppercase tracking-wider text-[#A3A3A3]">
-                Amount
-              </label>
-              <div className="bg-[#141414] border-2 border-[#C5A059] rounded-2xl px-4 py-3 flex items-center justify-between shadow-lg">
-                <span className="text-2xl font-black text-[#C5A059] font-mono">$</span>
-                <span className="text-3xl sm:text-4xl font-black font-mono text-white tracking-tight">
-                  {quickPrice ? (quickPrice.endsWith('.') ? `${parseFloat(quickPrice.slice(0, -1)).toFixed(0)}.` : quickPrice) : '0.00'}
+            {/* Price + Quantity entry, modeled after a traditional POS manual-entry screen */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setQuickEntryTarget('price')}
+                className={`text-left rounded-2xl border-2 px-4 py-3 transition-all cursor-pointer ${
+                  quickEntryTarget === 'price'
+                    ? 'bg-[#141414] border-[#C5A059] shadow-lg'
+                    : 'bg-[#141414] border-[#333333] hover:border-[#555555]'
+                }`}
+              >
+                <span className="block text-[10px] uppercase tracking-wider font-black text-[#A3A3A3]">Price</span>
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="text-xl font-black text-[#C5A059]">$</span>
+                  <span className="text-2xl sm:text-3xl font-black font-mono text-white">
+                    {quickPrice || '0.00'}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setQuickEntryTarget('quantity')}
+                className={`text-left rounded-2xl border-2 px-4 py-3 transition-all cursor-pointer ${
+                  quickEntryTarget === 'quantity'
+                    ? 'bg-[#141414] border-sky-500 shadow-lg'
+                    : 'bg-[#141414] border-[#333333] hover:border-[#555555]'
+                }`}
+              >
+                <span className="block text-[10px] uppercase tracking-wider font-black text-[#A3A3A3]">Quantity</span>
+                <span className="block text-2xl sm:text-3xl font-black font-mono text-white mt-1">
+                  {quickQtyInput || '1'}
                 </span>
-                <span className="text-xs text-[#737373] uppercase font-bold tracking-wider">USD</span>
+              </button>
+            </div>
+
+            {/* Large quantity shortcuts for cases / bulk manual entries */}
+            <div className="grid grid-cols-6 gap-1.5">
+              {[1, 2, 5, 10, 12, 24].map(qty => (
+                <button
+                  key={qty}
+                  type="button"
+                  onClick={() => {
+                    setQuickQty(qty);
+                    setQuickQtyInput(String(qty));
+                    setQuickEntryTarget('quantity');
+                    playBeep('click');
+                  }}
+                  className="h-9 rounded-lg bg-[#1A1A1A] hover:bg-[#262626] border border-[#333333] text-xs font-black text-white cursor-pointer"
+                >
+                  {qty}
+                </button>
+              ))}
+            </div>
+
+            {/* Tax selection stays visible before the keypad so cashier cannot miss it */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#A3A3A3]">
+                Tax Status
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setQuickTaxable(true)}
+                  className={`py-3 rounded-xl border text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
+                    quickTaxable
+                      ? 'bg-[#C5A059] border-[#C5A059] text-black'
+                      : 'bg-[#1A1A1A] border-[#333333] text-[#A3A3A3] hover:text-white'
+                  }`}
+                >
+                  Taxable ({(((settings?.defaultTaxRate ?? 0.0825) * 100)).toFixed(2)}%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickTaxable(false)}
+                  className={`py-3 rounded-xl border text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
+                    !quickTaxable
+                      ? 'bg-emerald-600 border-emerald-500 text-white'
+                      : 'bg-[#1A1A1A] border-[#333333] text-[#A3A3A3] hover:text-white'
+                  }`}
+                >
+                  No Tax
+                </button>
               </div>
             </div>
 
-            {/* Built-in Touchscreen Numeric Keypad (Req 7) */}
+            {/* One touchscreen keypad can enter either Price or Quantity */}
             <TouchNumericKeypad
-              value={quickPrice}
-              onChange={setQuickPrice}
-              onEnter={() => handleQuickSubmit()}
-              onClear={() => setQuickPrice('')}
-              enterLabel="Add Item"
-              enterDisabled={!quickPrice || parseFloat(quickPrice) <= 0}
-              quickCashOptions={[5, 10, 15, 20]}
-              onQuickCashSelect={(amt) => setQuickPrice(amt.toFixed(2))}
+              value={quickEntryTarget === 'price' ? quickPrice : quickQtyInput}
+              onChange={value => {
+                if (quickEntryTarget === 'price') {
+                  setQuickPrice(value);
+                } else {
+                  const digitsOnly = value.replace(/\D/g, '').slice(0, 4);
+                  setQuickQtyInput(digitsOnly);
+                  setQuickQty(Math.max(1, parseInt(digitsOnly, 10) || 1));
+                }
+              }}
+              onEnter={() => {
+                if (quickEntryTarget === 'quantity') {
+                  setQuickEntryTarget('price');
+                  return;
+                }
+                handleQuickSubmit();
+              }}
+              onClear={() => {
+                if (quickEntryTarget === 'price') {
+                  setQuickPrice('');
+                } else {
+                  setQuickQtyInput('');
+                  setQuickQty(1);
+                }
+              }}
+              enterLabel={quickEntryTarget === 'quantity' ? 'Set Qty / Price Next' : 'Add Item'}
+              enterDisabled={
+                quickEntryTarget === 'price'
+                  ? !quickPrice || parseFloat(quickPrice) <= 0
+                  : !quickQtyInput || parseInt(quickQtyInput, 10) < 1
+              }
+              allowDecimals={quickEntryTarget === 'price'}
+              quickCashOptions={quickEntryTarget === 'price' ? [5, 10, 15, 20] : undefined}
+              onQuickCashSelect={quickEntryTarget === 'price' ? (amt) => setQuickPrice(amt.toFixed(2)) : undefined}
             />
 
             {/* Description (Optional) (Req 6) */}
@@ -338,37 +440,6 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
               <p className="text-[11px] text-[#737373]">
                 Item will display on cart as: <strong className="text-white">{quickName.trim() || 'Miscellaneous Item'}</strong> ${(quickPrice ? parseFloat(quickPrice).toFixed(2) : '10.00')}
               </p>
-            </div>
-
-            {/* Tax Selection */}
-            <div className="pt-2 border-t border-[#262626] space-y-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#A3A3A3]">
-                Tax
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setQuickTaxable(true)}
-                  className={`py-2.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
-                    quickTaxable
-                      ? 'bg-[#C5A059] border-[#C5A059] text-black'
-                      : 'bg-[#1A1A1A] border-[#333333] text-[#A3A3A3] hover:text-white'
-                  }`}
-                >
-                  Taxable ({(((settings?.defaultTaxRate ?? 0.0825) * 100)).toFixed(2)}%)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickTaxable(false)}
-                  className={`py-2.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
-                    !quickTaxable
-                      ? 'bg-emerald-600 border-emerald-500 text-white'
-                      : 'bg-[#1A1A1A] border-[#333333] text-[#A3A3A3] hover:text-white'
-                  }`}
-                >
-                  No Tax
-                </button>
-              </div>
             </div>
 
             {/* Cancel & Add Item Action Buttons */}
