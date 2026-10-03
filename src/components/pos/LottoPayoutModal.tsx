@@ -15,7 +15,7 @@ export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
   onClose,
   onAddLottoPayout,
 }) => {
-  const [payoutStr, setPayoutStr] = useState('20.00');
+  const [payoutStr, setPayoutStr] = useState('');
   const [ticketNumber, setTicketNumber] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -28,18 +28,18 @@ export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
     playBeep('click');
     setErrorMsg(null);
     if (char === 'C') {
-      setPayoutStr('0.00');
+      setPayoutStr('');
     } else if (char === '.') {
       if (!payoutStr.includes('.')) {
         setPayoutStr(payoutStr + '.');
       }
     } else if (char === '00') {
-      if (payoutStr === '0.00' || payoutStr === '0') return;
+      if (!payoutStr || payoutStr === '0') return;
       const num = parseFloat(payoutStr) * 100;
       setPayoutStr(num.toFixed(2));
     } else {
-      if (payoutStr === '0.00' || payoutStr === '0') {
-        setPayoutStr(char + '.00');
+      if (!payoutStr || payoutStr === '0') {
+        setPayoutStr(char);
       } else if (payoutStr.includes('.')) {
         const parts = payoutStr.split('.');
         if (parts[1].length < 2) {
