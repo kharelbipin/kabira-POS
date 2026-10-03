@@ -235,7 +235,8 @@ if (${customerDisplayFullscreen ? '$true' : '$false'}) {
     # Edge kiosk fullscreen removes normal window chrome so customers cannot
     # minimize, maximize, resize, or close the customer display from Display 2.
     $displayArgs = @(
-        "--kiosk=${customerDisplayUrl}",
+        "--kiosk",
+        "${customerDisplayUrl}",
         "--edge-kiosk-type=fullscreen"
     ) + $commonArgs
 } else {
