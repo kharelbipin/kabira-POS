@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import net from 'net';
+import { createHash } from 'crypto';
 import { execFile } from 'child_process';
 import { db } from './db.js';
 import {
@@ -33,6 +34,9 @@ import {
     CheckQrSession,
     InventoryReservation,
     OmnichannelCartTransfer,
+    Promotion,
+    ScanDataTransaction,
+    ScanDataExportBatch,
 } from '../src/types.js';
 import { extractInvoiceFromData, confirmAndReceiveInvoice, normalizeText, parsePackSize } from './invoiceService.js';
 import { shiftAndCheckRouter } from './shiftAndCheckRoutes.js';
@@ -1522,11 +1526,410 @@ apiRouter.post('/products/import', asyncHandler(async (req: Request, res: Respon
 }));
 
 // ----------------------------------------------------
+// Manufacturer / Vendor Promotion & Scan Data Engine
+// ----------------------------------------------------
+type ScanOfferEvaluation = {
+    productId: string;
+    offerAvailable: boolean;
+    eligible: boolean;
+    message: string;
+    programId?: string;
+    programCode?: string;
+    programName?: string;
+    programType?: Promotion['programType'];
+    manufacturerName?: string;
+    productHeading?: string;
+    discountAmount: number;
+    discountPerUnit: number;
+    reimbursementExpected: number;
+    phoneRequired: boolean;
+    loyaltyRequired: boolean;
+    ageVerificationRequired: boolean;
+};
+
+const normalizePhone = (value?: string) => String(value || '').replace(/\D/g, '');
+
+const customerPhoneToken = (phone?: string) => {
+    const normalized = normalizePhone(phone);
+    if (!normalized) return undefined;
+    return createHash('sha256').update(normalized).digest('hex').slice(0, 24);
+};
+
+const promotionIsActive = (promo: Promotion, now = new Date()) => {
+    if (!promo.active) return false;
+    if (promo.startDate && new Date(promo.startDate).getTime() > now.getTime()) return false;
+    if (promo.endDate && new Date(promo.endDate).getTime() < now.getTime()) return false;
+    const used = Number(promo.currentUsages ?? promo.usageCount ?? 0);
+    if (promo.maxUsages && used >= Number(promo.maxUsages)) return false;
+    return true;
+};
+
+const promotionMatchesProduct = (promo: Promotion, product: Product) => {
+    if (promo.fundingSource === 'store' || !promo.fundingSource) return false;
+    if (!promotionIsActive(promo)) return false;
+
+    if (product.defaultProgramId) {
+        return promo.id === product.defaultProgramId;
+    }
+
+    if (promo.targetType === 'product' && promo.targetId && promo.targetId !== product.id) return false;
+    if (promo.targetType === 'category' && promo.targetId && promo.targetId !== product.categoryId) return false;
+
+    if (promo.productHeading) {
+        const expected = promo.productHeading.trim().toLowerCase();
+        const actual = String(product.productHeading || '').trim().toLowerCase();
+        if (!actual || expected !== actual) return false;
+    }
+
+    if (promo.manufacturerName) {
+        const expected = promo.manufacturerName.trim().toLowerCase();
+        const actual = String(product.manufacturerName || '').trim().toLowerCase();
+        if (!actual || expected !== actual) return false;
+    }
+
+    return true;
+};
+
+const evaluateManufacturerOffer = (
+    product: Product,
+    quantity: number,
+    customer?: { id?: string; phone?: string } | null
+): ScanOfferEvaluation => {
+    const qty = Math.max(1, Number(quantity || 1));
+    const baseResult: ScanOfferEvaluation = {
+        productId: product.id,
+        offerAvailable: false,
+        eligible: false,
+        message: 'No active manufacturer promotion',
+        discountAmount: 0,
+        discountPerUnit: 0,
+        reimbursementExpected: 0,
+        phoneRequired: false,
+        loyaltyRequired: false,
+        ageVerificationRequired: false,
+    };
+
+    if (!product.scanDataEligible && !product.defaultProgramId) return baseResult;
+
+    const candidates = db.promotions.filter(p => promotionMatchesProduct(p, product));
+    if (candidates.length === 0) return baseResult;
+
+    const gross = Math.max(0, Number(product.price || 0) * qty);
+    const evaluated = candidates.map(promo => {
+        const minSpend = Number(promo.minPurchaseAmount ?? promo.minSpend ?? 0);
+        let discount = promo.type === 'percentage'
+            ? gross * (Number(promo.value || 0) / 100)
+            : Number(promo.value || 0) * qty;
+
+        if (minSpend > 0 && gross < minSpend) discount = 0;
+        if (promo.maxDiscount !== undefined) discount = Math.min(discount, Number(promo.maxDiscount));
+        discount = Math.max(0, Math.min(gross, Math.round(discount * 100) / 100));
+
+        const phoneRequired = Boolean(promo.customerPhoneRequired);
+        const loyaltyRequired = Boolean(promo.loyaltyRequired);
+        const hasCustomerPhone = Boolean(customer?.id && normalizePhone(customer?.phone));
+        const eligibilityMet = (!phoneRequired && !loyaltyRequired) || hasCustomerPhone;
+        const message = eligibilityMet
+            ? 'Manufacturer offer applied'
+            : 'Customer phone number / loyalty account required for this offer';
+
+        return {
+            productId: product.id,
+            offerAvailable: true,
+            eligible: eligibilityMet && discount > 0,
+            message,
+            programId: promo.id,
+            programCode: promo.code,
+            programName: promo.name,
+            programType: promo.programType,
+            manufacturerName: promo.manufacturerName || product.manufacturerName || 'Manufacturer',
+            productHeading: promo.productHeading || product.productHeading || product.categoryName || 'Other',
+            discountAmount: eligibilityMet ? discount : 0,
+            discountPerUnit: eligibilityMet ? Math.round((discount / qty) * 100) / 100 : 0,
+            reimbursementExpected: eligibilityMet
+                ? Math.round(Number(promo.reimbursementPerUnit || 0) * qty * 100) / 100
+                : 0,
+            phoneRequired,
+            loyaltyRequired,
+            ageVerificationRequired: Boolean(promo.ageVerificationRequired),
+        } satisfies ScanOfferEvaluation;
+    });
+
+    const eligible = evaluated
+        .filter(x => x.eligible)
+        .sort((a, b) => b.discountAmount - a.discountAmount)[0];
+    if (eligible) return eligible;
+
+    return evaluated[0] || baseResult;
+};
+
+const markScanDataOrderStatus = (orderId: string, saleStatus: 'void' | 'refund') => {
+    const now = new Date().toISOString();
+    for (const tx of db.scanDataTransactions.filter(t => t.orderId === orderId)) {
+        tx.saleStatus = saleStatus;
+        tx.updatedAt = now;
+        if (tx.submissionStatus === 'pending' || tx.submissionStatus === 'batched') {
+            tx.submissionStatus = 'excluded';
+            tx.reimbursementStatus = 'rejected';
+        } else {
+            tx.reimbursementStatus = 'disputed';
+        }
+    }
+};
+
+apiRouter.post('/scan-data/evaluate', (req: Request, res: Response) => {
+    const { items, customerId, customerPhone } = req.body || {};
+    const customer = customerId
+        ? db.customers.find(c => c.id === customerId)
+        : customerPhone
+            ? db.customers.find(c => normalizePhone(c.phone) === normalizePhone(customerPhone))
+            : undefined;
+
+    const requestItems = Array.isArray(items) ? items : [];
+    const lines = requestItems.map((item: any) => {
+        const product = db.products.find(p => p.id === item.productId);
+        if (!product) {
+            return {
+                productId: item.productId,
+                offerAvailable: false,
+                eligible: false,
+                message: 'Product not found',
+                discountAmount: 0,
+                discountPerUnit: 0,
+                reimbursementExpected: 0,
+                phoneRequired: false,
+                loyaltyRequired: false,
+                ageVerificationRequired: false,
+            } as ScanOfferEvaluation;
+        }
+        return evaluateManufacturerOffer(product, Number(item.quantity || 1), customer);
+    });
+
+    res.json({
+        customerMatched: Boolean(customer),
+        customerId: customer?.id,
+        lines,
+        discountTotal: Math.round(lines.reduce((sum, line) => sum + line.discountAmount, 0) * 100) / 100,
+        reimbursementExpected: Math.round(lines.reduce((sum, line) => sum + line.reimbursementExpected, 0) * 100) / 100,
+    });
+});
+
+apiRouter.get('/scan-data/transactions', (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
+        return res.status(403).json({ error: 'Only Managers and Admins can view scan data' });
+    }
+
+    const { manufacturerName, productHeading, programId, submissionStatus, startDate, endDate } = req.query;
+    let rows = [...db.scanDataTransactions];
+
+    if (manufacturerName && manufacturerName !== 'all') {
+        rows = rows.filter(t => t.manufacturerName.toLowerCase() === String(manufacturerName).toLowerCase());
+    }
+    if (productHeading && productHeading !== 'all') {
+        rows = rows.filter(t => t.productHeading.toLowerCase() === String(productHeading).toLowerCase());
+    }
+    if (programId && programId !== 'all') rows = rows.filter(t => t.programId === programId);
+    if (submissionStatus && submissionStatus !== 'all') rows = rows.filter(t => t.submissionStatus === submissionStatus);
+    if (startDate) rows = rows.filter(t => t.orderCreatedAt >= String(startDate));
+    if (endDate) rows = rows.filter(t => t.orderCreatedAt <= String(endDate) + 'T23:59:59');
+
+    rows.sort((a, b) => new Date(b.orderCreatedAt).getTime() - new Date(a.orderCreatedAt).getTime());
+    res.json(rows);
+});
+
+apiRouter.get('/scan-data/export-batches', (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
+        return res.status(403).json({ error: 'Only Managers and Admins can view scan data exports' });
+    }
+    res.json([...db.scanDataExportBatches].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+});
+
+apiRouter.post('/scan-data/export-batches', asyncHandler(async (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
+        return res.status(403).json({ error: 'Only Managers and Admins can generate scan data exports' });
+    }
+
+    const { manufacturerName, productHeading, programId, startDate, endDate } = req.body || {};
+    let rows = db.scanDataTransactions.filter(t => t.saleStatus === 'sale' && t.submissionStatus === 'pending');
+
+    if (manufacturerName && manufacturerName !== 'all') {
+        rows = rows.filter(t => t.manufacturerName.toLowerCase() === String(manufacturerName).toLowerCase());
+    }
+    if (productHeading && productHeading !== 'all') {
+        rows = rows.filter(t => t.productHeading.toLowerCase() === String(productHeading).toLowerCase());
+    }
+    if (programId && programId !== 'all') rows = rows.filter(t => t.programId === programId);
+    if (startDate) rows = rows.filter(t => t.orderCreatedAt >= String(startDate));
+    if (endDate) rows = rows.filter(t => t.orderCreatedAt <= String(endDate) + 'T23:59:59');
+
+    const validationErrors: string[] = [];
+    rows.forEach(t => {
+        if (!t.upc) validationErrors.push(`${t.orderNumber}: missing UPC`);
+        if (!t.manufacturerName) validationErrors.push(`${t.orderNumber}: missing manufacturer`);
+        if (!t.productHeading) validationErrors.push(`${t.orderNumber}: missing product heading`);
+        if (!t.programId) validationErrors.push(`${t.orderNumber}: missing program`);
+    });
+
+    if (rows.length === 0) {
+        return res.status(400).json({ error: 'No pending eligible scan-data transactions match these filters' });
+    }
+    if (validationErrors.length > 0) {
+        return res.status(400).json({ error: 'Scan data validation failed', validationErrors });
+    }
+
+    const now = new Date().toISOString();
+    const batchId = `sdb-${Date.now()}`;
+    const batchNumber = `SCAN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${db.scanDataExportBatches.length + 1}`;
+    const selectedProgram = programId ? db.promotions.find(p => p.id === programId) : undefined;
+    const exportTemplate = selectedProgram?.exportTemplate || 'Generic CSV';
+    const safeCompany = String(manufacturerName && manufacturerName !== 'all' ? manufacturerName : 'All-Companies').replace(/[^a-z0-9]+/gi, '-');
+    const safeHeading = String(productHeading && productHeading !== 'all' ? productHeading : 'All-Products').replace(/[^a-z0-9]+/gi, '-');
+    const fileName = `${safeCompany}_${safeHeading}_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    const batch: ScanDataExportBatch = {
+        id: batchId,
+        batchNumber,
+        manufacturerName: manufacturerName && manufacturerName !== 'all' ? manufacturerName : undefined,
+        productHeading: productHeading && productHeading !== 'all' ? productHeading : undefined,
+        programId: programId && programId !== 'all' ? programId : undefined,
+        programName: selectedProgram?.name,
+        startDate,
+        endDate,
+        transactionIds: rows.map(t => t.id),
+        transactionCount: rows.length,
+        expectedReimbursement: Math.round(rows.reduce((sum, t) => sum + t.expectedReimbursement, 0) * 100) / 100,
+        exportTemplate,
+        fileName,
+        status: 'validated',
+        createdByUserId: currentUser.id,
+        createdByUserName: currentUser.name,
+        createdAt: now,
+        updatedAt: now,
+    };
+
+    db.scanDataExportBatches.unshift(batch);
+    rows.forEach(t => {
+        t.submissionStatus = 'batched';
+        t.exportBatchId = batch.id;
+        t.updatedAt = now;
+    });
+
+    const headers = [
+        'TransactionID','OrderNumber','SaleDateTime','UPC','Product','ProductHeading','Manufacturer',
+        'Distributor','ProgramCode','ProgramName','ProgramType','Quantity','RegularUnitPrice',
+        'DiscountPerUnit','ManufacturerDiscountTotal','CustomerPaid','ExpectedReimbursement',
+        'CustomerToken','Cashier','Register'
+    ];
+    const csvRows = rows.map(t => [
+        t.id, t.orderNumber, t.orderCreatedAt, t.upc, t.productName, t.productHeading,
+        t.manufacturerName, t.distributorName || '', t.programCode, t.programName, t.programType || '',
+        t.quantity, t.regularPrice.toFixed(2), t.discountPerUnit.toFixed(2),
+        t.manufacturerDiscountTotal.toFixed(2), t.customerPaid.toFixed(2),
+        t.expectedReimbursement.toFixed(2), t.customerPhoneToken || '', t.cashierName, t.registerId
+    ]);
+    const csv = [headers, ...csvRows]
+        .map(row => row.map(value => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(','))
+        .join('\n');
+
+    db.addAudit(currentUser.id, currentUser.name, currentUser.role, 'SCAN_DATA_EXPORT_CREATE', 'system', batch.id, `Created scan-data export ${batch.batchNumber} with ${rows.length} transactions`);
+    res.status(201).json({ batch, csv, validationErrors: [] });
+}));
+
+apiRouter.patch('/scan-data/export-batches/:id/status', asyncHandler(async (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
+        return res.status(403).json({ error: 'Only Managers and Admins can update scan-data batches' });
+    }
+
+    const batch = db.scanDataExportBatches.find(b => b.id === req.params.id);
+    if (!batch) return res.status(404).json({ error: 'Export batch not found' });
+
+    const allowed = new Set(['validated', 'downloaded', 'submitted', 'accepted', 'paid', 'rejected']);
+    const status = String(req.body?.status || '');
+    if (!allowed.has(status)) return res.status(400).json({ error: 'Invalid batch status' });
+
+    const now = new Date().toISOString();
+    batch.status = status as ScanDataExportBatch['status'];
+    batch.updatedAt = now;
+    if (req.body?.notes !== undefined) batch.notes = String(req.body.notes || '');
+    if (req.body?.paidAmount !== undefined) batch.paidAmount = Math.max(0, Number(req.body.paidAmount || 0));
+    if (status === 'submitted') batch.submittedAt = now;
+    if (status === 'accepted') batch.acceptedAt = now;
+    if (status === 'paid') batch.paidAt = now;
+
+    for (const tx of db.scanDataTransactions.filter(t => batch.transactionIds.includes(t.id))) {
+        if (status === 'submitted') tx.submissionStatus = 'submitted';
+        if (status === 'accepted') {
+            tx.submissionStatus = 'accepted';
+            tx.reimbursementStatus = 'expected';
+        }
+        if (status === 'paid') {
+            tx.submissionStatus = 'paid';
+            tx.reimbursementStatus = 'paid';
+        }
+        if (status === 'rejected') {
+            tx.submissionStatus = 'rejected';
+            tx.reimbursementStatus = 'rejected';
+        }
+        tx.updatedAt = now;
+    }
+
+    db.addAudit(currentUser.id, currentUser.name, currentUser.role, 'SCAN_DATA_BATCH_STATUS', 'system', batch.id, `Updated scan-data batch ${batch.batchNumber} to ${status}`);
+    res.json(batch);
+}));
+
+apiRouter.get('/scan-data/summary', (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
+        return res.status(403).json({ error: 'Only Managers and Admins can view scan-data summary' });
+    }
+
+    const saleRows = db.scanDataTransactions.filter(t => t.saleStatus === 'sale');
+    const companyNames = Array.from(new Set(saleRows.map(t => t.manufacturerName))).sort();
+    const byManufacturer = companyNames.map(name => {
+        const rows = saleRows.filter(t => t.manufacturerName === name);
+        const batches = db.scanDataExportBatches.filter(b =>
+            b.manufacturerName ? b.manufacturerName === name : b.transactionIds.some(id => rows.some(r => r.id === id))
+        );
+        const expected = rows.reduce((sum, t) => sum + t.expectedReimbursement, 0);
+        const submitted = rows.filter(t => ['submitted','accepted','paid'].includes(t.submissionStatus)).reduce((sum, t) => sum + t.expectedReimbursement, 0);
+        const accepted = rows.filter(t => ['accepted','paid'].includes(t.submissionStatus)).reduce((sum, t) => sum + t.expectedReimbursement, 0);
+        const paid = batches.filter(b => b.status === 'paid').reduce((sum, b) => sum + Number(b.paidAmount ?? b.expectedReimbursement), 0);
+        return {
+            manufacturerName: name,
+            transactionCount: rows.length,
+            eligibleUnits: rows.reduce((sum, t) => sum + t.quantity, 0),
+            discountsGiven: Math.round(rows.reduce((sum, t) => sum + t.manufacturerDiscountTotal, 0) * 100) / 100,
+            expectedReimbursement: Math.round(expected * 100) / 100,
+            submittedAmount: Math.round(submitted * 100) / 100,
+            acceptedAmount: Math.round(accepted * 100) / 100,
+            paidAmount: Math.round(paid * 100) / 100,
+            outstandingAmount: Math.round(Math.max(0, expected - paid) * 100) / 100,
+        };
+    });
+
+    res.json({
+        totals: {
+            transactions: saleRows.length,
+            eligibleUnits: saleRows.reduce((sum, t) => sum + t.quantity, 0),
+            discountsGiven: Math.round(saleRows.reduce((sum, t) => sum + t.manufacturerDiscountTotal, 0) * 100) / 100,
+            expectedReimbursement: Math.round(saleRows.reduce((sum, t) => sum + t.expectedReimbursement, 0) * 100) / 100,
+            pendingTransactions: saleRows.filter(t => t.submissionStatus === 'pending').length,
+            errorTransactions: db.scanDataTransactions.filter(t => t.saleStatus !== 'sale' || t.submissionStatus === 'rejected').length,
+        },
+        byManufacturer,
+    });
+});
+
+// ----------------------------------------------------
 // CA-01 to CA-11 & BE-06, BE-08: Cart, Checkout & Orders
 // ----------------------------------------------------
 apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
     const currentUser = getAuthUser(req);
-    const { items, customerId, discountTotal, payment, pointsRedeemed, pointsDiscountAmount, payments } = req.body;
+    const { items, customerId, discountTotal, payment, pointsRedeemed, pointsDiscountAmount, payments, registerId } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: 'Order must have at least one line item' });
@@ -1635,7 +2038,14 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
             };
 
         const itemPrice = Number(product.price);
-        const itemDiscount = Math.max(0, Number(item.discountAmount || 0));
+        const manualDiscount = Math.max(0, Number(item.discountAmount || 0));
+        const manufacturerOffer = catalogProduct
+            ? evaluateManufacturerOffer(catalogProduct, quantity, customer)
+            : null;
+        const manufacturerDiscount = manufacturerOffer?.eligible
+            ? Number(manufacturerOffer.discountAmount || 0)
+            : 0;
+        const itemDiscount = manualDiscount + manufacturerDiscount;
         const grossLineSubtotal = itemPrice * quantity;
         const lineSubtotal = Math.max(0, grossLineSubtotal - itemDiscount);
 
@@ -1646,8 +2056,13 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
             product: { ...product },
             quantity,
             unitPrice: itemPrice,
-            discountAmount: itemDiscount,
+            discountAmount: manualDiscount,
             discountReason: item.discountReason,
+            manufacturerDiscountAmount: manufacturerDiscount,
+            manufacturerProgramId: manufacturerOffer?.eligible ? manufacturerOffer.programId : undefined,
+            manufacturerProgramName: manufacturerOffer?.eligible ? manufacturerOffer.programName : undefined,
+            manufacturerCompany: manufacturerOffer?.eligible ? manufacturerOffer.manufacturerName : undefined,
+            manufacturerReimbursementExpected: manufacturerOffer?.eligible ? manufacturerOffer.reimbursementExpected : 0,
             taxAmount: 0,
             lineTotal: Math.round(lineSubtotal * 100) / 100,
         });
@@ -1686,7 +2101,7 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
 
         const lineSubtotal = Math.max(
             0,
-            item.unitPrice * item.quantity - Number(item.discountAmount || 0)
+            item.unitPrice * item.quantity - Number(item.discountAmount || 0) - Number(item.manufacturerDiscountAmount || 0)
         );
         const lineTaxRate = item.product.taxRate ?? db.settings.defaultTaxRate;
         const itemTax = lineSubtotal * orderDiscountFactor * lineTaxRate;
@@ -1966,6 +2381,60 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
     };
 
     db.orders.unshift(newOrder);
+
+    // Create immutable manufacturer/vendor scan-data ledger rows from verified promotions.
+    for (const item of processedItems) {
+        if (!item.manufacturerProgramId || Number(item.manufacturerDiscountAmount || 0) <= 0) continue;
+        const promo = db.promotions.find(p => p.id === item.manufacturerProgramId);
+        const product = db.products.find(p => p.id === item.product.id);
+        if (!promo || !product) continue;
+
+        const quantity = Math.max(1, Number(item.quantity || 1));
+        const regularGross = Number(item.unitPrice || product.price || 0) * quantity;
+        const manufacturerDiscount = Number(item.manufacturerDiscountAmount || 0);
+        const manualDiscount = Number(item.discountAmount || 0);
+        const tx: ScanDataTransaction = {
+            id: `sdt-${Date.now()}-${product.id}-${Math.floor(Math.random() * 1000)}`,
+            orderId: newOrder.id,
+            orderNumber: newOrder.orderNumber,
+            orderCreatedAt: now,
+            storeId: 'store-1',
+            registerId: String(registerId || 'reg-01'),
+            cashierId: currentUser.id,
+            cashierName: currentUser.name,
+            customerId: customer?.id,
+            customerPhoneToken: customerPhoneToken(customer?.phone),
+            productId: product.id,
+            upc: product.barcode,
+            productName: product.name,
+            brandName: product.brandName || product.brand,
+            productHeading: promo.productHeading || product.productHeading || product.categoryName || 'Other',
+            manufacturerName: promo.manufacturerName || product.manufacturerName || 'Manufacturer',
+            distributorName: promo.distributorName || product.distributorName || product.vendor,
+            programId: promo.id,
+            programCode: promo.code,
+            programName: promo.name,
+            programType: promo.programType,
+            quantity,
+            regularPrice: Number(item.unitPrice || product.price || 0),
+            discountPerUnit: Math.round((manufacturerDiscount / quantity) * 100) / 100,
+            manufacturerDiscountTotal: Math.round(manufacturerDiscount * 100) / 100,
+            customerPaid: Math.round(Math.max(0, regularGross - manufacturerDiscount - manualDiscount) * 100) / 100,
+            expectedReimbursement: Math.round(Number(item.manufacturerReimbursementExpected || 0) * 100) / 100,
+            phoneRequired: Boolean(promo.customerPhoneRequired),
+            loyaltyRequired: Boolean(promo.loyaltyRequired),
+            ageVerificationRequired: Boolean(promo.ageVerificationRequired),
+            saleStatus: 'sale',
+            submissionStatus: 'pending',
+            reimbursementStatus: 'pending',
+            createdAt: now,
+            updatedAt: now,
+        };
+        db.scanDataTransactions.unshift(tx);
+        promo.currentUsages = Number(promo.currentUsages ?? promo.usageCount ?? 0) + quantity;
+        promo.usageCount = promo.currentUsages;
+    }
+
     db.addAudit(
         currentUser.id,
         currentUser.name,
@@ -2107,6 +2576,7 @@ apiRouter.post('/orders/:id/void', asyncHandler(async (req: Request, res: Respon
     order.voidReason = reason;
     order.voidedBy = currentUser.name;
     order.updatedAt = new Date().toISOString();
+    markScanDataOrderStatus(order.id, 'void');
 
     db.addAudit(currentUser.id, currentUser.name, currentUser.role, 'ORDER_VOID', 'order', order.id, `Voided Order ${order.orderNumber}. Reason: ${reason}`);
 
@@ -2188,6 +2658,7 @@ apiRouter.post('/orders/:id/refund', asyncHandler(async (req: Request, res: Resp
     order.refundAmount = refundAmt;
     order.refundedBy = currentUser.name;
     order.updatedAt = new Date().toISOString();
+    markScanDataOrderStatus(order.id, 'refund');
 
     db.addAudit(currentUser.id, currentUser.name, currentUser.role, 'ORDER_REFUND', 'order', order.id, `Refunded $${refundAmt.toFixed(2)} on Order ${order.orderNumber}. Reason: ${reason}`);
 
