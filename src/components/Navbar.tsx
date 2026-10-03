@@ -56,6 +56,7 @@ interface NavbarProps {
   onSearchChange?: (val: string) => void;
   onOpenHelp?: () => void;
   onOpenBridgeHub?: () => void;
+  onOpenManagerPortal?: () => void;
   onOpenCustomerDisplay?: () => void;
   onOpenAllFunctions?: () => void;
 }
@@ -78,6 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSearchChange,
   onOpenHelp,
   onOpenBridgeHub,
+  onOpenManagerPortal,
   onOpenCustomerDisplay,
   onOpenAllFunctions,
 }) => {
@@ -207,6 +209,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Cpu className={`w-3.5 h-3.5 ${bridgeHealth.status === 'running' ? 'text-emerald-400' : 'text-rose-400'}`} />
             <span className="hidden lg:inline">{bridgeHealth.status === 'running' ? 'Bridge Online' : 'Bridge Offline'}</span>
           </button>
+
+          {/* Manager Portal login / backend access */}
+          {onOpenManagerPortal && (
+            <button
+              type="button"
+              onClick={onOpenManagerPortal}
+              className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border border-amber-400/40 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              title="Manager Login / Backend Portal"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-300" />
+              <span className="hidden lg:inline">Manager</span>
+            </button>
+          )}
 
           {/* Online status indicator matching fin.png */}
           <button
