@@ -45,6 +45,7 @@ import { HeldOrdersModal } from './components/HeldOrdersModal';
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { CustomerSelectModal } from './components/CustomerSelectModal';
 import { ItemDiscountModal } from './components/ItemDiscountModal';
+import { PrintLabelModal } from './components/PrintLabelModal';
 import { MobileInvoiceCaptureView } from './components/invoice/MobileInvoiceCaptureView';
 import { StandalonePaymentFallbackModal } from './components/payment/StandalonePaymentFallbackModal';
 import { AllFunctionsMenuModal } from './components/AllFunctionsMenuModal';
@@ -204,6 +205,7 @@ export default function App() {
   const [showCustomerSelectModal, setShowCustomerSelectModal] = useState<boolean>(false);
   const [itemDiscountTarget, setItemDiscountTarget] = useState<CartItem | null>(null);
   const [showBridgeHubModal, setShowBridgeHubModal] = useState<boolean>(false);
+  const [showPrintLabelModal, setShowPrintLabelModal] = useState<boolean>(false);
   const [showCustomerDisplayModal, setShowCustomerDisplayModal] = useState<boolean>(false);
   const [showPaymentFallbackModal, setShowPaymentFallbackModal] = useState<boolean>(false);
   const [showAllFunctionsModal, setShowAllFunctionsModal] = useState<boolean>(false);
@@ -1092,6 +1094,7 @@ export default function App() {
 
           setShowManagerPortalLogin(true);
         }}
+        onOpenPrintLabel={() => setShowPrintLabelModal(true)}
         onOpenCustomerDisplay={() => {
           setShowCustomerDisplayModal(true);
         }}
@@ -1354,6 +1357,12 @@ export default function App() {
         managerOnly={true}
         title="Manager Portal Login"
         subtitle="Enter Manager/Admin credentials to access POS backend functions"
+      />
+
+      <PrintLabelModal
+        isOpen={showPrintLabelModal}
+        onClose={() => setShowPrintLabelModal(false)}
+        products={products}
       />
 
       <CheckoutModal
