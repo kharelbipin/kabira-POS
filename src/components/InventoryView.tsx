@@ -109,6 +109,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     stockQuantity: 24,
     lowStockThreshold: 6,
     size: '750ml',
+    productHeading: '',
+    manufacturerName: '',
+    distributorName: '',
+    scanDataEligible: false,
     imageUrl: 'https://images.unsplash.com/photo-1527061011665-3652c757a4d4?w=500&q=80',
     active: true,
   });
@@ -153,6 +157,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       stockQuantity: 24,
       lowStockThreshold: 6,
       size: '750ml',
+      productHeading: '',
+      manufacturerName: '',
+      distributorName: '',
+      scanDataEligible: false,
       imageUrl: 'https://images.unsplash.com/photo-1527061011665-3652c757a4d4?w=500&q=80',
       active: true,
     });
@@ -817,6 +825,65 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     className="w-full bg-[#141414] border border-[#262626] rounded-lg p-2 text-[#E5E5E5] font-mono focus:outline-hidden focus:border-[#C5A059]"
                   />
                 </div>
+              </div>
+
+              <div className="rounded-xl border border-[#2A2A2A] bg-[#0B0B0B] p-4 space-y-3">
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wider text-[#C5A059]">Manufacturer / Scan Data Mapping</div>
+                  <div className="text-[11px] text-[#737373] mt-0.5">Map this item to a company and product heading so it can be used later for manufacturer promotions and company-specific exports.</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1.5">Product Heading</label>
+                    <select
+                      value={formData.productHeading || ''}
+                      onChange={e => setFormData({ ...formData, productHeading: e.target.value })}
+                      className="w-full bg-[#141414] border border-[#262626] rounded-lg p-2 text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
+                    >
+                      <option value="">Not Assigned</option>
+                      <option value="Tobacco">Tobacco</option>
+                      <option value="Cigars">Cigars</option>
+                      <option value="Beer">Beer</option>
+                      <option value="Wine">Wine</option>
+                      <option value="Liquor">Liquor</option>
+                      <option value="Energy Drinks">Energy Drinks</option>
+                      <option value="Soft Drinks">Soft Drinks</option>
+                      <option value="Snacks">Snacks</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1.5">Manufacturer / Company</label>
+                    <input
+                      type="text"
+                      value={formData.manufacturerName || ''}
+                      onChange={e => setFormData({ ...formData, manufacturerName: e.target.value })}
+                      placeholder="e.g. Altria, Diageo, Red Bull"
+                      className="w-full bg-[#141414] border border-[#262626] rounded-lg p-2 text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1.5">Distributor / Supplier</label>
+                  <input
+                    type="text"
+                    value={formData.distributorName || ''}
+                    onChange={e => setFormData({ ...formData, distributorName: e.target.value })}
+                    placeholder="Optional distributor or supplier"
+                    className="w-full bg-[#141414] border border-[#262626] rounded-lg p-2 text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 bg-[#141414] border border-[#262626] rounded-lg p-2.5">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.scanDataEligible)}
+                    onChange={e => setFormData({ ...formData, scanDataEligible: e.target.checked })}
+                  />
+                  <span className="text-[#E5E5E5] font-bold">Eligible for Manufacturer Promotion / Scan Data</span>
+                </label>
               </div>
 
               <div>
