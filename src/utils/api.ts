@@ -1925,6 +1925,10 @@ class ApiService {
     });
   }
 
+  async getScanDataExportBatchCsv(id: string): Promise<{ fileName: string; csv: string }> {
+    return this.request(`/scan-data/export-batches/${id}/csv`);
+  }
+
   async updateScanDataExportBatchStatus(
     id: string,
     payload: {
