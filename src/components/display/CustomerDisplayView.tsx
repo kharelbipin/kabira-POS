@@ -299,11 +299,6 @@ export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settin
             </button>
           )}
 
-          <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-emerald-400 font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Display 2 Synced</span>
-          </div>
-
         </div>
       </header>
 
