@@ -71,7 +71,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const minPointsToRedeem = settings?.loyaltyMinPointsToRedeem ?? 50;
   const maxDiscountPercent = settings?.loyaltyMaxDiscountPercent ?? 50;
 
-  const maxAllowedDiscountDollars = Math.min(grandTotal, (subtotal * maxDiscountPercent) / 100);
+  const maxAllowedDiscountDollars = Math.max(0, Math.min(grandTotal, (subtotal * maxDiscountPercent) / 100));
   const customerPoints = customer?.loyaltyPoints ?? 0;
   const maxPointsCustomerCanRedeem = Math.min(
     customerPoints,
@@ -95,7 +95,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     : 0;
 
   const safeGrandTotal = Number(grandTotal) || 0;
-  const effectiveGrandTotal = Math.max(0, Math.round((safeGrandTotal - pointsDiscount) * 100) / 100);
+  const effectiveGrandTotal = Math.round((safeGrandTotal - pointsDiscount) * 100) / 100;
+  const isPayoutTransaction = effectiveGrandTotal < -0.005;
 
   // ----------------------------------------------------
   // Manager Approval State (Discounts exceeding threshold)
@@ -195,7 +196,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const totalAmountPaid = Math.round(successfulPayments.reduce((sum, p) => sum + p.amount, 0) * 100) / 100;
   const remainingBalance = Math.max(0, Math.round((effectiveGrandTotal - totalAmountPaid) * 100) / 100);
   const isPartiallyPaid = totalAmountPaid > 0 && remainingBalance > 0.005;
-  const isFullyPaid = remainingBalance <= 0.005 && effectiveGrandTotal > 0;
+  const isFullyPaid = remainingBalance <= 0.005;
 
   // Reset or initialize when modal opens/closes
   useEffect(() => {
@@ -518,7 +519,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         );
 
       const paymentPayload: any = {
-        method: recordedPayments.length === 1 ? recordedPayments[0].method : 'split',
+        method: isPayoutTransaction
+          ? 'split'
+          : recordedPayments.length === 1
+            ? recordedPayments[0].method
+            : 'split',
         amount: effectiveGrandTotal,
         cashTendered: totalCashTendered,
         changeDue: changeDueCustomer,
