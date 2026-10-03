@@ -153,14 +153,14 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
             {
               label: 'Active Products',
               value: String(activeProducts.length),
-              detail: \`\${totalUnits.toLocaleString()} units on hand\`,
+              detail: `${totalUnits.toLocaleString()} units on hand`,
               icon: Boxes,
               accent: 'text-sky-400',
             },
             {
               label: 'Retail Value',
               value: money(retailValue),
-              detail: \`Cost basis \${money(costValue)}\`,
+              detail: `Cost basis ${money(costValue)}`,
               icon: DollarSign,
               accent: 'text-emerald-400',
             },
@@ -196,7 +196,7 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
                   <div className="text-[10px] uppercase tracking-wider text-slate-500 font-black">
                     {card.label}
                   </div>
-                  <Icon className={\`w-4 h-4 \${card.accent}\`} />
+                  <Icon className={`w-4 h-4 ${card.accent}`} />
                 </div>
                 <div className="text-2xl font-black mt-2">{card.value}</div>
                 <div className="text-[10px] text-slate-500 mt-1">{card.detail}</div>
@@ -234,7 +234,7 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
                       <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
                         <div
                           className="h-full rounded-full bg-gradient-to-r from-sky-600 to-sky-400"
-                          style={{ width: \`\${Math.max(3, (category.units / maxCategoryUnits) * 100)}%\` }}
+                          style={{ width: `${Math.max(3, (category.units / maxCategoryUnits) * 100)}%` }}
                         />
                       </div>
                       <span className="text-right font-black">{category.units}</span>
@@ -252,9 +252,9 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
 
             <div className="mt-8">
               <div className="h-5 rounded-full overflow-hidden bg-slate-800 flex">
-                <div className="bg-emerald-500" style={{ width: \`\${healthyPct}%\` }} />
-                <div className="bg-amber-400" style={{ width: \`\${lowPct}%\` }} />
-                <div className="bg-rose-500" style={{ width: \`\${outPct}%\` }} />
+                <div className="bg-emerald-500" style={{ width: `${healthyPct}%` }} />
+                <div className="bg-amber-400" style={{ width: `${lowPct}%` }} />
+                <div className="bg-rose-500" style={{ width: `${outPct}%` }} />
               </div>
 
               <div className="space-y-3 mt-6">
@@ -265,7 +265,7 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
                 ].map(([label, value, dot]: any) => (
                   <div key={label} className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
-                      <span className={\`w-2.5 h-2.5 rounded-full \${dot}\`} />
+                      <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
                       <span className="text-slate-300">{label}</span>
                     </div>
                     <span className="font-black">{value}</span>
@@ -337,9 +337,9 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
                           </div>
                         </td>
                         <td className="px-4 py-3 font-mono text-slate-400">{product.sku}</td>
-                        <td className={\`px-4 py-3 text-right font-black \${
+                        <td className={`px-4 py-3 text-right font-black ${
                           product.stockQuantity <= 0 ? 'text-rose-400' : 'text-amber-400'
-                        }\`}>
+                        }`}>
                           {product.stockQuantity}
                         </td>
                         <td className="px-4 py-3 text-right text-slate-400">
@@ -349,11 +349,11 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
                           {money(product.stockQuantity * product.price)}
                         </td>
                         <td className="px-4 py-3">
-                          <span className={\`inline-flex px-2 py-1 rounded-full border text-[9px] font-black \${
+                          <span className={`inline-flex px-2 py-1 rounded-full border text-[9px] font-black ${
                             product.stockQuantity <= 0
                               ? 'bg-rose-950/50 border-rose-800 text-rose-300'
                               : 'bg-amber-950/50 border-amber-800 text-amber-300'
-                          }\`}>
+                          }`}>
                             {product.stockQuantity <= 0 ? 'Out of Stock' : 'Low Stock'}
                           </span>
                         </td>
