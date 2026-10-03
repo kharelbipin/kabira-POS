@@ -336,25 +336,6 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
               </button>
             </div>
 
-            {/* Large quantity shortcuts for cases / bulk manual entries */}
-            <div className="grid grid-cols-6 gap-1.5">
-              {[1, 2, 5, 10, 12, 24].map(qty => (
-                <button
-                  key={qty}
-                  type="button"
-                  onClick={() => {
-                    setQuickQty(qty);
-                    setQuickQtyInput(String(qty));
-                    setQuickEntryTarget('quantity');
-                    playBeep('click');
-                  }}
-                  className="h-9 rounded-lg bg-[#1A1A1A] hover:bg-[#262626] border border-[#333333] text-xs font-black text-white cursor-pointer"
-                >
-                  {qty}
-                </button>
-              ))}
-            </div>
-
             {/* Tax selection stays visible before the keypad so cashier cannot miss it */}
             <div className="space-y-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-[#A3A3A3]">
