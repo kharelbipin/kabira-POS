@@ -636,6 +636,10 @@ export interface StoreSettings {
     allowCheckIssuanceRegister?: boolean;
     allowDepositBatches?: boolean;
   };
+
+  // Persist advanced Manager Settings Center controls that do not yet have
+  // dedicated top-level runtime fields. Core settings remain mirrored above.
+  managerSettings?: Record<string, any>;
 }
 
 export interface Vendor {
