@@ -627,9 +627,96 @@ export default function App() {
     setHeldOrders(prev => prev.filter(h => h.id !== id));
   };
 
+  // Manufacturer/vendor promotion evaluation.
+  // The signature excludes calculated promotion fields so updating the cart
+  // with a discount does not recursively re-run this effect.
+  const manufacturerEvaluationKey = useMemo(
+    () =>
+      JSON.stringify({
+        customerId: selectedCustomer?.id || '',
+        customerPhone: selectedCustomer?.phone || '',
+        items: cartItems.map(item => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+        })),
+      }),
+    [cartItems, selectedCustomer?.id, selectedCustomer?.phone]
+  );
+
+  useEffect(() => {
+    if (isCustomerDisplayMode || cartItems.length === 0) return;
+
+    let cancelled = false;
+    const evaluate = async () => {
+      try {
+        const result = await api.evaluateScanDataPromotions({
+          items: cartItems.map(item => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+          })),
+          customerId: selectedCustomer?.id,
+          customerPhone: selectedCustomer?.phone,
+        });
+
+        if (cancelled) return;
+
+        const byProduct = new Map(result.lines.map(line => [line.productId, line]));
+        setCartItems(prev => {
+          let changed = false;
+          const next = prev.map(item => {
+            const offer = byProduct.get(item.product.id);
+            const manufacturerDiscountAmount = Number(offer?.discountAmount || 0);
+            const manufacturerProgramId = offer?.eligible ? offer.programId : undefined;
+            const manufacturerProgramName = offer?.eligible ? offer.programName : undefined;
+            const manufacturerCompany = offer?.manufacturerName;
+            const manufacturerReimbursementExpected = Number(offer?.reimbursementExpected || 0);
+            const manufacturerOfferAvailable = Boolean(offer?.offerAvailable);
+            const manufacturerEligibilityMessage = offer?.message;
+
+            if (
+              Number(item.manufacturerDiscountAmount || 0) === manufacturerDiscountAmount &&
+              item.manufacturerProgramId === manufacturerProgramId &&
+              item.manufacturerProgramName === manufacturerProgramName &&
+              item.manufacturerCompany === manufacturerCompany &&
+              Number(item.manufacturerReimbursementExpected || 0) === manufacturerReimbursementExpected &&
+              Boolean(item.manufacturerOfferAvailable) === manufacturerOfferAvailable &&
+              item.manufacturerEligibilityMessage === manufacturerEligibilityMessage
+            ) {
+              return item;
+            }
+
+            changed = true;
+            return {
+              ...item,
+              manufacturerDiscountAmount,
+              manufacturerProgramId,
+              manufacturerProgramName,
+              manufacturerCompany,
+              manufacturerReimbursementExpected,
+              manufacturerOfferAvailable,
+              manufacturerEligibilityMessage,
+            };
+          });
+
+          return changed ? next : prev;
+        });
+      } catch (error) {
+        console.warn('[Manufacturer Promotions] Evaluation failed:', error);
+      }
+    };
+
+    void evaluate();
+    return () => {
+      cancelled = true;
+    };
+  }, [manufacturerEvaluationKey, isCustomerDisplayMode]);
+
   // Financial Calculations for Active Cart
   const rawSubtotal = cartItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const itemDiscountsTotal = cartItems.reduce((sum, item) => sum + item.discountAmount, 0);
+  const itemDiscountsTotal = cartItems.reduce(
+    (sum, item) => sum + Number(item.discountAmount || 0) + Number(item.manufacturerDiscountAmount || 0),
+    0
+  );
   const adjustedSubtotal = rawSubtotal - itemDiscountsTotal;
 
   let calculatedOrderDiscount = 0;
@@ -646,7 +733,9 @@ export default function App() {
   const taxTotal = cartItems.reduce((sum, item) => {
     const lineSubtotal = Math.max(
       0,
-      item.unitPrice * item.quantity - (item.discountAmount || 0)
+      item.unitPrice * item.quantity -
+        Number(item.discountAmount || 0) -
+        Number(item.manufacturerDiscountAmount || 0)
     );
     const lineTaxRate = item.product.taxRate ?? defaultTaxRate;
     return sum + lineSubtotal * orderDiscountFactor * lineTaxRate;
@@ -677,7 +766,10 @@ export default function App() {
           size: it.product.size || it.product.volume,
           quantity: it.quantity,
           unitPrice: it.unitPrice,
-          lineTotal: (it.unitPrice * it.quantity) - (it.discountAmount || 0),
+          lineTotal:
+            (it.unitPrice * it.quantity) -
+            Number(it.discountAmount || 0) -
+            Number(it.manufacturerDiscountAmount || 0),
         })),
         subtotal: rawSubtotal,
         discountTotal: discountTotalAll,
@@ -754,6 +846,7 @@ export default function App() {
       pointsDiscountAmount,
       payment: paymentDetails,
       payments: paymentDetails.payments || undefined,
+      registerId: 'reg-01',
     };
 
     const completed = await api.createOrder(orderPayload);
