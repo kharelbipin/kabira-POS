@@ -198,22 +198,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* POS Hardware Bridge indicator button */}
-          <button
-            onClick={() => setCurrentTab('hardware-manager')}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-2xs ${
-              bridgeHealth.status === 'running'
-                ? currentTab === 'hardware-manager'
-                  ? 'bg-sky-500 text-slate-950 border-sky-400'
-                  : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25'
-                : 'bg-rose-500/15 border-rose-500/30 text-rose-300 hover:bg-rose-500/25'
-            }`}
-            title={`POS Hardware Bridge (127.0.0.1:5055): ${bridgeHealth.status === 'running' ? 'Running' : 'Offline'}`}
-          >
-            <Cpu className={`w-3.5 h-3.5 ${bridgeHealth.status === 'running' ? 'text-emerald-400' : 'text-rose-400'}`} />
-            <span className="hidden lg:inline">{bridgeHealth.status === 'running' ? 'Bridge Online' : 'Bridge Offline'}</span>
-          </button>
-
           {/* Manager Portal login / backend access */}
           {onOpenManagerPortal && (
             <button
