@@ -56,6 +56,7 @@ import { RestaurantTablesView } from './components/restaurant/RestaurantTablesVi
 import { AdminPosDesigner } from './components/admin/AdminPosDesigner';
 import { StoreFeatureManagementModal } from './components/admin/StoreFeatureManagementModal';
 import { HardwareDeviceManager } from './components/admin/HardwareDeviceManager';
+import { AdminPortalNav } from './components/admin/AdminPortalNav';
 
 const HELD_ORDERS_STORAGE_KEY = 'kabira_pos_held_orders_v1';
 
@@ -1035,6 +1036,7 @@ export default function App() {
           }}
           onLoginSuccess={user => {
             setCurrentUser(user);
+            setCurrentTab(user.role === 'Admin' ? 'dashboard' : 'pos');
             setShowLoginModal(false);
             void loadAllData();
           }}
@@ -1058,48 +1060,63 @@ export default function App() {
 
   return (
     <div
-      className="flex flex-col h-screen w-screen overflow-hidden bg-[#0A0A0A] font-sans text-[#E5E5E5] antialiased selection:bg-[#C5A059] selection:text-black"
+      className={`flex ${currentUser.role === 'Admin' ? 'flex-row' : 'flex-col'} h-screen w-screen overflow-hidden bg-[#0A0A0A] font-sans text-[#E5E5E5] antialiased selection:bg-[#C5A059] selection:text-black`}
       style={{
         zoom: (settings?.windowZoomPercent ?? 100) / 100,
         fontSize: `${settings?.posScreenFontSizePx ?? 16}px`,
       }}
     >
-      {/* Top Navbar */}
-      <Navbar
-        currentTab={currentTab}
-        setCurrentTab={setCurrentTab}
-        currentUser={currentUser}
-        onOpenLogin={() => setShowLoginModal(true)}
-        onLogout={async () => {
-          await api.logout();
-          setCurrentUser(null);
-          setShowLoginModal(true);
-        }}
-        heldOrdersCount={heldOrders.length}
-        onOpenHeldOrders={() => setShowHeldOrdersModal(true)}
-        onOpenScanner={() => setShowScannerModal(true)}
-        lowStockCount={lowStockCount}
-        onOpenLowStock={() => {
-          setCurrentTab('inventory');
-        }}
-        isOffline={isOffline}
-        onToggleOffline={handleToggleOffline}
-        settings={settings}
-        onOpenBridgeHub={() => setShowBridgeHubModal(true)}
-        onOpenManagerPortal={() => {
-          if (currentUser?.role === 'Manager' || currentUser?.role === 'Admin') {
-            setShowAllFunctionsModal(true);
-            return;
-          }
-
-          setShowManagerPortalLogin(true);
-        }}
-        onOpenPrintLabel={() => setShowPrintLabelModal(true)}
-        onOpenCustomerDisplay={() => {
-          setShowCustomerDisplayModal(true);
-        }}
-        onOpenAllFunctions={() => setShowAllFunctionsModal(true)}
-      />
+      {currentUser.role === 'Admin' ? (
+        <AdminPortalNav
+          currentTab={currentTab}
+          setCurrentTab={setCurrentTab}
+          currentUser={currentUser}
+          settings={settings}
+          onOpenDesigner={() => setShowDesignerModal(true)}
+          onLogout={async () => {
+            await api.logout();
+            setCurrentUser(null);
+            setCurrentTab('pos');
+            setShowLoginModal(true);
+          }}
+        />
+      ) : (
+        <Navbar
+                currentTab={currentTab}
+                setCurrentTab={setCurrentTab}
+                currentUser={currentUser}
+                onOpenLogin={() => setShowLoginModal(true)}
+                onLogout={async () => {
+                  await api.logout();
+                  setCurrentUser(null);
+                  setShowLoginModal(true);
+                }}
+                heldOrdersCount={heldOrders.length}
+                onOpenHeldOrders={() => setShowHeldOrdersModal(true)}
+                onOpenScanner={() => setShowScannerModal(true)}
+                lowStockCount={lowStockCount}
+                onOpenLowStock={() => {
+                  setCurrentTab('inventory');
+                }}
+                isOffline={isOffline}
+                onToggleOffline={handleToggleOffline}
+                settings={settings}
+                onOpenBridgeHub={() => setShowBridgeHubModal(true)}
+                onOpenManagerPortal={() => {
+                  if (currentUser?.role === 'Manager' || currentUser?.role === 'Admin') {
+                    setShowAllFunctionsModal(true);
+                    return;
+                  }
+        
+                  setShowManagerPortalLogin(true);
+                }}
+                onOpenPrintLabel={() => setShowPrintLabelModal(true)}
+                onOpenCustomerDisplay={() => {
+                  setShowCustomerDisplayModal(true);
+                }}
+                onOpenAllFunctions={() => setShowAllFunctionsModal(true)}
+              />
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 min-h-0 overflow-hidden relative">
@@ -1338,6 +1355,7 @@ export default function App() {
         onClose={() => setShowLoginModal(false)}
         onLoginSuccess={user => {
           setCurrentUser(user);
+          setCurrentTab(user.role === 'Admin' ? 'dashboard' : 'pos');
           setShowLoginModal(false);
           void loadAllData();
         }}
@@ -1350,7 +1368,11 @@ export default function App() {
         onLoginSuccess={user => {
           setCurrentUser(user);
           setShowManagerPortalLogin(false);
-          setShowAllFunctionsModal(true);
+          if (user.role === 'Admin') {
+            setCurrentTab('dashboard');
+          } else {
+            setShowAllFunctionsModal(true);
+          }
           void loadAllData();
         }}
         currentUserId={currentUser?.id}
