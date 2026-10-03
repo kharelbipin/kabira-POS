@@ -1146,9 +1146,9 @@ export default function App() {
           <ManagerOperationsDashboard
             settings={settings}
             currentUser={currentUser}
-            heldOrdersCount={heldOrders.length}
+            orders={orders}
+            products={products}
             onNavigate={setCurrentTab}
-            onOpenHeldOrders={() => setShowHeldOrdersModal(true)}
           />
         )}
         {currentTab === 'dashboard' && (
