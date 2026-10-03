@@ -266,6 +266,39 @@ jobs:
           Write-Host "Hardware Bridge verified."
 
       # ==========================================================
+      # NATIVE CUSTOMER DISPLAY
+      # ==========================================================
+
+      - name: Restore Native Customer Display
+        run: dotnet restore "bridge\customer-display\KaBiRaCustomerDisplay.csproj"
+
+      - name: Build Native Customer Display
+        run: >
+          dotnet build
+          "bridge\customer-display\KaBiRaCustomerDisplay.csproj"
+          -c Release
+          --no-restore
+
+      - name: Publish Native Customer Display
+        run: >
+          dotnet publish
+          "bridge\customer-display\KaBiRaCustomerDisplay.csproj"
+          -c Release
+          -r win-x64
+          --self-contained true
+          -o "dist\customer-display"
+
+      - name: Verify Native Customer Display
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist\customer-display\KaBiRaCustomerDisplay.exe")) {
+            Write-Error "KaBiRaCustomerDisplay.exe was not created."
+            exit 1
+          }
+
+          Write-Host "Native customer display verified."
+
+      # ==========================================================
       # PREPARE INSTALLER FILES
       # ==========================================================
 
@@ -279,6 +312,7 @@ jobs:
             "dist\node_modules",
             "dist\runtime\node.exe",
             "dist\bridge\KaBiRaPosBridge.exe",
+            "dist\customer-display\KaBiRaCustomerDisplay.exe",
             "bridge\Start-KaBiRaPOS.bat",
             "bridge\installer\KabiraPOS-Setup.iss"
           )
