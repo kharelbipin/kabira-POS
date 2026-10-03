@@ -601,6 +601,12 @@ export interface StoreSettings {
   autoPrintLabelOnNewItem?: boolean; // Auto-print item label when a manager creates a new inventory item
   autoPrintLabelOnPriceChange?: boolean; // Auto-print updated label when a manager changes retail price
   autoPrintLabelCopies?: number; // Number of labels to auto-print per trigger
+  // Manufacturer / vendor scan-data service settings
+  scanDataSubscriptionActive?: boolean;
+  scanDataSubscriptionProvider?: string;
+  scanDataMonthlySubscriptionFee?: number;
+  scanDataRetailerAccountId?: string;
+  scanDataDefaultExportFrequency?: 'daily' | 'weekly' | 'monthly';
   // Admin Pos Button Visibility & Delegation
   adminAllowedPosButtons?: {
     allowScaleForCashier?: boolean;
