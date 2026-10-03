@@ -12,7 +12,7 @@ import {
   Store,
   UserRound,
 } from 'lucide-react';
-import { StoreSettings } from '../../types';
+import { AuditLog, Order, StoreSettings } from '../../types';
 import { api } from '../../utils/api';
 import { hardwareStore } from '../../hardware';
 
@@ -47,18 +47,31 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
   const [selectedRegister, setSelectedRegister] = useState<RegisterRow | null>(null);
   const [quickAction, setQuickAction] = useState<string | null>(null);
   const [quickActionMessage, setQuickActionMessage] = useState<{ success: boolean; message: string } | null>(null);
+  const [latestOrder, setLatestOrder] = useState<Order | null>(null);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [registerResult, telemetryResult] = await Promise.all([
+      const [registerResult, telemetryResult, ordersResult, auditResult] = await Promise.all([
         api.getRegisters().catch(() => ({ registers: [] })),
         api.getBridgeTelemetry().catch(() => ({ terminals: [], count: 0, serverTime: new Date().toISOString() })),
+        api.getOrders().catch(() => []),
+        api.getAuditLogs().catch(() => []),
         hardwareStore.refreshHealth().catch(() => hardwareStore.getHealth()),
       ]);
 
+      const sortedOrders = [...ordersResult].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const sortedAudit = [...auditResult].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+
       setRegisters(registerResult.registers || []);
       setBridgeTelemetryCount(telemetryResult.count || 0);
+      setLatestOrder(sortedOrders[0] || null);
+      setAuditLogs(sortedAudit);
       setBridgeHealth(hardwareStore.getHealth());
       setConfiguredHardware(hardwareStore.getConfiguredHardware());
       setLastUpdated(new Date().toLocaleTimeString());
@@ -269,6 +282,26 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
       {ok ? trueLabel : falseLabel}
     </span>
   );
+
+  const latestAuditFor = (...terms: string[]) =>
+    auditLogs.find(log =>
+      terms.some(term =>
+        `${log.action} ${log.targetType} ${log.details}`
+          .toLowerCase()
+          .includes(term.toLowerCase())
+      )
+    ) || null;
+
+  const latestPrint = latestAuditFor('print', 'receipt');
+  const latestDrawer = latestAuditFor('drawer_open', 'drawer open', 'cash drawer');
+  const latestDeviceScan = latestAuditFor('device scan', 'hardware scan', 'barcode_scan');
+  const latestBridgeEvent = latestAuditFor('bridge_service_restart', 'bridge', 'hardware bridge');
+
+  const formatTime = (value?: string | null) => {
+    if (!value) return 'No activity recorded';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  };
 
   return (
     <div className="h-full overflow-y-auto bg-slate-100 text-slate-900 p-4 md:p-6 space-y-5">
@@ -592,7 +625,51 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <h3 className="text-sm font-black">Register Activity</h3>
+                <h3 className="text-sm font-black">Latest Register Activity</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Most recent important events for quick troubleshooting.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                  <div className="rounded-xl bg-white border border-slate-200 p-3">
+                    <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Last Transaction</div>
+                    <div className="text-xs font-black mt-1">
+                      {latestOrder ? `${latestOrder.orderNumber} · ${latestOrder.grandTotal.toFixed(2)}` : 'No transaction recorded'}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-1">
+                      {latestOrder ? `${latestOrder.cashierName} · ${formatTime(latestOrder.createdAt)}` : '—'}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-white border border-slate-200 p-3">
+                    <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Last Print Activity</div>
+                    <div className="text-xs font-black mt-1">{latestPrint?.details || 'No print activity recorded'}</div>
+                    <div className="text-[10px] text-slate-500 mt-1">{formatTime(latestPrint?.timestamp)}</div>
+                  </div>
+
+                  <div className="rounded-xl bg-white border border-slate-200 p-3">
+                    <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Last Drawer Activity</div>
+                    <div className="text-xs font-black mt-1">{latestDrawer?.details || 'No drawer activity recorded'}</div>
+                    <div className="text-[10px] text-slate-500 mt-1">{formatTime(latestDrawer?.timestamp)}</div>
+                  </div>
+
+                  <div className="rounded-xl bg-white border border-slate-200 p-3">
+                    <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Last Device / Scanner Activity</div>
+                    <div className="text-xs font-black mt-1">{latestDeviceScan?.details || 'No device scan activity recorded'}</div>
+                    <div className="text-[10px] text-slate-500 mt-1">{formatTime(latestDeviceScan?.timestamp)}</div>
+                  </div>
+
+                  <div className="rounded-xl bg-white border border-slate-200 p-3 md:col-span-2">
+                    <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Last Bridge Event</div>
+                    <div className="text-xs font-black mt-1">
+                      {latestBridgeEvent?.details || bridgeHealth.error || 'No bridge error or restart event recorded'}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-1">
+                      {latestBridgeEvent ? formatTime(latestBridgeEvent.timestamp) : `Heartbeat: ${bridgeHealth.lastHeartbeat || 'Never'}`}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 text-xs">
                   <div>
                     <div className="text-[10px] uppercase tracking-wider font-black text-slate-500">Register ID</div>
