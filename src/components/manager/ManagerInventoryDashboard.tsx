@@ -1,16 +1,19 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  ArrowRight,
+  BarChart3,
   Boxes,
   ClipboardList,
-  DollarSign,
+  FileSpreadsheet,
   PackageCheck,
+  Plus,
   Search,
-  ShieldCheck,
-  TrendingDown,
+  Truck,
+  Upload,
+  Users,
 } from 'lucide-react';
-import { Category, Product, StoreSettings } from '../../types';
+import { Category, Product, ScannedInvoice, StoreSettings } from '../../types';
+import { api } from '../../utils/api';
 
 interface ManagerInventoryDashboardProps {
   products: Product[];
@@ -29,332 +32,334 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
   onNavigate,
 }) => {
   const [search, setSearch] = useState('');
+  const [categoryId, setCategoryId] = useState('all');
+  const [vendor, setVendor] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [recentInvoices, setRecentInvoices] = useState<ScannedInvoice[]>([]);
+
+  useEffect(() => {
+    api
+      .getInvoices()
+      .then(list =>
+        setRecentInvoices(
+          [...list]
+            .sort(
+              (a, b) =>
+                new Date(b.receivedDate || b.createdAt).getTime() -
+                new Date(a.receivedDate || a.createdAt).getTime()
+            )
+            .slice(0, 5)
+        )
+      )
+      .catch(() => setRecentInvoices([]));
+  }, [products]);
 
   const activeProducts = useMemo(() => products.filter(product => product.active), [products]);
-  const totalUnits = activeProducts.reduce((sum, product) => sum + Number(product.stockQuantity || 0), 0);
-  const retailValue = activeProducts.reduce(
-    (sum, product) => sum + Number(product.stockQuantity || 0) * Number(product.price || 0),
-    0
+
+  const vendors = useMemo(
+    () =>
+      [...new Set(activeProducts.map(product => product.vendor).filter(Boolean) as string[])].sort(),
+    [activeProducts]
   );
-  const costValue = activeProducts.reduce(
-    (sum, product) =>
-      sum +
-      Number(product.stockQuantity || 0) *
-        Number(product.cost ?? product.costPrice ?? 0),
-    0
-  );
-  const lowStock = activeProducts.filter(
-    product => product.stockQuantity > 0 && product.stockQuantity <= product.lowStockThreshold
-  );
-  const outOfStock = activeProducts.filter(product => product.stockQuantity <= 0);
-  const healthyStock = Math.max(0, activeProducts.length - lowStock.length - outOfStock.length);
 
-  const categoryStats = useMemo(() => {
-    const map = new Map<string, { name: string; units: number; products: number; value: number }>();
-
-    activeProducts.forEach(product => {
-      const categoryName =
-        product.categoryName ||
-        categories.find(category => category.id === product.categoryId)?.name ||
-        'Uncategorized';
-
-      const current = map.get(categoryName) || {
-        name: categoryName,
-        units: 0,
-        products: 0,
-        value: 0,
-      };
-
-      current.units += Number(product.stockQuantity || 0);
-      current.products += 1;
-      current.value += Number(product.stockQuantity || 0) * Number(product.price || 0);
-      map.set(categoryName, current);
-    });
-
-    return [...map.values()].sort((a, b) => b.units - a.units).slice(0, 7);
-  }, [activeProducts, categories]);
-
-  const maxCategoryUnits = Math.max(1, ...categoryStats.map(category => category.units));
-
-  const lowStockRows = useMemo(() => {
+  const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return [...activeProducts]
-      .filter(product => product.stockQuantity <= product.lowStockThreshold)
+    return activeProducts
       .filter(product => {
         if (!query) return true;
         return (
           product.name.toLowerCase().includes(query) ||
           product.sku.toLowerCase().includes(query) ||
-          product.barcode.toLowerCase().includes(query)
+          product.barcode.toLowerCase().includes(query) ||
+          (product.brandName || product.brand || '').toLowerCase().includes(query)
         );
       })
-      .sort((a, b) => {
-        const aRatio = a.lowStockThreshold > 0 ? a.stockQuantity / a.lowStockThreshold : 0;
-        const bRatio = b.lowStockThreshold > 0 ? b.stockQuantity / b.lowStockThreshold : 0;
-        return aRatio - bRatio;
+      .filter(product => categoryId === 'all' || product.categoryId === categoryId)
+      .filter(product => vendor === 'all' || product.vendor === vendor)
+      .filter(product => {
+        if (status === 'all') return true;
+        if (status === 'out') return product.stockQuantity <= 0;
+        if (status === 'low') {
+          return product.stockQuantity > 0 && product.stockQuantity <= product.lowStockThreshold;
+        }
+        if (status === 'in') return product.stockQuantity > product.lowStockThreshold;
+        return true;
       })
-      .slice(0, 8);
-  }, [activeProducts, search]);
+      .slice(0, 18);
+  }, [activeProducts, search, categoryId, vendor, status]);
 
-  const topValueProducts = useMemo(
+  const lowStock = useMemo(
     () =>
-      [...activeProducts]
-        .map(product => ({
-          ...product,
-          inventoryValue: Number(product.stockQuantity || 0) * Number(product.price || 0),
-        }))
-        .sort((a, b) => b.inventoryValue - a.inventoryValue)
+      activeProducts
+        .filter(product => product.stockQuantity <= product.lowStockThreshold)
+        .sort((a, b) => a.stockQuantity - b.stockQuantity)
         .slice(0, 5),
     [activeProducts]
   );
 
-  const totalStatus = Math.max(activeProducts.length, 1);
-  const healthyPct = (healthyStock / totalStatus) * 100;
-  const lowPct = (lowStock.length / totalStatus) * 100;
-  const outPct = (outOfStock.length / totalStatus) * 100;
+  const navItems = [
+    { label: 'Items', icon: Boxes, tab: 'inventory', active: true },
+    { label: 'Receive Inventory', icon: Truck, tab: 'receiving' },
+    { label: 'Purchase Orders', icon: FileSpreadsheet, tab: 'receiving' },
+    { label: 'Stock Count', icon: ClipboardList, tab: 'inventory-count' },
+    { label: 'Vendors', icon: Users, tab: 'inventory-vendors' },
+    { label: 'Reports', icon: BarChart3, tab: 'reports' },
+  ];
+
+  const stockStatus = (product: Product) => {
+    if (product.stockQuantity <= 0) {
+      return {
+        label: 'Out of Stock',
+        cls: 'bg-rose-100 text-rose-700',
+        dot: 'bg-rose-500',
+      };
+    }
+    if (product.stockQuantity <= product.lowStockThreshold) {
+      return {
+        label: 'Low Stock',
+        cls: 'bg-amber-100 text-amber-700',
+        dot: 'bg-amber-500',
+      };
+    }
+    return {
+      label: 'In Stock',
+      cls: 'bg-emerald-100 text-emerald-700',
+      dot: 'bg-emerald-500',
+    };
+  };
 
   return (
-    <div className="h-full overflow-y-auto bg-[#07111f] text-slate-100">
-      <div className="px-5 md:px-7 py-5 space-y-4">
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+    <div className="h-full overflow-y-auto bg-[#eef3f8] text-[#10234a]">
+      <div className="px-4 md:px-5 py-4 space-y-3">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.22em] font-black text-amber-400">
-              Inventory
+            <div className="text-[10px] text-slate-500 mb-1">
+              Inventory <span className="mx-1">›</span> Inventory Control Center
             </div>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight mt-1">
-              Inventory Performance
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-[#10234a]">
+              Inventory Control Center
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Clean overview of stock health, inventory value, categories, and products needing attention.
+            <p className="text-sm text-slate-500 mt-0.5">
+              Manage items, receive stock, create purchase orders, run stock counts, and monitor inventory.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => onNavigate('receiving')}
-              className="px-4 py-2.5 rounded-xl bg-amber-400 text-slate-950 text-xs font-black hover:bg-amber-300 cursor-pointer"
-            >
-              Receive Inventory
+            <button type="button" onClick={() => onNavigate('inventory-add')} className="h-11 px-4 rounded-lg bg-[#c78d20] hover:bg-[#b57d18] text-white text-xs font-black flex items-center gap-2 cursor-pointer shadow-sm">
+              <Plus className="w-4 h-4" />
+              Add Item
             </button>
-            <button
-              type="button"
-              onClick={() => onNavigate('inventory-catalog')}
-              className="px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-900/70 text-xs font-black hover:bg-slate-800 cursor-pointer"
-            >
-              Full Inventory Catalog
+            <button type="button" onClick={() => onNavigate('receiving')} className="h-11 px-4 rounded-lg bg-[#08274d] hover:bg-[#0b315f] text-white text-xs font-black flex items-center gap-2 cursor-pointer">
+              <Truck className="w-4 h-4" />
+              Receive Items
+            </button>
+            <button type="button" onClick={() => onNavigate('receiving')} className="h-11 px-4 rounded-lg bg-white border border-[#25467b] text-[#10234a] text-xs font-black flex items-center gap-2 cursor-pointer">
+              <FileSpreadsheet className="w-4 h-4" />
+              New PO
+            </button>
+            <button type="button" onClick={() => onNavigate('inventory-import')} className="h-11 px-4 rounded-lg bg-white border border-[#25467b] text-[#10234a] text-xs font-black flex items-center gap-2 cursor-pointer">
+              <Upload className="w-4 h-4" />
+              Import CSV
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
-          {[
-            {
-              label: 'Active Products',
-              value: String(activeProducts.length),
-              detail: `${totalUnits.toLocaleString()} units on hand`,
-              icon: Boxes,
-              accent: 'text-sky-400',
-            },
-            {
-              label: 'Retail Value',
-              value: money(retailValue),
-              detail: `Cost basis ${money(costValue)}`,
-              icon: DollarSign,
-              accent: 'text-emerald-400',
-            },
-            {
-              label: 'Healthy Stock',
-              value: String(healthyStock),
-              detail: 'Above reorder threshold',
-              icon: ShieldCheck,
-              accent: 'text-emerald-400',
-            },
-            {
-              label: 'Low Stock',
-              value: String(lowStock.length),
-              detail: 'Needs reorder attention',
-              icon: TrendingDown,
-              accent: 'text-amber-400',
-            },
-            {
-              label: 'Out of Stock',
-              value: String(outOfStock.length),
-              detail: 'Unavailable for sale',
-              icon: AlertTriangle,
-              accent: 'text-rose-400',
-            },
-          ].map(card => {
-            const Icon = card.icon;
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+          {navItems.map(item => {
+            const Icon = item.icon;
             return (
-              <div
-                key={card.label}
-                className="rounded-2xl border border-slate-700/80 bg-[#0b1a2d] p-4 shadow-lg shadow-black/10"
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => onNavigate(item.tab)}
+                className={'h-16 rounded-lg border flex items-center justify-center gap-3 text-xs font-black cursor-pointer transition ' + (item.active ? 'bg-[#08274d] text-white border-[#08274d] shadow-sm' : 'bg-white text-[#10234a] border-slate-200 hover:border-[#c78d20]')}
               >
-                <div className="flex items-center justify-between">
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500 font-black">
-                    {card.label}
-                  </div>
-                  <Icon className={`w-4 h-4 ${card.accent}`} />
-                </div>
-                <div className="text-2xl font-black mt-2">{card.value}</div>
-                <div className="text-[10px] text-slate-500 mt-1">{card.detail}</div>
-              </div>
+                <Icon className="w-5 h-5" />
+                {item.label}
+              </button>
             );
           })}
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <div className="xl:col-span-2 rounded-2xl border border-slate-700/80 bg-[#0b1a2d] p-4">
-            <div className="flex items-center justify-between gap-3">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
+                <Boxes className="w-5 h-5 text-[#10234a]" />
+              </div>
               <div>
-                <h2 className="text-base font-black">Inventory by Category</h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Units currently available by product category.
+                <h2 className="text-lg font-black text-[#10234a]">Item Master</h2>
+                <p className="text-[10px] text-slate-500">
+                  {activeProducts.length.toLocaleString()} items · Shared live catalog for cashier POS and online store
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => onNavigate('inventory-catalog')}
-                className="text-[10px] font-black text-sky-400 cursor-pointer"
-              >
-                View Catalog
-              </button>
             </div>
 
-            <div className="space-y-4 mt-6">
-              {categoryStats.length === 0 ? (
-                <div className="text-xs text-slate-500">No inventory categories available.</div>
-              ) : (
-                categoryStats.map(category => (
-                  <div key={category.name}>
-                    <div className="grid grid-cols-[minmax(100px,160px)_1fr_70px_90px] items-center gap-3 text-[10px]">
-                      <span className="font-bold text-slate-300 truncate">{category.name}</span>
-                      <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-sky-600 to-sky-400"
-                          style={{ width: `${Math.max(3, (category.units / maxCategoryUnits) * 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-right font-black">{category.units}</span>
-                      <span className="text-right text-slate-500">{money(category.value)}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-700/80 bg-[#0b1a2d] p-4">
-            <h2 className="text-base font-black">Stock Health</h2>
-            <p className="text-[11px] text-slate-400 mt-0.5">Product status distribution</p>
-
-            <div className="mt-8">
-              <div className="h-5 rounded-full overflow-hidden bg-slate-800 flex">
-                <div className="bg-emerald-500" style={{ width: `${healthyPct}%` }} />
-                <div className="bg-amber-400" style={{ width: `${lowPct}%` }} />
-                <div className="bg-rose-500" style={{ width: `${outPct}%` }} />
-              </div>
-
-              <div className="space-y-3 mt-6">
-                {[
-                  ['Healthy', healthyStock, 'bg-emerald-500'],
-                  ['Low Stock', lowStock.length, 'bg-amber-400'],
-                  ['Out of Stock', outOfStock.length, 'bg-rose-500'],
-                ].map(([label, value, dot]: any) => (
-                  <div key={label} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
-                      <span className="text-slate-300">{label}</span>
-                    </div>
-                    <span className="font-black">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <div className="xl:col-span-2 rounded-2xl border border-slate-700/80 bg-[#0b1a2d] overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-black">Products Needing Attention</h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Low and out-of-stock items sorted by urgency.
-                </p>
-              </div>
-
-              <div className="relative w-full md:w-72">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-full md:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   value={search}
                   onChange={event => setSearch(event.target.value)}
-                  placeholder="Search product, SKU, barcode..."
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-600"
+                  placeholder="Search items, SKU, or brand..."
+                  className="w-full h-9 rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-[11px] text-slate-800 focus:outline-none focus:border-blue-500"
                 />
               </div>
+
+              <select value={categoryId} onChange={event => setCategoryId(event.target.value)} className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-[10px] font-bold text-slate-600">
+                <option value="all">All Categories</option>
+                {categories.map(category => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
+
+              <select value={vendor} onChange={event => setVendor(event.target.value)} className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-[10px] font-bold text-slate-600">
+                <option value="all">All Vendors</option>
+                {vendors.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+
+              <select value={status} onChange={event => setStatus(event.target.value)} className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-[10px] font-bold text-slate-600">
+                <option value="all">All Statuses</option>
+                <option value="in">In Stock</option>
+                <option value="low">Low Stock</option>
+                <option value="out">Out of Stock</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setCategoryId('all');
+                  setVendor('all');
+                  setStatus('all');
+                }}
+                className="h-9 px-3 rounded-lg border border-blue-400 text-blue-600 bg-white text-[10px] font-black cursor-pointer"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1180px] text-left text-[10px]">
+              <thead className="bg-[#f4f7fb] text-[#33476b] border-b border-slate-200">
+                <tr>
+                  <th className="px-3 py-2.5">Item</th>
+                  <th className="px-3 py-2.5">SKU</th>
+                  <th className="px-3 py-2.5">Category</th>
+                  <th className="px-3 py-2.5">Size</th>
+                  <th className="px-3 py-2.5 text-right">On Hand</th>
+                  <th className="px-3 py-2.5 text-right">Cost</th>
+                  <th className="px-3 py-2.5 text-right">Price</th>
+                  <th className="px-3 py-2.5">Vendor</th>
+                  <th className="px-3 py-2.5 text-right">Reorder Level</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="px-4 py-8 text-center text-xs text-slate-400">
+                      No inventory items match the current filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProducts.map(product => {
+                    const state = stockStatus(product);
+                    const category =
+                      product.categoryName ||
+                      categories.find(item => item.id === product.categoryId)?.name ||
+                      'Uncategorized';
+                    return (
+                      <tr key={product.id} className="hover:bg-slate-50">
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2 min-w-[220px]">
+                            {product.imageUrl ? (
+                              <img src={product.imageUrl} alt="" className="w-6 h-8 object-contain rounded bg-white" />
+                            ) : (
+                              <div className="w-6 h-8 rounded bg-slate-100" />
+                            )}
+                            <span className="font-semibold text-[#203760] truncate">{product.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 font-mono text-[#36517a]">{product.sku}</td>
+                        <td className="px-3 py-2 text-[#36517a]">{category}</td>
+                        <td className="px-3 py-2 text-[#36517a]">{product.size}</td>
+                        <td className={'px-3 py-2 text-right font-black ' + (product.stockQuantity <= 0 ? 'text-rose-600' : product.stockQuantity <= product.lowStockThreshold ? 'text-amber-600' : 'text-[#203760]')}>
+                          {product.stockQuantity}
+                        </td>
+                        <td className="px-3 py-2 text-right text-[#36517a]">{money(Number(product.cost ?? product.costPrice ?? 0))}</td>
+                        <td className="px-3 py-2 text-right text-[#203760] font-bold">{money(product.price)}</td>
+                        <td className="px-3 py-2 text-[#36517a]">{product.vendor || '—'}</td>
+                        <td className="px-3 py-2 text-right text-[#36517a]">{product.lowStockThreshold}</td>
+                        <td className="px-3 py-2">
+                          <span className={'inline-flex items-center gap-1.5 px-2 py-1 rounded-full font-bold ' + state.cls}>
+                            <span className={'w-1.5 h-1.5 rounded-full ' + state.dot} />
+                            {state.label}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => onNavigate('inventory-catalog')}
+                            className="w-7 h-7 rounded-md border border-slate-300 text-[#203760] hover:bg-slate-100 cursor-pointer"
+                            title="Open product in inventory catalog"
+                          >
+                            •••
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-[#08274d]" />
+                <div>
+                  <h3 className="text-sm font-black text-[#10234a]">Recent Receiving</h3>
+                  <p className="text-[10px] text-slate-500">Most recent inventory receipts</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => onNavigate('receiving')} className="text-[10px] font-black text-blue-600 cursor-pointer">View All</button>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[10px]">
-                <thead className="bg-slate-950/50 text-slate-500 uppercase tracking-wider">
+                <thead className="bg-[#f4f7fb] text-[#33476b]">
                   <tr>
-                    <th className="px-4 py-2.5">Product</th>
-                    <th className="px-4 py-2.5">SKU</th>
-                    <th className="px-4 py-2.5 text-right">On Hand</th>
-                    <th className="px-4 py-2.5 text-right">Minimum</th>
-                    <th className="px-4 py-2.5 text-right">Retail Value</th>
-                    <th className="px-4 py-2.5">Status</th>
+                    <th className="px-3 py-2">Receipt #</th>
+                    <th className="px-3 py-2">Vendor</th>
+                    <th className="px-3 py-2">Date</th>
+                    <th className="px-3 py-2 text-right">Items</th>
+                    <th className="px-3 py-2">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {lowStockRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-6 text-center text-xs text-slate-500">
-                        No products need attention.
-                      </td>
-                    </tr>
+                <tbody className="divide-y divide-slate-100">
+                  {recentInvoices.length === 0 ? (
+                    <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">No recent receipts.</td></tr>
                   ) : (
-                    lowStockRows.map(product => (
-                      <tr key={product.id} className="hover:bg-slate-900/40">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 min-w-[220px]">
-                            {product.imageUrl ? (
-                              <img
-                                src={product.imageUrl}
-                                alt=""
-                                className="w-7 h-9 object-contain rounded bg-slate-900"
-                              />
-                            ) : (
-                              <div className="w-7 h-9 rounded bg-slate-800" />
-                            )}
-                            <div>
-                              <div className="font-black text-slate-200">{product.name}</div>
-                              <div className="text-[9px] text-slate-500 mt-0.5">{product.size}</div>
-                            </div>
-                          </div>
+                    recentInvoices.map(invoice => (
+                      <tr key={invoice.id}>
+                        <td className="px-3 py-2 font-bold text-blue-600">{invoice.invoiceNumber}</td>
+                        <td className="px-3 py-2 text-[#36517a]">{invoice.vendorName}</td>
+                        <td className="px-3 py-2 text-[#36517a]">{new Date(invoice.receivedDate || invoice.createdAt).toLocaleDateString()}</td>
+                        <td className="px-3 py-2 text-right font-bold">
+                          {invoice.lineItems.reduce((sum, line) => sum + Number(line.totalInventoryUnits || line.quantity || 0), 0)}
                         </td>
-                        <td className="px-4 py-3 font-mono text-slate-400">{product.sku}</td>
-                        <td className={`px-4 py-3 text-right font-black ${
-                          product.stockQuantity <= 0 ? 'text-rose-400' : 'text-amber-400'
-                        }`}>
-                          {product.stockQuantity}
-                        </td>
-                        <td className="px-4 py-3 text-right text-slate-400">
-                          {product.lowStockThreshold}
-                        </td>
-                        <td className="px-4 py-3 text-right font-black">
-                          {money(product.stockQuantity * product.price)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex px-2 py-1 rounded-full border text-[9px] font-black ${
-                            product.stockQuantity <= 0
-                              ? 'bg-rose-950/50 border-rose-800 text-rose-300'
-                              : 'bg-amber-950/50 border-amber-800 text-amber-300'
-                          }`}>
-                            {product.stockQuantity <= 0 ? 'Out of Stock' : 'Low Stock'}
+                        <td className="px-3 py-2">
+                          <span className={'inline-flex px-2 py-1 rounded-full font-bold ' + (invoice.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : invoice.status === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700')}>
+                            {invoice.status === 'confirmed' ? 'Received' : invoice.status.replace(/_/g, ' ')}
                           </span>
                         </td>
                       </tr>
@@ -365,79 +370,63 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-700/80 bg-[#0b1a2d] overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-700">
-              <h2 className="text-base font-black">Highest Inventory Value</h2>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Products tying up the most retail value.
-              </p>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-rose-500" />
+                <div>
+                  <h3 className="text-sm font-black text-[#10234a]">Low Stock & Reorder</h3>
+                  <p className="text-[10px] text-slate-500">Items at or below reorder level</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => { setStatus('low'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="text-[10px] font-black text-blue-600 cursor-pointer">View All</button>
             </div>
 
-            <div className="divide-y divide-slate-800">
-              {topValueProducts.map((product, index) => (
-                <div key={product.id} className="px-4 py-3 flex items-center gap-3">
-                  <div className="w-6 text-[10px] text-slate-500">{index + 1}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[11px] font-black truncate">{product.name}</div>
-                    <div className="text-[9px] text-slate-500 mt-0.5">
-                      {product.stockQuantity} units · {money(product.price)} each
-                    </div>
-                  </div>
-                  <div className="text-xs font-black">{money(product.inventoryValue)}</div>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[10px]">
+                <thead className="bg-[#f4f7fb] text-[#33476b]">
+                  <tr>
+                    <th className="px-3 py-2">Item</th>
+                    <th className="px-3 py-2 text-right">On Hand</th>
+                    <th className="px-3 py-2 text-right">Reorder Level</th>
+                    <th className="px-3 py-2 text-right">Suggested</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {lowStock.map(product => {
+                    const state = stockStatus(product);
+                    const suggested = Math.max(product.lowStockThreshold * 2 - product.stockQuantity, 1);
+                    return (
+                      <tr key={product.id}>
+                        <td className="px-3 py-2 font-semibold text-[#203760]">{product.name}</td>
+                        <td className={'px-3 py-2 text-right font-black ' + (product.stockQuantity <= 0 ? 'text-rose-600' : 'text-amber-600')}>{product.stockQuantity}</td>
+                        <td className="px-3 py-2 text-right">{product.lowStockThreshold}</td>
+                        <td className="px-3 py-2 text-right">{suggested}</td>
+                        <td className="px-3 py-2">
+                          <span className={'inline-flex items-center gap-1.5 px-2 py-1 rounded-full font-bold ' + state.cls}>
+                            <span className={'w-1.5 h-1.5 rounded-full ' + state.dot} />
+                            {state.label}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <button type="button" onClick={() => onNavigate('receiving')} className="px-3 py-1.5 rounded-md bg-[#c78d20] hover:bg-[#b57d18] text-white font-black cursor-pointer">
+                            Create PO
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            {
-              label: 'Full Catalog',
-              detail: 'Add, edit and adjust products',
-              tab: 'inventory-catalog',
-              icon: Boxes,
-            },
-            {
-              label: 'Receiving',
-              detail: 'Invoices and stock receiving',
-              tab: 'receiving',
-              icon: PackageCheck,
-            },
-            {
-              label: 'Update History',
-              detail: 'Review inventory changes',
-              tab: 'inventory-history',
-              icon: ClipboardList,
-            },
-            {
-              label: 'Inventory Ledger',
-              detail: 'Immutable stock movement history',
-              tab: 'inventory-ledger',
-              icon: ShieldCheck,
-            },
-          ].map(action => {
-            const Icon = action.icon;
-            return (
-              <button
-                key={action.tab}
-                type="button"
-                onClick={() => onNavigate(action.tab)}
-                className="rounded-2xl border border-slate-700 bg-[#0b1a2d] p-4 text-left hover:border-sky-700 hover:bg-[#10223a] cursor-pointer"
-              >
-                <div className="flex items-center justify-between">
-                  <Icon className="w-5 h-5 text-sky-400" />
-                  <ArrowRight className="w-4 h-4 text-slate-600" />
-                </div>
-                <div className="text-sm font-black mt-3">{action.label}</div>
-                <div className="text-[10px] text-slate-500 mt-1">{action.detail}</div>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="text-[10px] text-slate-600 pb-1">
-          {settings?.storeName || 'Store'} inventory data · {activeProducts.length} active products
+        <div className="flex items-center justify-between px-1 text-[10px] text-slate-500">
+          <span>{settings?.storeName || 'Store'} inventory</span>
+          <span className="font-bold text-emerald-600">Shared inventory source: Manager Portal + Cashier POS + Online Store</span>
         </div>
       </div>
     </div>
