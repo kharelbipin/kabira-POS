@@ -108,6 +108,40 @@ export const ManagerReportsCenter: React.FC<ManagerReportsCenterProps> = ({ orde
     [products]
   );
 
+  const salesByCategory = useMemo(() => {
+    const totals: Record<string, { sales: number; units: number }> = {};
+    filteredOrders.forEach(order => {
+      order.items.forEach(item => {
+        const category = item.product?.categoryName || 'Uncategorized';
+        const lineAmount = Number(item.lineTotal ?? item.unitPrice * item.quantity ?? 0);
+        if (!totals[category]) totals[category] = { sales: 0, units: 0 };
+        totals[category].sales += Math.max(0, lineAmount);
+        totals[category].units += Math.max(0, Number(item.quantity || 0));
+      });
+    });
+    return Object.entries(totals)
+      .map(([name, value]) => ({ name, ...value }))
+      .sort((a, b) => b.sales - a.sales);
+  }, [filteredOrders]);
+
+  const salesByHour = useMemo(() => {
+    const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, sales: 0, transactions: 0 }));
+    filteredOrders.forEach(order => {
+      const hour = new Date(order.createdAt).getHours();
+      hours[hour].sales += Math.max(0, Number(order.grandTotal || 0));
+      hours[hour].transactions += 1;
+    });
+    return hours.filter(row => row.transactions > 0);
+  }, [filteredOrders]);
+
+  const recentSales = useMemo(
+    () => [...filteredOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 12),
+    [filteredOrders]
+  );
+
+  const maxCategorySales = Math.max(1, ...salesByCategory.map(row => row.sales));
+  const maxHourlySales = Math.max(1, ...salesByHour.map(row => row.sales));
+
   const reportTabs = [
     { id: 'sales' as const, label: 'Sales Report', icon: BarChart3 },
     { id: 'payment' as const, label: 'Payment Report', icon: CreditCard },
@@ -273,11 +307,12 @@ export const ManagerReportsCenter: React.FC<ManagerReportsCenterProps> = ({ orde
           <div className="space-y-4">
             {tab === 'sales' && report && (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
                   {[
-                    ['Total Sales', money(report.totalSales)],
+                    ['Net Sales', money(report.totalSales)],
                     ['Transactions', String(report.completedOrdersCount)],
                     ['Average Ticket', money(report.averageOrderValue)],
+                    ['Tax Collected', money(report.taxTotal)],
                     ['Discounts', money(report.discountsTotal)],
                     ['Refunds', money(report.refundsTotal)],
                   ].map(([label, value]) => (
@@ -286,6 +321,97 @@ export const ManagerReportsCenter: React.FC<ManagerReportsCenterProps> = ({ orde
                       <div className="text-xl font-black mt-2">{value}</div>
                     </div>
                   ))}
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <div className="font-black">Sales by Category</div>
+                        <div className="text-[10px] text-slate-500">Revenue and units sold from completed transactions</div>
+                      </div>
+                    </div>
+                    {salesByCategory.length === 0 ? empty : (
+                      <div className="space-y-3">
+                        {salesByCategory.slice(0, 10).map(row => (
+                          <div key={row.name}>
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="font-bold">{row.name}</span>
+                              <span className="font-black">{money(row.sales)} <span className="text-slate-400 font-medium">· {row.units} units</span></span>
+                            </div>
+                            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                              <div className="h-full bg-[#c78d20]" style={{ width: Math.max(2, (row.sales / maxCategorySales) * 100) + '%' }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                    <div className="font-black">Sales by Hour</div>
+                    <div className="text-[10px] text-slate-500 mb-4">See the busiest sales hours for the selected period</div>
+                    {salesByHour.length === 0 ? empty : (
+                      <div className="flex items-end gap-2 h-52 overflow-x-auto pb-2">
+                        {salesByHour.map(row => (
+                          <div key={row.hour} className="min-w-[42px] flex-1 h-full flex flex-col justify-end items-center">
+                            <div className="text-[9px] font-black text-slate-500 mb-1">{money(row.sales)}</div>
+                            <div
+                              className="w-full max-w-[34px] rounded-t-md bg-[#08274d]"
+                              style={{ height: Math.max(8, (row.sales / maxHourlySales) * 150) + 'px' }}
+                              title={row.transactions + ' transactions'}
+                            />
+                            <div className="text-[9px] font-bold text-slate-500 mt-1">
+                              {String(row.hour).padStart(2, '0')}:00
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                    <div className="px-4 py-3 border-b border-slate-200 font-black">Top Selling Products</div>
+                    {report.topSellingProducts.length === 0 ? empty : (
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-500">
+                          <tr><th className="px-4 py-2">Product</th><th className="px-4 py-2 text-right">Units</th><th className="px-4 py-2 text-right">Revenue</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {report.topSellingProducts.slice(0, 8).map(item => (
+                            <tr key={item.name}>
+                              <td className="px-4 py-3 font-bold">{item.name}</td>
+                              <td className="px-4 py-3 text-right">{item.quantitySold}</td>
+                              <td className="px-4 py-3 text-right font-black">{money(item.revenue)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                    <div className="px-4 py-3 border-b border-slate-200 font-black">Recent Sales</div>
+                    {recentSales.length === 0 ? empty : (
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-500">
+                          <tr><th className="px-4 py-2">Order</th><th className="px-4 py-2">Cashier</th><th className="px-4 py-2">Time</th><th className="px-4 py-2 text-right">Total</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {recentSales.map(order => (
+                            <tr key={order.id}>
+                              <td className="px-4 py-3 font-mono font-bold">{order.orderNumber}</td>
+                              <td className="px-4 py-3">{order.cashierName}</td>
+                              <td className="px-4 py-3 text-slate-500">{new Date(order.createdAt).toLocaleString()}</td>
+                              <td className="px-4 py-3 text-right font-black">{money(order.grandTotal)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 </div>
               </>
             )}
