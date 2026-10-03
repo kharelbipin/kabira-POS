@@ -1500,12 +1500,21 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
         }
 
         const catalogProduct = db.products.find(p => p.id === item.product.id);
+        const productId = String(item.product?.id || '');
+        const productSku = String(item.product?.sku || '');
         const isManualItem =
             !catalogProduct &&
-            String(item.product?.id || '').startsWith('manual-') &&
-            String(item.product?.sku || '').startsWith('MISC-');
+            productId.startsWith('manual-') &&
+            productSku.startsWith('MISC-');
+        const isLottoPayout =
+            !catalogProduct &&
+            productId.startsWith('lotto-payout-') &&
+            productSku === 'LOTTO-PAYOUT';
 
-        if (!catalogProduct && !isManualItem) {
+        // Transaction-only POS lines (such as a Lotto payout) are intentionally
+        // not stored in the permanent product catalog, so they must not fail the
+        // normal "product no longer exists" catalog validation.
+        if (!catalogProduct && !isManualItem && !isLottoPayout) {
             return res.status(400).json({ error: `Product ${item.product.name} no longer exists` });
         }
 
@@ -1527,12 +1536,23 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Manual item must have a valid positive price' });
         }
 
+        if (isLottoPayout) {
+            if (!Number.isFinite(manualPrice) || manualPrice >= 0) {
+                return res.status(400).json({ error: 'Lotto payout must have a valid negative payout amount' });
+            }
+            if (quantity !== 1) {
+                return res.status(400).json({ error: 'Lotto payout quantity must be 1' });
+            }
+        }
+
         const product = catalogProduct
             ? { ...catalogProduct }
             : {
                 ...item.product,
                 price: manualPrice,
-                taxRate: Number(item.product?.taxRate) === 0 ? 0 : db.settings.defaultTaxRate,
+                taxRate: isLottoPayout
+                    ? 0
+                    : (Number(item.product?.taxRate) === 0 ? 0 : db.settings.defaultTaxRate),
                 active: true,
             };
 
@@ -1573,6 +1593,19 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
 
     let calculatedTax = 0;
     for (const item of processedItems) {
+        const isLottoPayoutLine =
+            item.product?.sku === 'LOTTO-PAYOUT' ||
+            String(item.product?.id || '').startsWith('lotto-payout-');
+
+        if (isLottoPayoutLine) {
+            // Payout is a non-taxable customer credit. Preserve its negative
+            // value on the order/receipt while allowing it to offset normal
+            // merchandise in the same transaction.
+            item.taxAmount = 0;
+            item.lineTotal = Math.round(item.unitPrice * item.quantity * 100) / 100;
+            continue;
+        }
+
         const lineSubtotal = Math.max(
             0,
             item.unitPrice * item.quantity - Number(item.discountAmount || 0)
