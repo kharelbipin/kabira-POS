@@ -60,6 +60,7 @@ import { AdminPortalNav } from './components/admin/AdminPortalNav';
 import { AdminHealthDashboard } from './components/admin/AdminHealthDashboard';
 import { ManagerPortalNav } from './components/manager/ManagerPortalNav';
 import { ManagerOperationsDashboard } from './components/manager/ManagerOperationsDashboard';
+import { ManagerInventoryDashboard } from './components/manager/ManagerInventoryDashboard';
 
 const HELD_ORDERS_STORAGE_KEY = 'kabira_pos_held_orders_v1';
 
@@ -1236,7 +1237,14 @@ export default function App() {
         )}
 
         {currentTab === 'inventory' && (
-          currentUser?.role === 'Cashier' && !settings?.cashierPermissions?.allowInventory ? (
+          currentUser?.role === 'Manager' ? (
+            <ManagerInventoryDashboard
+              products={products}
+              categories={categories}
+              settings={settings}
+              onNavigate={setCurrentTab}
+            />
+          ) : currentUser?.role === 'Cashier' && !settings?.cashierPermissions?.allowInventory ? (
             <div className="h-full flex flex-col items-center justify-center bg-[#0D0D0D] text-[#E5E5E5] p-6">
               <div className="max-w-md w-full bg-[#141414] border border-[#262626] rounded-2xl p-8 text-center space-y-4 shadow-xl">
                 <div className="w-16 h-16 rounded-full bg-amber-950/40 border border-amber-800/40 text-amber-400 mx-auto flex items-center justify-center">
@@ -1267,6 +1275,42 @@ export default function App() {
               onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
             />
           )
+        )}
+
+        {currentTab === 'inventory-catalog' && (
+          <InventoryView
+            products={products}
+            categories={categories}
+            currentUser={currentUser}
+            settings={settings}
+            onRefresh={() => api.getProducts().then(setProducts)}
+            initialSubTab="catalog"
+            onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
+          />
+        )}
+
+        {currentTab === 'inventory-history' && (
+          <InventoryView
+            products={products}
+            categories={categories}
+            currentUser={currentUser}
+            settings={settings}
+            onRefresh={() => api.getProducts().then(setProducts)}
+            initialSubTab="history"
+            onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
+          />
+        )}
+
+        {currentTab === 'inventory-ledger' && (
+          <InventoryView
+            products={products}
+            categories={categories}
+            currentUser={currentUser}
+            settings={settings}
+            onRefresh={() => api.getProducts().then(setProducts)}
+            initialSubTab="unified-ledger"
+            onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
+          />
         )}
 
         {currentTab === 'receiving' && (
