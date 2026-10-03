@@ -1239,6 +1239,8 @@ class Database {
         auditLogs: this.auditLogs.length,
         vendors: this.vendors.length,
         promotions: this.promotions.length,
+        scanDataTransactions: this.scanDataTransactions.length,
+        scanDataExportBatches: this.scanDataExportBatches.length,
         devices: this.devices.length,
       },
     };
