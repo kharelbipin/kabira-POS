@@ -10,8 +10,6 @@ interface LottoPayoutModalProps {
   onAddLottoPayout: (payoutProduct: Product) => void;
 }
 
-const QUICK_PAYOUTS = [5, 10, 20, 25, 40, 50, 100, 200, 500];
-
 export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
   isOpen,
   onClose,
@@ -25,11 +23,6 @@ export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
 
   const payoutAmount = Math.max(0, parseFloat(payoutStr) || 0);
 
-  const handleQuickAmount = (val: number) => {
-    playBeep('click');
-    setPayoutStr(val.toFixed(2));
-    setErrorMsg(null);
-  };
 
   const handleKeypad = (char: string) => {
     playBeep('click');
@@ -170,28 +163,6 @@ export const LottoPayoutModal: React.FC<LottoPayoutModalProps> = ({
               />
             </div>
 
-            {/* Quick Denominations */}
-            <div>
-              <span className="text-[11px] font-semibold text-slate-400 block mb-1.5">
-                Common Payout Amounts:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {QUICK_PAYOUTS.map(amt => (
-                  <button
-                    key={amt}
-                    type="button"
-                    onClick={() => handleQuickAmount(amt)}
-                    className={`px-3 py-1.5 rounded-xl font-mono font-bold text-xs border transition-all cursor-pointer ${
-                      payoutAmount === amt
-                        ? 'bg-rose-600 text-white border-rose-400 shadow-xs'
-                        : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
-                    }`}
-                  >
-                    ${amt}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Keypad & Audit inputs */}
