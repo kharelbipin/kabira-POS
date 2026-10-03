@@ -24,7 +24,7 @@ const navItems = [
   { id: 'manager-dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'orders', label: 'Sales', icon: BarChart3 },
   { id: 'inventory', label: 'Inventory', icon: Boxes },
-  { id: 'manager-promotions', label: 'Promotions', icon: Tag },
+  { id: 'manager-promotions', label: 'Promotions & Scan Data', icon: Tag },
   { id: 'shifts', label: 'Shifts', icon: Clock3 },
   { id: 'reports', label: 'Reports', icon: ShoppingCart },
   { id: 'users', label: 'Users', icon: Users },
