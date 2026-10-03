@@ -46,6 +46,7 @@ interface InventoryViewProps {
   settings: StoreSettings | null;
   onRefresh: () => void;
   initialSubTab?: 'catalog' | 'invoices' | 'vendors' | 'ledger' | 'history' | 'unified-ledger' | 'ats';
+  initialAction?: 'add' | 'import';
   onOpenMobileCaptureSimulator?: (sessionId: string, token: string) => void;
 }
 
@@ -56,6 +57,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   settings,
   onRefresh,
   initialSubTab = 'catalog',
+  initialAction,
   onOpenMobileCaptureSimulator,
 }) => {
   const [subTab, setSubTab] = useState<'catalog' | 'invoices' | 'vendors' | 'ledger' | 'history' | 'unified-ledger' | 'ats'>(initialSubTab);
@@ -155,6 +157,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     });
     setShowAddEditModal(true);
   };
+
+  React.useEffect(() => {
+    if (initialAction === 'add') {
+      handleOpenAdd();
+    } else if (initialAction === 'import') {
+      setShowImportModal(true);
+    }
+  }, [initialAction]);
 
   const handleOpenEdit = (p: Product) => {
     setEditingProduct(p);
