@@ -9,6 +9,7 @@ import {
   Search,
   Truck,
   Upload,
+  Download,
   Users,
 } from 'lucide-react';
 import { Category, Product, ScannedInvoice, StoreSettings } from '../../types';
@@ -105,6 +106,23 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
     { label: 'Reports', icon: BarChart3, tab: 'reports' },
   ];
 
+  const handleDownloadInventory = async () => {
+    try {
+      const csvData = await api.exportProductsCSV();
+      const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `inventory-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      alert(error?.message || 'Failed to download inventory.');
+    }
+  };
+
   const stockStatus = (product: Product) => {
     if (product.stockQuantity <= 0) {
       return {
@@ -155,6 +173,10 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
             <button type="button" onClick={() => onNavigate('inventory-import')} className="h-11 px-4 rounded-lg bg-white border border-[#25467b] text-[#10234a] text-xs font-black flex items-center gap-2 cursor-pointer">
               <Upload className="w-4 h-4" />
               Import CSV
+            </button>
+            <button type="button" onClick={handleDownloadInventory} className="h-11 px-4 rounded-lg bg-white border border-[#25467b] text-[#10234a] text-xs font-black flex items-center gap-2 cursor-pointer">
+              <Download className="w-4 h-4" />
+              Download Inventory
             </button>
           </div>
         </div>
