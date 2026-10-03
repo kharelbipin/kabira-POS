@@ -62,7 +62,7 @@ import { ManagerPortalNav } from './components/manager/ManagerPortalNav';
 import { ManagerOperationsDashboard } from './components/manager/ManagerOperationsDashboard';
 import { ManagerInventoryDashboard } from './components/manager/ManagerInventoryDashboard';
 import { ManagerReportsCenter } from './components/manager/ManagerReportsCenter';
-import { PromotionsSettings } from './components/PromotionsSettings';
+import { ManagerPromotionScanDataCenter } from './components/manager/ManagerPromotionScanDataCenter';
 
 const HELD_ORDERS_STORAGE_KEY = 'kabira_pos_held_orders_v1';
 
@@ -1473,16 +1473,10 @@ export default function App() {
         )}
 
         {currentTab === 'manager-promotions' && currentUser?.role === 'Manager' && (
-          <div className="h-full overflow-y-auto bg-[#eef3f8] p-4 md:p-5">
-            <div className="mb-4">
-              <div className="text-[10px] text-slate-500 mb-1">Manager Portal › Promotions</div>
-              <h1 className="text-2xl md:text-3xl font-black tracking-tight text-[#10234a]">Promotions</h1>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Create and manage store promotions and discounts. Scan Data will be added separately after its workflow is defined.
-              </p>
-            </div>
-            <PromotionsSettings />
-          </div>
+          <ManagerPromotionScanDataCenter
+            products={products}
+            onNavigate={setCurrentTab}
+          />
         )}
 
         {currentTab === 'customers' && (
