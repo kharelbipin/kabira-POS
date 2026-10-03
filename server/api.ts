@@ -1463,6 +1463,12 @@ apiRouter.post('/products/import', asyncHandler(async (req: Request, res: Respon
         const categoryName = rowObj['category'] || values[5] || 'General';
         const size = rowObj['size'] || values[6] || 'Standard';
         const stock = parseInt(rowObj['stock'] || rowObj['quantity'] || values[7] || '0', 10);
+        const productHeading = rowObj['productheading'] || rowObj['product_heading'] || '';
+        const manufacturerName = rowObj['manufacturer'] || rowObj['manufacturername'] || '';
+        const distributorName = rowObj['distributor'] || rowObj['distributorname'] || '';
+        const scanDataEligibleRaw = String(rowObj['scandataeligible'] || rowObj['scan_data_eligible'] || '').toLowerCase();
+        const scanDataEligible = ['true', '1', 'yes', 'y'].includes(scanDataEligibleRaw);
+        const defaultProgramId = rowObj['defaultprogramid'] || rowObj['default_program_id'] || '';
 
         if (!name || !sku || !barcode || isNaN(price)) {
             errors.push({ row: i + 1, data: rawLine, reason: 'Missing required field (Name, SKU, Barcode, or Price)' });
@@ -1506,6 +1512,11 @@ apiRouter.post('/products/import', asyncHandler(async (req: Request, res: Respon
             stockQuantity: isNaN(stock) ? 0 : stock,
             lowStockThreshold: 5,
             imageUrl: 'https://images.unsplash.com/photo-1527281400683-1aae777175f8?w=500&auto=format&fit=crop&q=60',
+            productHeading: productHeading || undefined,
+            manufacturerName: manufacturerName || undefined,
+            distributorName: distributorName || undefined,
+            scanDataEligible,
+            defaultProgramId: defaultProgramId || undefined,
             active: true,
             createdAt: now,
             updatedAt: now,
