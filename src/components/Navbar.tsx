@@ -37,6 +37,7 @@ import {
   LayoutGrid,
   ShieldAlert,
   Printer,
+  UserRoundCog,
 } from 'lucide-react';
 
 interface NavbarProps {
