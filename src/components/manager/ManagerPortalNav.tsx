@@ -49,7 +49,10 @@ export const ManagerPortalNav: React.FC<ManagerPortalNavProps> = ({
       <nav className="flex-1 py-4 px-2 space-y-1">
         {navItems.map(item => {
           const Icon = item.icon;
-          const active = currentTab === item.id;
+          const active =
+            currentTab === item.id ||
+            (item.id === 'inventory' &&
+              ['inventory-catalog', 'inventory-history', 'inventory-ledger', 'receiving'].includes(currentTab));
           return (
             <button
               key={item.id}
