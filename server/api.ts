@@ -1838,6 +1838,39 @@ apiRouter.post('/scan-data/export-batches', asyncHandler(async (req: Request, re
     res.status(201).json({ batch, csv, validationErrors: [] });
 }));
 
+apiRouter.get('/scan-data/export-batches/:id/csv', (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
+        return res.status(403).json({ error: 'Only Managers and Admins can download scan-data batches' });
+    }
+
+    const batch = db.scanDataExportBatches.find(b => b.id === req.params.id);
+    if (!batch) return res.status(404).json({ error: 'Export batch not found' });
+
+    const rows = batch.transactionIds
+        .map(id => db.scanDataTransactions.find(t => t.id === id))
+        .filter(Boolean) as ScanDataTransaction[];
+
+    const headers = [
+        'TransactionID','OrderNumber','SaleDateTime','UPC','Product','ProductHeading','Manufacturer',
+        'Distributor','ProgramCode','ProgramName','ProgramType','Quantity','RegularUnitPrice',
+        'DiscountPerUnit','ManufacturerDiscountTotal','CustomerPaid','ExpectedReimbursement',
+        'CustomerToken','Cashier','Register'
+    ];
+    const csvRows = rows.map(t => [
+        t.id, t.orderNumber, t.orderCreatedAt, t.upc, t.productName, t.productHeading,
+        t.manufacturerName, t.distributorName || '', t.programCode, t.programName, t.programType || '',
+        t.quantity, t.regularPrice.toFixed(2), t.discountPerUnit.toFixed(2),
+        t.manufacturerDiscountTotal.toFixed(2), t.customerPaid.toFixed(2),
+        t.expectedReimbursement.toFixed(2), t.customerPhoneToken || '', t.cashierName, t.registerId
+    ]);
+    const csv = [headers, ...csvRows]
+        .map(row => row.map(value => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(','))
+        .join('\n');
+
+    res.json({ fileName: batch.fileName, csv });
+});
+
 apiRouter.patch('/scan-data/export-batches/:id/status', asyncHandler(async (req: Request, res: Response) => {
     const currentUser = getAuthUser(req);
     if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
