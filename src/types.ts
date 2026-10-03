@@ -429,6 +429,27 @@ export interface StoreSettings {
   requireManagerDiscountAbove: number; // e.g. 20 (%)
   requireManagerToOpenDrawerNoSale?: boolean; // Default false: cashier can open drawer directly
   customerDisplayFullscreen?: boolean; // Default true: launch customer display locked/borderless on Display 2
+
+  // General POS display & usability settings
+  useOnScreenKeypad?: boolean;
+  showFixedKeypad?: boolean;
+  autoLaunchCustomerScreen?: boolean;
+  customerDisplayShowTotal?: boolean;
+  customerDisplayShowPrice?: boolean;
+  customerDisplayShowCustomerNumber?: boolean;
+  customerDisplayShowSaleNotes?: boolean;
+  alwaysShowShortcuts?: boolean;
+  webOrderNotificationsEnabled?: boolean;
+  hideTotalDetails?: boolean;
+  tasklistNotificationSound?: 'none' | 'beep' | 'chime';
+  searchFontSizePx?: number;
+  windowZoomPercent?: number;
+  posScreenFontSizePx?: number;
+  customerScreenFontSizePx?: number;
+  customerScreenZoomPercent?: number;
+  applicationVersionLabel?: string;
+  electronAppVersionLabel?: string;
+
   allowedPaymentMethods?: {
     cash: boolean;
     card: boolean;
