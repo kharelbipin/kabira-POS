@@ -750,6 +750,13 @@ export const InvoiceReviewView: React.FC<InvoiceReviewViewProps> = ({
         </table>
       </div>
 
+      <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/20 px-4 py-3 text-xs text-emerald-200 flex items-start gap-2">
+        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+        <span>
+          Confirming this invoice updates the shared product inventory used by the manager portal, cashier register, and online store. The original invoice image or PDF is kept with the receiving record.
+        </span>
+      </div>
+
       {/* Bottom Sticky Action Bar */}
       <div className="bg-[#141414] border border-[#262626] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
         <div className="flex items-center space-x-3 text-xs text-[#888888]">
