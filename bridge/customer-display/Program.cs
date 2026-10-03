@@ -87,7 +87,8 @@ internal sealed class CustomerDisplayForm : Form
     {
         if (_fullscreen)
         {
-            if (keyData is Keys.Alt | Keys.F4 or Keys.Escape or Keys.F11)
+            var altF4 = (keyData & Keys.Alt) == Keys.Alt && (keyData & Keys.F4) == Keys.F4;
+            if (altF4 || keyData == Keys.Escape || keyData == Keys.F11)
             {
                 return true;
             }
