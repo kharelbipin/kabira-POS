@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import net from 'net';
+import { execFile } from 'child_process';
 import { db } from './db.js';
 import {
     Product,
@@ -185,6 +186,68 @@ apiRouter.get('/bridge/telemetry', (req: Request, res: Response) => {
         count: Object.keys(bridgeTelemetryFleet).length,
         serverTime: new Date().toISOString(),
     });
+});
+
+apiRouter.post('/bridge/restart-service', (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+
+    if (currentUser.role !== 'Admin') {
+        return res.status(403).json({
+            success: false,
+            message: 'Only an Admin can restart the KaBiRa Hardware Bridge service.',
+        });
+    }
+
+    if (process.platform !== 'win32') {
+        return res.status(400).json({
+            success: false,
+            message: 'Bridge service restart is only available on Windows POS installations.',
+        });
+    }
+
+    const command = [
+        "$ErrorActionPreference='Stop'",
+        "$serviceName='KaBiRaPOSBridge'",
+        "$service=Get-Service -Name $serviceName -ErrorAction Stop",
+        "Restart-Service -Name $serviceName -Force -ErrorAction Stop",
+        "$service=Get-Service -Name $serviceName",
+        "$service.WaitForStatus('Running',[TimeSpan]::FromSeconds(15))",
+        "$service=Get-Service -Name $serviceName",
+        "if ($service.Status -ne 'Running') { throw 'Bridge service did not return to Running state.' }",
+        "Write-Output 'KaBiRaPOSBridge is Running'",
+    ].join('; ');
+
+    execFile(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
+        { windowsHide: true, timeout: 20000 },
+        (error, stdout, stderr) => {
+            if (error) {
+                const details = String(stderr || error.message || '').trim();
+                return res.status(500).json({
+                    success: false,
+                    message:
+                        'Bridge restart failed. The KaBiRa POS backend may need Windows service-control permission. ' +
+                        (details || 'Verify the KaBiRaPOSBridge service is installed.'),
+                });
+            }
+
+            db.addAudit(
+                currentUser.id,
+                currentUser.name,
+                currentUser.role,
+                'BRIDGE_SERVICE_RESTART',
+                'system',
+                'KaBiRaPOSBridge',
+                'Admin restarted the KaBiRa POS Hardware Bridge Windows service.'
+            );
+
+            return res.json({
+                success: true,
+                message: String(stdout || 'KaBiRa Hardware Bridge restarted successfully.').trim(),
+            });
+        }
+    );
 });
 
 function toPublicUser(user: User) {
