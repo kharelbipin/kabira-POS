@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import JSZip from 'jszip';
 import {
   AlertTriangle,
   Building2,
@@ -40,6 +41,17 @@ const money = (value: number) =>
 
 const downloadCsv = (fileName: string, csv: string) => {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const downloadBlob = (fileName: string, blob: Blob) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -194,6 +206,73 @@ export const ManagerPromotionScanDataCenter: React.FC<ManagerPromotionScanDataCe
         ? '\n' + error.validationErrors.join('\n')
         : '';
       alert((error?.message || 'Could not generate scan-data file.') + details);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleGenerateSeparateFiles = async () => {
+    setBusy(true);
+    try {
+      const from = startDate ? new Date(startDate + 'T00:00:00').getTime() : Number.NEGATIVE_INFINITY;
+      const to = endDate ? new Date(endDate + 'T23:59:59').getTime() : Number.POSITIVE_INFINITY;
+      const pending = transactions.filter(tx => {
+        const time = new Date(tx.orderCreatedAt).getTime();
+        return (
+          tx.saleStatus === 'sale' &&
+          tx.submissionStatus === 'pending' &&
+          time >= from &&
+          time <= to &&
+          (companyFilter === 'all' || tx.manufacturerName === companyFilter) &&
+          (headingFilter === 'all' || tx.productHeading === headingFilter) &&
+          (programFilter === 'all' || tx.programId === programFilter)
+        );
+      });
+
+      const groups = new Map<string, { manufacturerName: string; productHeading: string }>();
+      pending.forEach(tx => {
+        const key = tx.manufacturerName + '||' + tx.productHeading;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            manufacturerName: tx.manufacturerName,
+            productHeading: tx.productHeading,
+          });
+        }
+      });
+
+      if (groups.size === 0) {
+        alert('No pending transactions are available for separate company/product files.');
+        return;
+      }
+
+      const zip = new JSZip();
+      const createdBatchIds: string[] = [];
+
+      for (const group of groups.values()) {
+        const result = await api.createScanDataExportBatch({
+          manufacturerName: group.manufacturerName,
+          productHeading: group.productHeading,
+          programId: programFilter,
+          startDate,
+          endDate,
+        });
+        zip.file(result.batch.fileName, result.csv);
+        createdBatchIds.push(result.batch.id);
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      downloadBlob(
+        'scan-data-separate-files-' + new Date().toISOString().slice(0, 10) + '.zip',
+        blob
+      );
+
+      for (const batchId of createdBatchIds) {
+        await api.updateScanDataExportBatchStatus(batchId, { status: 'downloaded' });
+      }
+      await loadAll();
+      setTab('exports');
+    } catch (error: any) {
+      alert(error?.message || 'Could not generate separate scan-data files.');
     } finally {
       setBusy(false);
     }
@@ -501,15 +580,27 @@ export const ManagerPromotionScanDataCenter: React.FC<ManagerPromotionScanDataCe
                     </select>
                     <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-2 text-xs" />
                     <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-10 rounded-lg border border-slate-300 px-2 text-xs" />
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void handleGenerateExport()}
-                      className="h-10 rounded-lg bg-[#08274d] text-white text-xs font-black flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
-                    >
-                      <Download className="w-4 h-4" />
-                      {busy ? 'Generating...' : 'Generate & Download'}
-                    </button>
+                    <div className="flex gap-2 md:col-span-3 xl:col-span-1">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handleGenerateExport()}
+                        className="h-10 flex-1 rounded-lg bg-[#08274d] text-white text-[10px] font-black flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 px-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        {busy ? 'Generating...' : 'One File'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handleGenerateSeparateFiles()}
+                        className="h-10 flex-1 rounded-lg bg-[#c78d20] text-white text-[10px] font-black flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 px-2"
+                        title="Create one CSV per manufacturer + product heading and download them as a ZIP"
+                      >
+                        <FileDown className="w-4 h-4" />
+                        Separate ZIP
+                      </button>
+                    </div>
                   </div>
                 </div>
 
