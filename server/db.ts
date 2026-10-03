@@ -36,6 +36,8 @@ import {
   ProductBundle,
   ProductSubstitutionRule,
   DigitalTwinShelfPosition,
+  ScanDataTransaction,
+  ScanDataExportBatch,
 } from '../src/types';
 
 // In-Memory Database with Persistence for AI Studio Applet
@@ -899,6 +901,10 @@ class Database {
 
   inventoryReservations: InventoryReservation[] = [];
 
+  scanDataTransactions: ScanDataTransaction[] = [];
+
+  scanDataExportBatches: ScanDataExportBatch[] = [];
+
   omnichannelCartTransfers: OmnichannelCartTransfer[] = [];
 
   productBundles: ProductBundle[] = [
@@ -1135,6 +1141,8 @@ class Database {
       'depositBatches',
       'inventoryLedger',
       'inventoryReservations',
+      'scanDataTransactions',
+      'scanDataExportBatches',
       'omnichannelCartTransfers',
       'productBundles',
       'productSubstitutionRules',
