@@ -73,7 +73,13 @@ export const CartPanel: React.FC<CartPanelProps> = ({
 
   // Financial calculations
   const rawSubtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const itemDiscountsTotal = items.reduce((sum, item) => sum + item.discountAmount, 0);
+  const itemDiscountsTotal = items.reduce(
+    (sum, item) =>
+      sum +
+      Number(item.discountAmount || 0) +
+      Number(item.manufacturerDiscountAmount || 0),
+    0
+  );
   const adjustedSubtotal = rawSubtotal - itemDiscountsTotal;
 
   let calculatedOrderDiscount = 0;
@@ -90,7 +96,9 @@ export const CartPanel: React.FC<CartPanelProps> = ({
   const taxTotal = items.reduce((sum, item) => {
     const lineSubtotal = Math.max(
       0,
-      item.unitPrice * item.quantity - (item.discountAmount || 0)
+      item.unitPrice * item.quantity -
+        Number(item.discountAmount || 0) -
+        Number(item.manufacturerDiscountAmount || 0)
     );
     const lineTaxRate = item.product.taxRate ?? defaultTaxRate;
     return sum + lineSubtotal * orderDiscountFactor * lineTaxRate;
@@ -233,7 +241,8 @@ export const CartPanel: React.FC<CartPanelProps> = ({
               {items.map(item => {
                 const lineTotal =
                   ((item.unitPrice ?? 0) * item.quantity) -
-                  (item.discountAmount ?? 0);
+                  Number(item.discountAmount ?? 0) -
+                  Number(item.manufacturerDiscountAmount ?? 0);
 
                 const stockRemaining = Math.max(
                   0,
@@ -322,9 +331,28 @@ export const CartPanel: React.FC<CartPanelProps> = ({
                         }`}
                       >
                         {(item.discountAmount ?? 0) > 0
-                          ? `Discount -$${(item.discountAmount ?? 0).toFixed(2)}`
+                          ? `Store Discount -${(item.discountAmount ?? 0).toFixed(2)}`
                           : 'Add Discount'}
                       </button>
+
+                      {Number(item.manufacturerDiscountAmount || 0) > 0 && (
+                        <div className="mt-0.5 text-[9px] font-black text-sky-700">
+                          {item.manufacturerCompany || 'Manufacturer'} offer -$
+                          {Number(item.manufacturerDiscountAmount || 0).toFixed(2)}
+                        </div>
+                      )}
+
+                      {item.manufacturerOfferAvailable &&
+                        Number(item.manufacturerDiscountAmount || 0) === 0 &&
+                        item.manufacturerEligibilityMessage && (
+                          <button
+                            type="button"
+                            onClick={onOpenCustomerModal}
+                            className="mt-0.5 text-[9px] font-black text-violet-700 hover:underline cursor-pointer"
+                          >
+                            {item.manufacturerEligibilityMessage}
+                          </button>
+                        )}
                     </div>
 
                     <div className="text-right text-xs font-bold font-mono text-slate-600">
