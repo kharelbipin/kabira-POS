@@ -32,6 +32,17 @@ export const PromotionsSettings: React.FC = () => {
     endDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
     maxUsages: 100,
     active: true,
+    fundingSource: 'store' as 'store' | 'manufacturer' | 'vendor',
+    manufacturerName: '',
+    distributorName: '',
+    productHeading: 'Tobacco',
+    programType: 'buydown' as Promotion['programType'],
+    customerPhoneRequired: false,
+    loyaltyRequired: false,
+    ageVerificationRequired: false,
+    reimbursementPerUnit: 0,
+    reportingFrequency: 'monthly' as Promotion['reportingFrequency'],
+    exportTemplate: 'Generic CSV',
   });
 
   const loadPromotions = async () => {
@@ -63,6 +74,17 @@ export const PromotionsSettings: React.FC = () => {
         endDate: formData.endDate,
         maxUsages: Number(formData.maxUsages) || undefined,
         active: formData.active,
+        fundingSource: formData.fundingSource,
+        manufacturerName: formData.manufacturerName.trim() || undefined,
+        distributorName: formData.distributorName.trim() || undefined,
+        productHeading: formData.productHeading.trim() || undefined,
+        programType: formData.programType,
+        customerPhoneRequired: formData.customerPhoneRequired,
+        loyaltyRequired: formData.loyaltyRequired,
+        ageVerificationRequired: formData.ageVerificationRequired,
+        reimbursementPerUnit: Number(formData.reimbursementPerUnit) || 0,
+        reportingFrequency: formData.reportingFrequency,
+        exportTemplate: formData.exportTemplate.trim() || 'Generic CSV',
       });
       playBeep('success');
       setShowAddModal(false);
@@ -76,6 +98,17 @@ export const PromotionsSettings: React.FC = () => {
         endDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
         maxUsages: 100,
         active: true,
+        fundingSource: 'store',
+        manufacturerName: '',
+        distributorName: '',
+        productHeading: 'Tobacco',
+        programType: 'buydown',
+        customerPhoneRequired: false,
+        loyaltyRequired: false,
+        ageVerificationRequired: false,
+        reimbursementPerUnit: 0,
+        reportingFrequency: 'monthly',
+        exportTemplate: 'Generic CSV',
       });
       loadPromotions();
     } catch (err: any) {
@@ -214,6 +247,316 @@ export const PromotionsSettings: React.FC = () => {
                       {promo.currentUsages || 0} / {promo.maxUsages || '∞'}
                     </span>
                   </div>
+                  {promo.fundingSource && promo.fundingSource !== 'store' && (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[#737373]">Funded By:</span>
+                        <span className="font-bold text-sky-300">{promo.manufacturerName || promo.fundingSource}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[#737373]">Product Heading:</span>
+                        <span className="font-mono text-[#E5E5E5]">{promo.productHeading || '—'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[#737373]">Expected Rebate:</span>
+                        <span className="font-mono text-emerald-400">{'
+                  <div className="flex justify-between items-center pt-1 border-t border-[#262626]/60 text-[11px]">
+                    <span className="text-[#737373] flex items-center space-x-1">
+                      <Calendar className="w-3 h-3 text-[#525252]" />
+                      <span>Valid until:</span>
+                    </span>
+                    <span className="font-mono text-[#A3A3A3]">{promo.endDate}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-[#262626] flex items-center justify-between">
+                <span className="text-xs text-[#737373]">Status Toggle:</span>
+                <button
+                  type="button"
+                  onClick={() => handleToggleActive(promo)}
+                  className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                    promo.active
+                      ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/40 hover:bg-emerald-900/60'
+                      : 'bg-neutral-800 text-neutral-400 border border-neutral-700 hover:bg-neutral-700'
+                  }`}
+                >
+                  {promo.active ? 'Active' : 'Disabled'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Add Promotion Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-[#111111] border border-[#262626] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-[#262626] pb-3">
+              <h3 className="text-base font-serif italic font-bold text-[#F5F5F5] flex items-center space-x-2">
+                <Tag className="w-4 h-4 text-[#C5A059]" />
+                <span>Create Discount Promotion</span>
+              </h3>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-[#737373] hover:text-[#E5E5E5] text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePromo} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">
+                    Promo Code *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. GRANBURY10"
+                    value={formData.code}
+                    onChange={e => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                    className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5] font-mono uppercase focus:outline-hidden focus:border-[#C5A059]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">
+                    Promotion Title *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 10% Granbury Locals Discount"
+                    value={formData.name}
+                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">
+                    Discount Type *
+                  </label>
+                  <select
+                    value={formData.type}
+                    onChange={e => setFormData({ ...formData, type: e.target.value as Promotion['type'] })}
+                    className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
+                  >
+                    <option value="percentage">Percentage Off (%)</option>
+                    <option value="flat_amount">Flat Amount Off ($)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">
+                    {formData.type === 'percentage' ? 'Percent Value (%) *' : 'Discount Amount ($) *'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.1"
+                    required
+                    value={formData.value}
+                    onChange={e => setFormData({ ...formData, value: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5] font-mono focus:outline-hidden focus:border-[#C5A059]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">
+                    Minimum Cart Spend ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={formData.minPurchaseAmount}
+                    onChange={e => setFormData({ ...formData, minPurchaseAmount: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5] font-mono focus:outline-hidden focus:border-[#C5A059]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">
+                    Max Redemptions
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="100"
+                    value={formData.maxUsages}
+                    onChange={e => setFormData({ ...formData, maxUsages: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5] font-mono focus:outline-hidden focus:border-[#C5A059]"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[#2A2A2A] bg-[#0B0B0B] p-4 space-y-3">
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wider text-[#C5A059]">Promotion Funding & Reporting</div>
+                  <div className="text-[11px] text-[#737373] mt-0.5">Use manufacturer/vendor funding for scan-data, buydown, rebate, loyalty, or beverage programs.</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Funding Source</label>
+                    <select
+                      value={formData.fundingSource}
+                      onChange={e => setFormData({ ...formData, fundingSource: e.target.value as any })}
+                      className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]"
+                    >
+                      <option value="store">Store Funded</option>
+                      <option value="manufacturer">Manufacturer Funded</option>
+                      <option value="vendor">Vendor / Distributor Funded</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Program Type</label>
+                    <select
+                      value={formData.programType || 'buydown'}
+                      onChange={e => setFormData({ ...formData, programType: e.target.value as Promotion['programType'] })}
+                      className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]"
+                    >
+                      <option value="scan_data">Scan Data</option>
+                      <option value="buydown">Buydown</option>
+                      <option value="rebate">Rebate</option>
+                      <option value="loyalty">Loyalty Promotion</option>
+                      <option value="multipack">Multipack</option>
+                      <option value="vendor_promotion">Vendor Promotion</option>
+                    </select>
+                  </div>
+                </div>
+
+                {formData.fundingSource !== 'store' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Manufacturer / Company</label>
+                        <input value={formData.manufacturerName} onChange={e => setFormData({ ...formData, manufacturerName: e.target.value })} placeholder="e.g. Altria, Diageo, Red Bull" className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]" />
+                      </div>
+                      <div>
+                        <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Distributor</label>
+                        <input value={formData.distributorName} onChange={e => setFormData({ ...formData, distributorName: e.target.value })} placeholder="Optional distributor" className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Product Heading</label>
+                        <select value={formData.productHeading} onChange={e => setFormData({ ...formData, productHeading: e.target.value })} className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]">
+                          <option>Tobacco</option>
+                          <option>Cigars</option>
+                          <option>Beer</option>
+                          <option>Wine</option>
+                          <option>Liquor</option>
+                          <option>Energy Drinks</option>
+                          <option>Soft Drinks</option>
+                          <option>Snacks</option>
+                          <option>Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Reimbursement / Unit ($)</label>
+                        <input type="number" min="0" step="0.01" value={formData.reimbursementPerUnit} onChange={e => setFormData({ ...formData, reimbursementPerUnit: parseFloat(e.target.value) || 0 })} className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5] font-mono" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Reporting Frequency</label>
+                        <select value={formData.reportingFrequency || 'monthly'} onChange={e => setFormData({ ...formData, reportingFrequency: e.target.value as Promotion['reportingFrequency'] })} className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]">
+                          <option value="daily">Daily</option>
+                          <option value="weekly">Weekly</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="custom">Custom</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Export Template</label>
+                        <input value={formData.exportTemplate} onChange={e => setFormData({ ...formData, exportTemplate: e.target.value })} placeholder="Generic CSV" className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <label className="flex items-center gap-2 bg-[#141414] border border-[#262626] rounded-lg p-2.5">
+                        <input type="checkbox" checked={formData.customerPhoneRequired} onChange={e => setFormData({ ...formData, customerPhoneRequired: e.target.checked })} />
+                        <span className="text-[#D4D4D4] font-bold">Phone Required</span>
+                      </label>
+                      <label className="flex items-center gap-2 bg-[#141414] border border-[#262626] rounded-lg p-2.5">
+                        <input type="checkbox" checked={formData.loyaltyRequired} onChange={e => setFormData({ ...formData, loyaltyRequired: e.target.checked })} />
+                        <span className="text-[#D4D4D4] font-bold">Loyalty Required</span>
+                      </label>
+                      <label className="flex items-center gap-2 bg-[#141414] border border-[#262626] rounded-lg p-2.5">
+                        <input type="checkbox" checked={formData.ageVerificationRequired} onChange={e => setFormData({ ...formData, ageVerificationRequired: e.target.checked })} />
+                        <span className="text-[#D4D4D4] font-bold">Age Verification</span>
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.startDate}
+                    onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                    className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">
+                    Expiration Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.endDate}
+                    onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                    className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-[#262626]">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#262626] text-[#E5E5E5] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg bg-[#C5A059] hover:bg-[#D4B06A] text-black font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer"
+                >
+                  Save Promotion
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+}{Number(promo.reimbursementPerUnit || 0).toFixed(2)} / unit</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between items-center pt-1 border-t border-[#262626]/60 text-[11px]">
                     <span className="text-[#737373] flex items-center space-x-1">
                       <Calendar className="w-3 h-3 text-[#525252]" />
