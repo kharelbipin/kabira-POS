@@ -1852,6 +1852,104 @@ class ApiService {
     return this.request('/payments/audit-log');
   }
 
+  // Manufacturer / Vendor Promotions & Scan Data
+  async evaluateScanDataPromotions(payload: {
+    items: { productId: string; quantity: number }[];
+    customerId?: string;
+    customerPhone?: string;
+  }): Promise<{
+    customerMatched: boolean;
+    customerId?: string;
+    lines: {
+      productId: string;
+      offerAvailable: boolean;
+      eligible: boolean;
+      message: string;
+      programId?: string;
+      programCode?: string;
+      programName?: string;
+      programType?: string;
+      manufacturerName?: string;
+      productHeading?: string;
+      discountAmount: number;
+      discountPerUnit: number;
+      reimbursementExpected: number;
+      phoneRequired: boolean;
+      loyaltyRequired: boolean;
+      ageVerificationRequired: boolean;
+    }[];
+    discountTotal: number;
+    reimbursementExpected: number;
+  }> {
+    return this.request('/scan-data/evaluate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getScanDataTransactions(filters?: {
+    manufacturerName?: string;
+    productHeading?: string;
+    programId?: string;
+    submissionStatus?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<ScanDataTransaction[]> {
+    const params = new URLSearchParams();
+    if (filters?.manufacturerName) params.append('manufacturerName', filters.manufacturerName);
+    if (filters?.productHeading) params.append('productHeading', filters.productHeading);
+    if (filters?.programId) params.append('programId', filters.programId);
+    if (filters?.submissionStatus) params.append('submissionStatus', filters.submissionStatus);
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    return this.request(`/scan-data/transactions?${params.toString()}`);
+  }
+
+  async getScanDataExportBatches(): Promise<ScanDataExportBatch[]> {
+    return this.request('/scan-data/export-batches');
+  }
+
+  async createScanDataExportBatch(payload: {
+    manufacturerName?: string;
+    productHeading?: string;
+    programId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{ batch: ScanDataExportBatch; csv: string; validationErrors: string[] }> {
+    return this.request('/scan-data/export-batches', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateScanDataExportBatchStatus(
+    id: string,
+    payload: {
+      status: ScanDataExportBatch['status'];
+      paidAmount?: number;
+      notes?: string;
+    }
+  ): Promise<ScanDataExportBatch> {
+    return this.request(`/scan-data/export-batches/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getScanDataSummary(): Promise<{
+    totals: {
+      transactions: number;
+      eligibleUnits: number;
+      discountsGiven: number;
+      expectedReimbursement: number;
+      pendingTransactions: number;
+      errorTransactions: number;
+    };
+    byManufacturer: ManufacturerReimbursementSummary[];
+  }> {
+    return this.request('/scan-data/summary');
+  }
+
   // Database Management
   async getDatabaseStatus(): Promise<{
     status: string;
