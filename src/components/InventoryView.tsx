@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Product, Category, User, StoreSettings, ScannedInvoice } from '../types';
+import { Product, Category, User, StoreSettings, ScannedInvoice, Promotion } from '../types';
 import { api } from '../utils/api';
 import { playBeep } from '../utils/audio';
 import { hardwareStore } from '../hardware';
@@ -68,6 +68,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [showAiShelfModal, setShowAiShelfModal] = useState<boolean>(false);
   const [activeReviewInvoice, setActiveReviewInvoice] = useState<ScannedInvoice | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
+  const [manufacturerPrograms, setManufacturerPrograms] = useState<Promotion[]>([]);
+
+  React.useEffect(() => {
+    api.getPromotions()
+      .then(rows => setManufacturerPrograms(rows.filter(p => p.fundingSource && p.fundingSource !== 'store')))
+      .catch(() => setManufacturerPrograms([]));
+  }, []);
 
   React.useEffect(() => {
     if (initialSubTab) {
@@ -922,6 +929,35 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                     placeholder="Optional distributor or supplier"
                     className="w-full bg-[#141414] border border-[#262626] rounded-lg p-2 text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1.5">
+                    Default Manufacturer Program
+                  </label>
+                  <select
+                    value={formData.defaultProgramId || ''}
+                    onChange={e => {
+                      const programId = e.target.value;
+                      const program = manufacturerPrograms.find(p => p.id === programId);
+                      setFormData({
+                        ...formData,
+                        defaultProgramId: programId || undefined,
+                        scanDataEligible: programId ? true : Boolean(formData.scanDataEligible),
+                        manufacturerName: program?.manufacturerName || formData.manufacturerName,
+                        productHeading: program?.productHeading || formData.productHeading,
+                        distributorName: program?.distributorName || formData.distributorName,
+                      });
+                    }}
+                    className="w-full bg-[#141414] border border-[#262626] rounded-lg p-2 text-[#E5E5E5] focus:outline-hidden focus:border-[#C5A059]"
+                  >
+                    <option value="">Automatic Match by Company / Product Heading</option>
+                    {manufacturerPrograms.map(program => (
+                      <option key={program.id} value={program.id}>
+                        {program.manufacturerName || 'Manufacturer'} — {program.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <label className="flex items-center gap-2 bg-[#141414] border border-[#262626] rounded-lg p-2.5">
