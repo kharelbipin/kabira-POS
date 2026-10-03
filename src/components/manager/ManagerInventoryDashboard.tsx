@@ -4,7 +4,6 @@ import {
   BarChart3,
   Boxes,
   ClipboardList,
-  FileSpreadsheet,
   PackageCheck,
   Plus,
   Search,
@@ -101,7 +100,6 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
   const navItems = [
     { label: 'Items', icon: Boxes, tab: 'inventory', active: true },
     { label: 'Receive Inventory', icon: Truck, tab: 'receiving' },
-    { label: 'Purchase Orders', icon: FileSpreadsheet, tab: 'receiving' },
     { label: 'Stock Count', icon: ClipboardList, tab: 'inventory-count' },
     { label: 'Vendors', icon: Users, tab: 'inventory-vendors' },
     { label: 'Reports', icon: BarChart3, tab: 'reports' },
@@ -141,7 +139,7 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
               Inventory Control Center
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Manage items, receive stock, create purchase orders, run stock counts, and monitor inventory.
+              Manage items, receive stock, run stock counts, manage vendors, and monitor inventory.
             </p>
           </div>
 
@@ -153,10 +151,6 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
             <button type="button" onClick={() => onNavigate('receiving')} className="h-11 px-4 rounded-lg bg-[#08274d] hover:bg-[#0b315f] text-white text-xs font-black flex items-center gap-2 cursor-pointer">
               <Truck className="w-4 h-4" />
               Receive Items
-            </button>
-            <button type="button" onClick={() => onNavigate('receiving')} className="h-11 px-4 rounded-lg bg-white border border-[#25467b] text-[#10234a] text-xs font-black flex items-center gap-2 cursor-pointer">
-              <FileSpreadsheet className="w-4 h-4" />
-              New PO
             </button>
             <button type="button" onClick={() => onNavigate('inventory-import')} className="h-11 px-4 rounded-lg bg-white border border-[#25467b] text-[#10234a] text-xs font-black flex items-center gap-2 cursor-pointer">
               <Upload className="w-4 h-4" />
@@ -411,8 +405,8 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
                           </span>
                         </td>
                         <td className="px-3 py-2">
-                          <button type="button" onClick={() => onNavigate('receiving')} className="px-3 py-1.5 rounded-md bg-[#c78d20] hover:bg-[#b57d18] text-white font-black cursor-pointer">
-                            Create PO
+                          <button type="button" onClick={() => onNavigate('receiving')} className="px-3 py-1.5 rounded-md bg-[#08274d] hover:bg-[#0b315f] text-white font-black cursor-pointer">
+                            Receive Stock
                           </button>
                         </td>
                       </tr>
