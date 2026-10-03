@@ -1475,7 +1475,9 @@ export default function App() {
         {currentTab === 'manager-promotions' && currentUser?.role === 'Manager' && (
           <ManagerPromotionScanDataCenter
             products={products}
+            settings={settings}
             onNavigate={setCurrentTab}
+            onSettingsUpdated={setSettings}
           />
         )}
 
