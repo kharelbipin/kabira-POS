@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Promotion } from '../types';
+import { Category, Product, Promotion } from '../types';
 import { api } from '../utils/api';
 import { playBeep } from '../utils/audio';
 import {
@@ -20,6 +20,8 @@ export const PromotionsSettings: React.FC = () => {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -43,6 +45,9 @@ export const PromotionsSettings: React.FC = () => {
     reimbursementPerUnit: 0,
     reportingFrequency: 'monthly' as Promotion['reportingFrequency'],
     exportTemplate: 'Generic CSV',
+    targetType: 'all' as NonNullable<Promotion['targetType']>,
+    targetId: '',
+    customerIdentifierMode: 'token' as NonNullable<Promotion['customerIdentifierMode']>,
   });
 
   const loadPromotions = async () => {
@@ -59,6 +64,15 @@ export const PromotionsSettings: React.FC = () => {
 
   useEffect(() => {
     loadPromotions();
+    Promise.all([api.getProducts(), api.getCategories()])
+      .then(([productRows, categoryRows]) => {
+        setProducts(productRows);
+        setCategories(categoryRows);
+      })
+      .catch(() => {
+        setProducts([]);
+        setCategories([]);
+      });
   }, []);
 
   const handleCreatePromo = async (e: React.FormEvent) => {
@@ -85,6 +99,9 @@ export const PromotionsSettings: React.FC = () => {
         reimbursementPerUnit: Number(formData.reimbursementPerUnit) || 0,
         reportingFrequency: formData.reportingFrequency,
         exportTemplate: formData.exportTemplate.trim() || 'Generic CSV',
+        targetType: formData.targetType,
+        targetId: formData.targetType === 'all' ? undefined : formData.targetId || undefined,
+        customerIdentifierMode: formData.customerIdentifierMode,
       });
       playBeep('success');
       setShowAddModal(false);
@@ -109,6 +126,9 @@ export const PromotionsSettings: React.FC = () => {
         reimbursementPerUnit: 0,
         reportingFrequency: 'monthly',
         exportTemplate: 'Generic CSV',
+        targetType: 'all',
+        targetId: '',
+        customerIdentifierMode: 'token',
       });
       loadPromotions();
     } catch (err: any) {
@@ -406,6 +426,72 @@ export const PromotionsSettings: React.FC = () => {
 
               <div className="rounded-xl border border-[#2A2A2A] bg-[#0B0B0B] p-4 space-y-3">
                 <div>
+                  <div className="text-xs font-black uppercase tracking-wider text-[#C5A059]">Promotion Scope</div>
+                  <div className="text-[11px] text-[#737373] mt-0.5">Apply to all matching products, one category, or one exact product.</div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Target</label>
+                    <select
+                      value={formData.targetType}
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          targetType: e.target.value as NonNullable<Promotion['targetType']>,
+                          targetId: '',
+                        })
+                      }
+                      className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]"
+                    >
+                      <option value="all">All Matching Products</option>
+                      <option value="category">Specific Category</option>
+                      <option value="product">Specific Product / UPC</option>
+                    </select>
+                  </div>
+                  <div>
+                    {formData.targetType === 'category' ? (
+                      <>
+                        <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Category</label>
+                        <select
+                          required
+                          value={formData.targetId}
+                          onChange={e => setFormData({ ...formData, targetId: e.target.value })}
+                          className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]"
+                        >
+                          <option value="">Choose category...</option>
+                          {categories.filter(row => row.active).map(row => (
+                            <option key={row.id} value={row.id}>{row.name}</option>
+                          ))}
+                        </select>
+                      </>
+                    ) : formData.targetType === 'product' ? (
+                      <>
+                        <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Product / UPC</label>
+                        <select
+                          required
+                          value={formData.targetId}
+                          onChange={e => setFormData({ ...formData, targetId: e.target.value })}
+                          className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]"
+                        >
+                          <option value="">Choose product...</option>
+                          {products.filter(row => row.active).map(row => (
+                            <option key={row.id} value={row.id}>{row.name} — {row.barcode}</option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <div className="h-full flex items-end">
+                        <div className="w-full rounded-lg bg-[#141414] border border-[#262626] p-2.5 text-[#737373]">
+                          Uses company / heading mapping or product default program.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[#2A2A2A] bg-[#0B0B0B] p-4 space-y-3">
+                <div>
                   <div className="text-xs font-black uppercase tracking-wider text-[#C5A059]">Promotion Funding & Reporting</div>
                   <div className="text-[11px] text-[#737373] mt-0.5">Use manufacturer/vendor funding for scan-data, buydown, rebate, loyalty, or beverage programs.</div>
                 </div>
@@ -488,6 +574,19 @@ export const PromotionsSettings: React.FC = () => {
                         <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Export Template</label>
                         <input value={formData.exportTemplate} onChange={e => setFormData({ ...formData, exportTemplate: e.target.value })} placeholder="Generic CSV" className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]" />
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">Customer Identifier in Export</label>
+                      <select
+                        value={formData.customerIdentifierMode}
+                        onChange={e => setFormData({ ...formData, customerIdentifierMode: e.target.value as NonNullable<Promotion['customerIdentifierMode']> })}
+                        className="w-full bg-[#1A1A1A] border border-[#262626] rounded-lg p-2.5 text-[#E5E5E5]"
+                      >
+                        <option value="token">Protected Phone Token (Recommended)</option>
+                        <option value="raw_phone">Raw Phone Number (Only if company requires it)</option>
+                        <option value="none">Do Not Export Customer Identifier</option>
+                      </select>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
