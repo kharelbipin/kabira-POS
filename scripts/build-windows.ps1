@@ -78,8 +78,30 @@ if (-not (Test-Path $BridgeExe)) {
     }
 }
 
-# 5. Compile Inno Setup Installer
-Write-Host "[5/6] Compiling Inno Setup Windows Installer..." -ForegroundColor Green
+# 5. Restore and publish native Customer Display host
+Write-Host "[5/7] Restoring and publishing native KaBiRa Customer Display (win-x64)..." -ForegroundColor Green
+$CustomerDisplayProj = Join-Path $RepoRoot "bridge\customer-display\KaBiRaCustomerDisplay.csproj"
+$DistCustomerDisplay = Join-Path $RepoRoot "dist\customer-display"
+
+dotnet restore $CustomerDisplayProj
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "ERROR: customer display dotnet restore failed with exit code $LASTEXITCODE."
+    exit $LASTEXITCODE
+}
+
+dotnet publish $CustomerDisplayProj -c Release -r win-x64 --self-contained true -o $DistCustomerDisplay
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "ERROR: customer display dotnet publish failed with exit code $LASTEXITCODE."
+    exit $LASTEXITCODE
+}
+
+if (-not (Test-Path (Join-Path $DistCustomerDisplay "KaBiRaCustomerDisplay.exe"))) {
+    Write-Error "ERROR: KaBiRaCustomerDisplay.exe was not created."
+    exit 1
+}
+
+# 6. Compile Inno Setup Installer
+Write-Host "[6/7] Compiling Inno Setup Windows Installer..." -ForegroundColor Green
 $IssScript = Join-Path $RepoRoot "bridge\installer\KabiraPOS-Setup.iss"
 
 # Locate Inno Setup Compiler (ISCC)
@@ -106,7 +128,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # 6. Verify deterministic installer output
-Write-Host "[6/6] Verifying deterministic installer artifact..." -ForegroundColor Green
+Write-Host "[7/7] Verifying deterministic installer artifact..." -ForegroundColor Green
 $TargetExe = Join-Path $RepoRoot "dist\installer\KabiraPOS-Setup.exe"
 
 if (-not (Test-Path $TargetExe)) {
