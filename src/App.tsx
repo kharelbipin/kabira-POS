@@ -1243,6 +1243,8 @@ export default function App() {
               categories={categories}
               settings={settings}
               onNavigate={setCurrentTab}
+              onOpenPrintLabel={() => setShowPrintLabelModal(true)}
+              onSettingsUpdated={setSettings}
             />
           ) : currentUser?.role === 'Cashier' && !settings?.cashierPermissions?.allowInventory ? (
             <div className="h-full flex flex-col items-center justify-center bg-[#0D0D0D] text-[#E5E5E5] p-6">
