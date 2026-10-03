@@ -1,580 +1,535 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Activity,
   AlertTriangle,
   BarChart3,
-  Boxes,
-  CheckCircle2,
-  ClipboardList,
+  CreditCard,
   DollarSign,
-  HardDrive,
   Monitor,
   Printer,
   RefreshCw,
-  ScanBarcode,
   ShoppingCart,
-  Store,
-  UserRound,
-  Users,
-  WalletCards,
+  Tag,
 } from 'lucide-react';
-import { AuditLog, Shift, StoreSettings, User } from '../../types';
+import { Order, Product, StoreSettings, User } from '../../types';
 import { api } from '../../utils/api';
 import { hardwareStore } from '../../hardware';
 
 interface ManagerOperationsDashboardProps {
   settings: StoreSettings | null;
   currentUser: User;
-  heldOrdersCount: number;
+  orders: Order[];
+  products: Product[];
   onNavigate: (tab: string) => void;
-  onOpenHeldOrders: () => void;
 }
+
+type Period = 'today' | 'week' | 'month';
+
+const money = (value: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value || 0);
+
+const shortMoney = (value: number) => {
+  if (value >= 1000) return `$${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
+  return money(value);
+};
 
 export const ManagerOperationsDashboard: React.FC<ManagerOperationsDashboardProps> = ({
   settings,
   currentUser,
-  heldOrdersCount,
+  orders,
+  products,
   onNavigate,
-  onOpenHeldOrders,
 }) => {
+  const [period, setPeriod] = useState<Period>('week');
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<any>(null);
-  const [openShifts, setOpenShifts] = useState<Shift[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [bridgeHealth, setBridgeHealth] = useState(hardwareStore.getHealth());
   const [configuredHardware, setConfiguredHardware] = useState(hardwareStore.getConfiguredHardware());
-  const [lastUpdated, setLastUpdated] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [dashboardResult, shiftsResult, auditResult] = await Promise.all([
-        api.getDashboardOverview({ period: 'today' }).catch(() => null),
-        api.getShifts({ status: 'open' }).catch(() => []),
-        api.getAuditLogs().catch(() => []),
-        hardwareStore.refreshHealth().catch(() => hardwareStore.getHealth()),
-      ]);
-
-      setDashboard(dashboardResult);
-      setOpenShifts(shiftsResult);
-      setAuditLogs(
-        [...auditResult]
-          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-          .slice(0, 6)
-      );
+      const result = await api.getDashboardOverview({
+        period: period === 'today' ? 'today' : period === 'month' ? 'month' : 'week',
+      });
+      setDashboard(result);
+      await hardwareStore.refreshHealth().catch(() => hardwareStore.getHealth());
       setBridgeHealth(hardwareStore.getHealth());
       setConfiguredHardware(hardwareStore.getConfiguredHardware());
-      setLastUpdated(new Date().toLocaleTimeString());
+    } catch (error) {
+      console.error('Failed to refresh manager dashboard', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [period]);
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
 
-    const unsubscribe = hardwareStore.subscribe(() => {
+  useEffect(() => {
+    return hardwareStore.subscribe(() => {
       setBridgeHealth(hardwareStore.getHealth());
       setConfiguredHardware(hardwareStore.getConfiguredHardware());
     });
+  }, []);
 
-    const timer = window.setInterval(() => void refresh(), 30000);
-    return () => {
-      unsubscribe();
-      window.clearInterval(timer);
-    };
-  }, [refresh]);
-
-  const bridgeOnline = bridgeHealth.status === 'running';
-  const printerReady = Boolean(configuredHardware.receipt_printer?.deviceId);
-  const drawerReady = Boolean(
-    configuredHardware.cash_drawer?.deviceId ||
-      configuredHardware.cash_drawer?.hostPrinterId
-  );
-  const scannerReady = Boolean(configuredHardware.barcode_scanner?.deviceId);
-  const displayReady = Boolean(
-    configuredHardware.customer_display?.deviceId ||
-      configuredHardware.customer_display?.displayId
+  const completedOrders = useMemo(
+    () => orders.filter(order => order.status === 'completed'),
+    [orders]
   );
 
-  const lowStock = dashboard?.kpis?.lowStockCount ?? 0;
-  const outOfStock = dashboard?.kpis?.outOfStockCount ?? 0;
-  const orderCount = dashboard?.kpis?.orderCount ?? 0;
-  const netSales = dashboard?.kpis?.netSales ?? 0;
-  const lowStockItems = dashboard?.lowStockItems ?? [];
+  const todayOrders = useMemo(() => {
+    const now = new Date();
+    return completedOrders.filter(order => {
+      const d = new Date(order.createdAt);
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+      );
+    });
+  }, [completedOrders]);
 
-  const operationalIssues =
-    (bridgeOnline ? 0 : 1) +
-    (printerReady ? 0 : 1) +
-    (drawerReady ? 0 : 1) +
-    (scannerReady ? 0 : 1) +
-    (displayReady ? 0 : 1);
+  const todaySales = todayOrders.reduce((sum, order) => sum + Number(order.grandTotal || 0), 0);
+  const averageTicket = todayOrders.length ? todaySales / todayOrders.length : 0;
+  const lowStockCount = products.filter(
+    product => product.active && product.stockQuantity <= product.lowStockThreshold
+  ).length;
 
-  const attentionCount =
-    lowStock + outOfStock + heldOrdersCount + operationalIssues;
-
-  const attentionItems = useMemo(() => {
-    const items: Array<{
-      label: string;
-      detail: string;
-      tab: string;
-      severity: 'critical' | 'warning' | 'info';
-    }> = [];
-
-    if (!bridgeOnline) {
-      items.push({
-        label: 'Hardware Bridge Offline',
-        detail: 'Printer, drawer, scanner, and customer display access may be affected.',
-        tab: 'hardware-manager',
-        severity: 'critical',
+  const categorySales = useMemo(() => {
+    const map = new Map<string, number>();
+    completedOrders.forEach(order => {
+      order.items.forEach(item => {
+        const category = item.product.categoryName || item.product.subcategory || 'Other';
+        const total =
+          Number(item.lineTotal ?? item.unitPrice * item.quantity - (item.discountAmount || 0)) || 0;
+        map.set(category, (map.get(category) || 0) + total);
       });
-    }
-    if (!printerReady) {
-      items.push({
-        label: 'Receipt Printer Needs Setup',
-        detail: 'No receipt printer is assigned to this register.',
-        tab: 'hardware-manager',
-        severity: 'critical',
-      });
-    }
-    if (outOfStock > 0) {
-      items.push({
-        label: `${outOfStock} Out of Stock`,
-        detail: 'Review unavailable products and receiving status.',
-        tab: 'inventory',
-        severity: 'critical',
-      });
-    }
-    if (lowStock > 0) {
-      items.push({
-        label: `${lowStock} Low Stock`,
-        detail: 'Products are at or below their reorder threshold.',
-        tab: 'inventory',
-        severity: 'warning',
-      });
-    }
-    if (!drawerReady || !scannerReady || !displayReady) {
-      const missing = [
-        !drawerReady ? 'drawer' : '',
-        !scannerReady ? 'scanner' : '',
-        !displayReady ? 'customer display' : '',
-      ].filter(Boolean);
-      items.push({
-        label: 'Peripheral Setup Needed',
-        detail: `Check ${missing.join(', ')} configuration.`,
-        tab: 'hardware-manager',
-        severity: 'warning',
-      });
-    }
-    if (heldOrdersCount > 0) {
-      items.push({
-        label: `${heldOrdersCount} Held Order${heldOrdersCount === 1 ? '' : 's'}`,
-        detail: 'Parked transactions are waiting at the register.',
-        tab: 'pos',
-        severity: 'info',
-      });
-    }
+    });
+    return [...map.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+  }, [completedOrders]);
 
-    return items;
-  }, [
-    bridgeOnline,
-    printerReady,
-    drawerReady,
-    scannerReady,
-    displayReady,
-    outOfStock,
-    lowStock,
-    heldOrdersCount,
-  ]);
+  const hourlySales = useMemo(() => {
+    const values = Array.from({ length: 13 }, (_, index) => ({
+      hour: index + 9,
+      value: 0,
+    }));
+    todayOrders.forEach(order => {
+      const hour = new Date(order.createdAt).getHours();
+      const entry = values.find(item => item.hour === hour);
+      if (entry) entry.value += Number(order.grandTotal || 0);
+    });
+    return values;
+  }, [todayOrders]);
 
-  const summaryCards = [
-    {
-      label: "Today's Sales",
-      value: `$${Number(netSales).toFixed(2)}`,
-      detail: `${orderCount} completed transaction${orderCount === 1 ? '' : 's'}`,
-      icon: DollarSign,
-      tab: 'orders',
-    },
-    {
-      label: 'Open Shifts',
-      value: String(openShifts.length),
-      detail: openShifts.length ? 'Cashiers currently active' : 'No active shifts',
-      icon: WalletCards,
-      tab: 'shifts',
-    },
-    {
-      label: 'Low Stock Alerts',
-      value: String(lowStock + outOfStock),
-      detail: `${lowStock} low · ${outOfStock} out`,
-      icon: Boxes,
-      tab: 'inventory',
-    },
-    {
-      label: 'Held Orders',
-      value: String(heldOrdersCount),
-      detail: 'Waiting at register',
-      icon: ClipboardList,
-      action: onOpenHeldOrders,
-    },
-    {
-      label: 'Bridge Status',
-      value: bridgeOnline ? 'ONLINE' : 'OFFLINE',
-      detail: bridgeHealth.port ? `Port ${bridgeHealth.port}` : 'Local hardware service',
-      icon: HardDrive,
-      tab: 'hardware-manager',
-    },
-    {
-      label: 'Needs Attention',
-      value: String(attentionCount),
-      detail: attentionCount ? 'Review store issues' : 'No immediate issues',
-      icon: AlertTriangle,
-      tab: attentionItems[0]?.tab || 'manager-dashboard',
-    },
-  ];
+  const topProducts = useMemo(() => {
+    const map = new Map<
+      string,
+      { id: string; name: string; imageUrl?: string; units: number; revenue: number }
+    >();
 
-  const healthItems = [
+    completedOrders.forEach(order => {
+      order.items.forEach(item => {
+        const existing = map.get(item.product.id) || {
+          id: item.product.id,
+          name: item.product.name,
+          imageUrl: item.product.imageUrl,
+          units: 0,
+          revenue: 0,
+        };
+        existing.units += Number(item.quantity || 0);
+        existing.revenue +=
+          Number(item.lineTotal ?? item.unitPrice * item.quantity - (item.discountAmount || 0)) || 0;
+        map.set(item.product.id, existing);
+      });
+    });
+
+    return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  }, [completedOrders]);
+
+  const paymentMix = useMemo(() => {
+    const source = dashboard?.paymentBreakdown || {};
+    const entries = Object.entries(source).map(([method, raw]: [string, any]) => {
+      const value = typeof raw === 'number' ? raw : Number(raw?.total || raw?.amount || 0);
+      return { method, value };
+    });
+    const total = entries.reduce((sum, item) => sum + item.value, 0);
+    return entries
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 4)
+      .map(item => ({
+        ...item,
+        percent: total > 0 ? (item.value / total) * 100 : 0,
+      }));
+  }, [dashboard]);
+
+  const trendPoints = dashboard?.trendPoints || [];
+  const maxTrend = Math.max(1, ...trendPoints.map((point: any) => Number(point.sales || 0)));
+  const maxCategory = Math.max(1, ...categorySales.map(item => item.value));
+  const maxHour = Math.max(1, ...hourlySales.map(item => item.value));
+
+  const linePoints = trendPoints
+    .map((point: any, index: number) => {
+      const x = trendPoints.length <= 1 ? 50 : (index / (trendPoints.length - 1)) * 100;
+      const y = 94 - (Number(point.sales || 0) / maxTrend) * 82;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  const paymentGradient = (() => {
+    if (!paymentMix.length) return 'conic-gradient(#334155 0 100%)';
+    const colors = ['#38bdf8', '#fbbf24', '#8b5cf6', '#34d399'];
+    let cursor = 0;
+    const parts = paymentMix.map((item, index) => {
+      const start = cursor;
+      cursor += item.percent;
+      return `${colors[index % colors.length]} ${start}% ${cursor}%`;
+    });
+    return `conic-gradient(${parts.join(', ')})`;
+  })();
+
+  const health = [
     {
-      label: 'POS Register',
-      ok: bridgeOnline,
-      detail: bridgeOnline ? 'Register connected' : 'Connection needs attention',
+      label: 'Registers',
+      ok: bridgeHealth.status === 'running',
       icon: Monitor,
     },
     {
-      label: 'Receipt Printer',
-      ok: printerReady,
-      detail: configuredHardware.receipt_printer?.deviceName || 'Not configured',
+      label: 'Printer',
+      ok: Boolean(configuredHardware.receipt_printer?.deviceId),
       icon: Printer,
     },
     {
-      label: 'Hardware Bridge',
-      ok: bridgeOnline,
-      detail: bridgeOnline ? 'Online' : 'Offline',
-      icon: HardDrive,
-    },
-    {
-      label: 'Barcode Scanner',
-      ok: scannerReady,
-      detail: configuredHardware.barcode_scanner?.deviceName || 'Not configured',
-      icon: ScanBarcode,
+      label: 'Bridge',
+      ok: bridgeHealth.status === 'running',
+      icon: BarChart3,
     },
     {
       label: 'Customer Display',
-      ok: displayReady,
-      detail: configuredHardware.customer_display?.deviceName || 'Not configured',
+      ok: Boolean(
+        configuredHardware.customer_display?.deviceId ||
+          configuredHardware.customer_display?.displayId
+      ),
       icon: Monitor,
     },
   ];
 
-  const quickActions = [
-    { label: 'Transactions', sub: 'Search, refund, reprint', icon: ShoppingCart, tab: 'orders' },
-    { label: 'Employees', sub: 'Staff and cashier access', icon: Users, tab: 'users' },
-    { label: 'Open Reports', sub: 'Sales and operational reports', icon: BarChart3, tab: 'reports' },
-    { label: 'Inventory Control', sub: 'Stock, receiving and counts', icon: Boxes, tab: 'inventory' },
-    { label: 'Shifts & Cash', sub: 'Drawer and reconciliation', icon: WalletCards, tab: 'shifts' },
-    { label: 'Hardware Diagnostics', sub: 'Bridge and peripherals', icon: HardDrive, tab: 'hardware-manager' },
-  ];
-
   return (
-    <div className="h-full overflow-y-auto bg-slate-100 text-slate-900">
-      <div className="sticky top-0 z-20 bg-slate-950 border-b border-slate-800 px-5 py-3 flex items-center justify-between text-white">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-sky-950 border border-sky-800 flex items-center justify-center">
-            <Store className="w-5 h-5 text-sky-400" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-black truncate">{settings?.storeName || 'KaBiRa POS Store'}</div>
-            <div className="text-[10px] text-emerald-400 font-bold">
-              {bridgeOnline ? 'Store systems connected' : 'Store system needs attention'}
-            </div>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-xs font-black">{currentUser.name}</div>
-          <div className="text-[10px] text-slate-400">Manager</div>
-        </div>
-      </div>
-
-      <div className="p-4 md:p-6 space-y-5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+    <div className="h-full overflow-y-auto bg-[#07111f] text-slate-100">
+      <div className="px-5 md:px-7 py-5 space-y-4">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.2em] font-black text-amber-600">Store Operations</div>
-            <h1 className="text-2xl font-black tracking-tight mt-1">Manager Control Center</h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Daily sales, shifts, inventory, hardware, staff, and store activity · Updated {lastUpdated || '—'}
+            <div className="text-[10px] uppercase tracking-[0.22em] font-black text-amber-400">
+              Manager Portal
+            </div>
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight mt-1">
+              Sales & Store Performance Dashboard
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">
+              Clean overview of store performance, revenue, inventory, and staff activity.
             </p>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => onNavigate('pos')}
-              className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-black hover:bg-slate-800 cursor-pointer"
-            >
-              Open POS Register
-            </button>
+
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-900/70">
+              <div className="text-[10px] text-slate-500">Store</div>
+              <div className="text-xs font-black">{settings?.storeName || '377 Spirits'}</div>
+            </div>
+            <div className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-900/70">
+              <div className="text-[10px] text-slate-500">Manager</div>
+              <div className="text-xs font-black">{currentUser.name}</div>
+            </div>
             <button
               type="button"
               onClick={() => void refresh()}
-              className="px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-black flex items-center gap-2 cursor-pointer"
+              className="p-3 rounded-xl border border-slate-700 bg-slate-900/70 hover:bg-slate-800 cursor-pointer"
+              title="Refresh dashboard"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
-          {summaryCards.map((card: any) => {
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          {[
+            {
+              label: "Today's Sales",
+              value: money(todaySales),
+              detail: 'Live completed sales',
+              icon: DollarSign,
+              accent: 'text-sky-400',
+            },
+            {
+              label: 'Transactions',
+              value: String(todayOrders.length),
+              detail: 'Completed today',
+              icon: ShoppingCart,
+              accent: 'text-sky-400',
+            },
+            {
+              label: 'Average Ticket',
+              value: money(averageTicket),
+              detail: 'Average completed sale',
+              icon: Tag,
+              accent: 'text-amber-400',
+            },
+            {
+              label: 'Low Stock Alerts',
+              value: String(lowStockCount),
+              detail: 'At or below threshold',
+              icon: AlertTriangle,
+              accent: 'text-amber-400',
+            },
+          ].map(card => {
             const Icon = card.icon;
             return (
-              <button
+              <div
                 key={card.label}
-                type="button"
-                onClick={() => (card.action ? card.action() : onNavigate(card.tab))}
-                className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm text-left hover:border-amber-300 hover:shadow-md transition-all cursor-pointer"
+                className="rounded-2xl border border-slate-700/80 bg-[#0b1a2d] p-4 shadow-lg shadow-black/10"
               >
-                <div className="flex items-center justify-between text-slate-500">
-                  <span className="text-[10px] uppercase tracking-wider font-black">{card.label}</span>
-                  <Icon className="w-4 h-4" />
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full border border-slate-600 bg-slate-900 flex items-center justify-center">
+                    <Icon className={`w-5 h-5 ${card.accent}`} />
+                  </div>
+                  <div>
+                    <div className="text-[11px] text-slate-400 font-bold">{card.label}</div>
+                    <div className="text-2xl font-black mt-0.5">{card.value}</div>
+                  </div>
                 </div>
-                <div className={`text-xl font-black mt-2 ${card.label === 'Bridge Status' && !bridgeOnline ? 'text-rose-600' : ''}`}>
-                  {card.value}
-                </div>
-                <div className="text-[10px] text-slate-500 mt-1">{card.detail}</div>
-              </button>
+                <div className="text-[10px] text-emerald-400 mt-3">{card.detail}</div>
+              </div>
             );
           })}
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <div className="xl:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+          <div className="xl:col-span-2 rounded-2xl border border-slate-700/80 bg-[#0b1a2d] p-4">
+            <div className="flex items-center justify-between gap-3 mb-4">
               <div>
-                <h2 className="text-sm font-black">Store & Register Health</h2>
-                <p className="text-[11px] text-slate-500">Current configuration and local hardware readiness.</p>
+                <h2 className="text-base font-black">Sales Trend</h2>
+                <p className="text-[11px] text-slate-400 mt-0.5">Total sales over time</p>
               </div>
-              <button
-                type="button"
-                onClick={() => onNavigate('hardware-manager')}
-                className="text-[10px] font-black uppercase tracking-wider text-sky-700 cursor-pointer"
-              >
-                Run Diagnostics
-              </button>
-            </div>
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 p-3">
-              {healthItems.map(item => {
-                const Icon = item.icon;
-                return (
+              <div className="flex rounded-lg overflow-hidden border border-slate-700">
+                {(['today', 'week', 'month'] as Period[]).map(item => (
                   <button
-                    key={item.label}
+                    key={item}
                     type="button"
-                    onClick={() => onNavigate('hardware-manager')}
-                    className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left hover:bg-white cursor-pointer"
+                    onClick={() => setPeriod(item)}
+                    className={`px-4 py-2 text-[10px] font-black capitalize cursor-pointer ${
+                      period === item
+                        ? 'bg-sky-500 text-white'
+                        : 'bg-slate-900 text-slate-400 hover:text-white'
+                    }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <Icon className="w-4 h-4 text-slate-600" />
-                      <span className={`w-2 h-2 rounded-full ${item.ok ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                    </div>
-                    <div className="text-[11px] font-black mt-2">{item.label}</div>
-                    <div className={`text-[10px] font-bold mt-1 ${item.ok ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {item.ok ? 'READY' : 'ATTENTION'}
-                    </div>
-                    <div className="text-[9px] text-slate-500 mt-1 truncate">{item.detail}</div>
+                    {item === 'today' ? 'Day' : item === 'week' ? 'Week' : 'Month'}
                   </button>
-                );
-              })}
+                ))}
+              </div>
+            </div>
+
+            <div className="relative h-64">
+              <div className="absolute inset-0 flex flex-col justify-between text-[9px] text-slate-600 pointer-events-none">
+                {[maxTrend, maxTrend * 0.66, maxTrend * 0.33, 0].map((value, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <span className="w-12 text-right">{shortMoney(value)}</span>
+                    <span className="h-px flex-1 bg-slate-800" />
+                  </div>
+                ))}
+              </div>
+
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute left-14 right-0 top-2 bottom-7 w-[calc(100%-3.5rem)] h-[calc(100%-2.25rem)] overflow-visible">
+                <defs>
+                  <linearGradient id="managerSalesFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.5" />
+                    <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.02" />
+                  </linearGradient>
+                </defs>
+                {linePoints && (
+                  <>
+                    <polygon
+                      points={`0,100 ${linePoints} 100,100`}
+                      fill="url(#managerSalesFill)"
+                    />
+                    <polyline
+                      points={linePoints}
+                      fill="none"
+                      stroke="#38bdf8"
+                      strokeWidth="2.4"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    {trendPoints.map((point: any, index: number) => {
+                      const x = trendPoints.length <= 1 ? 50 : (index / (trendPoints.length - 1)) * 100;
+                      const y = 94 - (Number(point.sales || 0) / maxTrend) * 82;
+                      return <circle key={index} cx={x} cy={y} r="1.3" fill="#7dd3fc" />;
+                    })}
+                  </>
+                )}
+              </svg>
+
+              <div className="absolute left-14 right-0 bottom-0 grid text-[9px] text-slate-500" style={{ gridTemplateColumns: `repeat(${Math.max(trendPoints.length, 1)}, minmax(0, 1fr))` }}>
+                {trendPoints.map((point: any, index: number) => (
+                  <span key={index} className="text-center truncate px-1">{point.label}</span>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-200">
-              <h2 className="text-sm font-black">Quick Actions</h2>
-              <p className="text-[11px] text-slate-500">Common manager tools.</p>
+          <div className="rounded-2xl border border-slate-700/80 bg-[#0b1a2d] p-4">
+            <div className="mb-4">
+              <h2 className="text-base font-black">Sales by Category</h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">Top categories by sales</p>
             </div>
-            <div className="grid grid-cols-2 gap-2 p-3">
-              {quickActions.map(action => {
-                const Icon = action.icon;
-                return (
-                  <button
-                    key={action.label}
-                    type="button"
-                    onClick={() => onNavigate(action.tab)}
-                    className="rounded-xl border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-200 p-3 text-left cursor-pointer"
-                  >
-                    <Icon className="w-4 h-4 text-slate-700" />
-                    <div className="text-[11px] font-black mt-2">{action.label}</div>
-                    <div className="text-[9px] text-slate-500 mt-1">{action.sub}</div>
-                  </button>
-                );
-              })}
+            <div className="space-y-4 mt-6">
+              {categorySales.length === 0 ? (
+                <div className="text-xs text-slate-500">No category sales yet.</div>
+              ) : (
+                categorySales.map(item => (
+                  <div key={item.label}>
+                    <div className="flex items-center justify-between text-[11px] mb-1.5">
+                      <span className="font-bold text-slate-300 truncate pr-3">{item.label}</span>
+                      <span className="font-black text-slate-200">{shortMoney(item.value)}</span>
+                    </div>
+                    <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-sky-600 to-sky-400"
+                        style={{ width: `${Math.max(4, (item.value / maxCategory) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <div className="xl:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-black">Open Shifts & Cash Overview</h2>
-                <p className="text-[11px] text-slate-500">Current cashier shifts and drawer starting cash.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onNavigate('shifts')}
-                className="text-[10px] font-black uppercase tracking-wider text-sky-700 cursor-pointer"
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="rounded-2xl border border-slate-700/80 bg-[#0b1a2d] p-4">
+            <h2 className="text-base font-black">Payment Mix</h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">Share of sales by payment method</p>
+
+            <div className="flex items-center gap-5 mt-5">
+              <div
+                className="w-36 h-36 rounded-full relative shrink-0"
+                style={{ background: paymentGradient }}
               >
-                View All Shifts
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 text-[9px] uppercase tracking-wider text-slate-500">
-                  <tr>
-                    <th className="px-4 py-2.5">Cashier</th>
-                    <th className="px-4 py-2.5">Register</th>
-                    <th className="px-4 py-2.5">Shift Start</th>
-                    <th className="px-4 py-2.5">Opening Cash</th>
-                    <th className="px-4 py-2.5">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {openShifts.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-5 text-xs text-slate-500">No open shifts.</td>
-                    </tr>
-                  ) : (
-                    openShifts.slice(0, 5).map(shift => (
-                      <tr key={shift.id} className="text-xs">
-                        <td className="px-4 py-3 font-black">{shift.cashierName}</td>
-                        <td className="px-4 py-3 text-slate-600">{shift.registerName}</td>
-                        <td className="px-4 py-3 text-slate-600">{new Date(shift.startTime).toLocaleTimeString()}</td>
-                        <td className="px-4 py-3 font-mono font-bold">${Number(shift.startingCash || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3">
-                          <span className="inline-flex px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-black uppercase">
-                            Open
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                <div className="absolute inset-[24px] rounded-full bg-[#0b1a2d] flex flex-col items-center justify-center">
+                  <div className="text-base font-black">{money(todaySales)}</div>
+                  <div className="text-[9px] text-slate-500">Total Sales</div>
+                </div>
+              </div>
+
+              <div className="flex-1 space-y-3 min-w-0">
+                {paymentMix.length === 0 ? (
+                  <div className="text-xs text-slate-500">No payment data.</div>
+                ) : (
+                  paymentMix.map((item, index) => (
+                    <div key={item.method} className="flex items-center justify-between gap-2 text-[10px]">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: ['#38bdf8', '#fbbf24', '#8b5cf6', '#34d399'][index % 4] }}
+                        />
+                        <span className="capitalize truncate">{item.method.replace(/_/g, ' ')}</span>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-black">{item.percent.toFixed(0)}%</span>
+                        <span className="text-slate-500 ml-2">{shortMoney(item.value)}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+          <div className="rounded-2xl border border-slate-700/80 bg-[#0b1a2d] p-4">
+            <h2 className="text-base font-black">Sales by Hour</h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">Today's sales distribution</p>
+            <div className="h-44 flex items-end gap-1.5 mt-7 border-b border-slate-700">
+              {hourlySales.map(item => (
+                <div key={item.hour} className="flex-1 h-full flex flex-col justify-end items-center gap-1">
+                  <div
+                    title={money(item.value)}
+                    className="w-full max-w-6 rounded-t bg-gradient-to-t from-sky-700 to-sky-400 min-h-[2px]"
+                    style={{ height: `${Math.max(2, (item.value / maxHour) * 90)}%` }}
+                  />
+                  <span className="text-[8px] text-slate-500">
+                    {item.hour > 12 ? item.hour - 12 : item.hour}{item.hour >= 12 ? 'p' : 'a'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-700/80 bg-[#0b1a2d] overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-black">Low Stock / Alerts</h2>
-                <p className="text-[11px] text-slate-500">Items below minimum level.</p>
+                <h2 className="text-base font-black">Top Selling Products</h2>
+                <p className="text-[11px] text-slate-400 mt-0.5">Highest revenue products</p>
               </div>
               <button
                 type="button"
                 onClick={() => onNavigate('inventory')}
-                className="text-[10px] font-black uppercase tracking-wider text-sky-700 cursor-pointer"
+                className="text-[10px] font-black text-sky-400 cursor-pointer"
               >
                 Inventory
               </button>
             </div>
-            <div className="p-3 space-y-2">
-              {lowStockItems.length === 0 ? (
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-bold">
-                  No low-stock products reported.
-                </div>
+            <div className="divide-y divide-slate-800">
+              {topProducts.length === 0 ? (
+                <div className="p-4 text-xs text-slate-500">No product sales yet.</div>
               ) : (
-                lowStockItems.slice(0, 6).map((item: any) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => onNavigate('inventory')}
-                    className="w-full flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-left cursor-pointer"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-black truncate">{item.name}</div>
-                      <div className="text-[9px] text-slate-500 mt-0.5">{item.sku || item.barcode || 'No SKU'}</div>
+                topProducts.map((product, index) => (
+                  <div key={product.id} className="px-4 py-2.5 grid grid-cols-[24px_1fr_50px_72px] gap-2 items-center text-[10px]">
+                    <span className="text-slate-500">{index + 1}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      {product.imageUrl ? (
+                        <img src={product.imageUrl} alt="" className="w-6 h-8 object-contain rounded bg-slate-900" />
+                      ) : (
+                        <div className="w-6 h-8 rounded bg-slate-800" />
+                      )}
+                      <span className="font-bold truncate">{product.name}</span>
                     </div>
-                    <div className="text-right shrink-0">
-                      <div className={`text-xs font-black ${item.stockQuantity <= 0 ? 'text-rose-600' : 'text-amber-600'}`}>
-                        {item.stockQuantity}
-                      </div>
-                      <div className="text-[9px] text-slate-500">Min {item.lowStockThreshold}</div>
-                    </div>
-                  </button>
+                    <span className="text-right text-slate-400">{product.units}</span>
+                    <span className="text-right font-black">{money(product.revenue)}</span>
+                  </div>
                 ))
               )}
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <div className="xl:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-black">Recent Activity</h2>
-                <p className="text-[11px] text-slate-500">Latest operational activity across the store.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onNavigate('audit-log')}
-                className="text-[10px] font-black uppercase tracking-wider text-sky-700 cursor-pointer"
-              >
-                View All Activity
-              </button>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {auditLogs.length === 0 ? (
-                <div className="p-4 text-xs text-slate-500">No recent activity recorded.</div>
-              ) : (
-                auditLogs.map(log => (
-                  <div key={log.id} className="px-4 py-3 grid grid-cols-[80px_120px_1fr] gap-3 items-start text-[10px]">
-                    <div className="text-slate-500">{new Date(log.timestamp).toLocaleTimeString()}</div>
-                    <div className="font-black truncate">{log.userName}</div>
-                    <div className="min-w-0">
-                      <div className="font-black text-slate-800">{log.action.replace(/_/g, ' ')}</div>
-                      <div className="text-slate-500 mt-0.5 truncate">{log.details}</div>
-                    </div>
-                  </div>
-                ))
-              )}
+        <div className="rounded-2xl border border-slate-700/80 bg-[#0b1a2d] px-4 py-3 flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="lg:w-48">
+            <div className="text-sm font-black">Store Health</div>
+            <div className="text-[10px] text-slate-500">
+              {health.every(item => item.ok) ? 'All systems operational' : 'Some systems need attention'}
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-200">
-              <h2 className="text-sm font-black flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                Needs Attention
-              </h2>
-              <p className="text-[11px] text-slate-500">Only issues requiring manager review.</p>
-            </div>
-            <div className="p-3 space-y-2">
-              {attentionItems.length === 0 ? (
-                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 flex-1">
+            {health.map(item => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => onNavigate('hardware-manager')}
+                  className="flex items-center gap-3 px-4 py-2 border-t lg:border-t-0 lg:border-l border-slate-800 text-left cursor-pointer hover:bg-slate-900/50"
+                >
+                  <Icon className="w-5 h-5 text-slate-300" />
                   <div>
-                    <div className="text-xs font-black text-emerald-800">No immediate store issues</div>
-                    <div className="text-[10px] text-emerald-700 mt-1">Operations are clear.</div>
+                    <div className="text-[10px] text-slate-400">{item.label}</div>
+                    <div className={`text-[11px] font-black ${item.ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      ● {item.ok ? 'Online' : 'Attention'}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                attentionItems.slice(0, 5).map(item => (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={() => item.tab === 'pos' && heldOrdersCount ? onOpenHeldOrders() : onNavigate(item.tab)}
-                    className={`w-full p-3 rounded-xl border text-left cursor-pointer ${
-                      item.severity === 'critical'
-                        ? 'bg-rose-50 border-rose-200'
-                        : item.severity === 'warning'
-                        ? 'bg-amber-50 border-amber-200'
-                        : 'bg-sky-50 border-sky-200'
-                    }`}
-                  >
-                    <div className="text-[11px] font-black">{item.label}</div>
-                    <div className="text-[10px] text-slate-600 mt-1">{item.detail}</div>
-                  </button>
-                ))
-              )}
-            </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
