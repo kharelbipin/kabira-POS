@@ -152,7 +152,10 @@ export const POSView: React.FC<POSViewProps> = ({
       0
     );
     const itemDiscounts = cartItems.reduce(
-      (sum, item) => sum + (item.discountAmount || 0),
+      (sum, item) =>
+        sum +
+        Number(item.discountAmount || 0) +
+        Number(item.manufacturerDiscountAmount || 0),
       0
     );
     const adjustedSubtotal = rawSubtotal - itemDiscounts;
@@ -171,7 +174,9 @@ export const POSView: React.FC<POSViewProps> = ({
       const lineTaxRate = item.product.taxRate ?? defaultTaxRate;
       const lineSubtotal = Math.max(
         0,
-        item.unitPrice * item.quantity - (item.discountAmount || 0)
+        item.unitPrice * item.quantity -
+          Number(item.discountAmount || 0) -
+          Number(item.manufacturerDiscountAmount || 0)
       );
       return sum + lineSubtotal * orderDiscountFactor * lineTaxRate;
     }, 0);
