@@ -102,6 +102,100 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
     return Math.round((checks.filter(Boolean).length / checks.length) * 100);
   }, [bridgeOnline, printerConfigured, drawerConfigured, scannerConfigured, customerDisplayConfigured]);
 
+  const alerts = useMemo(() => {
+    const items: Array<{
+      id: string;
+      severity: 'critical' | 'warning' | 'info';
+      title: string;
+      detail: string;
+      action: 'hardware' | 'users' | 'inventory' | null;
+    }> = [];
+
+    if (!bridgeOnline) {
+      items.push({
+        id: 'bridge-offline',
+        severity: 'critical',
+        title: 'POS Bridge Offline',
+        detail: 'Register hardware commands may fail until the local bridge reconnects.',
+        action: 'hardware',
+      });
+    }
+
+    if (!printerConfigured) {
+      items.push({
+        id: 'printer-missing',
+        severity: 'critical',
+        title: 'Receipt Printer Not Configured',
+        detail: 'Register 01 has no assigned receipt printer.',
+        action: 'hardware',
+      });
+    }
+
+    if (!drawerConfigured) {
+      items.push({
+        id: 'drawer-missing',
+        severity: 'warning',
+        title: 'Cash Drawer Not Configured',
+        detail: 'Cash drawer control is unavailable on Register 01.',
+        action: 'hardware',
+      });
+    }
+
+    if (!scannerConfigured) {
+      items.push({
+        id: 'scanner-missing',
+        severity: 'warning',
+        title: 'Barcode Scanner Not Configured',
+        detail: 'Barcode entry will rely on manual input until a scanner is assigned.',
+        action: 'hardware',
+      });
+    }
+
+    if (!customerDisplayConfigured) {
+      items.push({
+        id: 'display-missing',
+        severity: 'warning',
+        title: 'Customer Display Not Configured',
+        detail: 'Register 01 does not currently have a customer display assignment.',
+        action: 'hardware',
+      });
+    }
+
+    registers.forEach(register => {
+      if (register.status !== 'active') {
+        items.push({
+          id: `register-offline-${register.id}`,
+          severity: 'critical',
+          title: `${register.name} Offline`,
+          detail: `${register.location} is not reporting as active.`,
+          action: 'hardware',
+        });
+      } else if (!register.activeShiftId) {
+        items.push({
+          id: `shift-missing-${register.id}`,
+          severity: 'info',
+          title: `${register.name} Has No Open Shift`,
+          detail: register.currentCashier
+            ? `${register.currentCashier} is signed in without an active shift.`
+            : 'No cashier or active shift is currently assigned.',
+          action: 'users',
+        });
+      }
+    });
+
+    return items;
+  }, [
+    bridgeOnline,
+    printerConfigured,
+    drawerConfigured,
+    scannerConfigured,
+    customerDisplayConfigured,
+    registers,
+  ]);
+
+  const criticalAlertCount = alerts.filter(a => a.severity === 'critical').length;
+  const warningAlertCount = alerts.filter(a => a.severity === 'warning').length;
+
   const statusPill = (ok: boolean, trueLabel = 'ONLINE', falseLabel = 'NEEDS ATTENTION') => (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
       ok
@@ -173,6 +267,101 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
           </div>
           <div className="text-2xl font-black mt-2">{healthScore}%</div>
           <p className="text-[11px] text-slate-500 mt-1">Configured and reachable health snapshot</p>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-black flex items-center gap-2">
+              <CircleAlert className={`w-4 h-4 ${criticalAlertCount > 0 ? 'text-rose-600' : warningAlertCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
+              Operational Alerts
+            </h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">Prioritized issues that may affect register operation.</p>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider">
+            <span className="px-2 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+              {criticalAlertCount} Critical
+            </span>
+            <span className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+              {warningAlertCount} Warning
+            </span>
+          </div>
+        </div>
+
+        <div className="p-3 space-y-2">
+          {alerts.length === 0 ? (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div>
+                <div className="text-xs font-black text-emerald-800">All monitored systems healthy</div>
+                <div className="text-[11px] text-emerald-700 mt-0.5">No register or hardware alerts require attention.</div>
+              </div>
+            </div>
+          ) : (
+            alerts.map(alert => {
+              const critical = alert.severity === 'critical';
+              const warning = alert.severity === 'warning';
+              const actionLabel =
+                alert.action === 'hardware'
+                  ? 'Open Hardware'
+                  : alert.action === 'users'
+                  ? 'Open Users'
+                  : alert.action === 'inventory'
+                  ? 'Open Inventory'
+                  : null;
+
+              const handleAction = () => {
+                if (alert.action === 'hardware') onOpenHardware();
+                if (alert.action === 'users') onOpenUsers();
+                if (alert.action === 'inventory') onOpenInventory();
+              };
+
+              return (
+                <div
+                  key={alert.id}
+                  className={`flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-xl border ${
+                    critical
+                      ? 'bg-rose-50 border-rose-200'
+                      : warning
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-sky-50 border-sky-200'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <CircleAlert className={`w-4 h-4 mt-0.5 shrink-0 ${
+                      critical ? 'text-rose-600' : warning ? 'text-amber-600' : 'text-sky-600'
+                    }`} />
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${
+                          critical
+                            ? 'bg-rose-600 text-white'
+                            : warning
+                            ? 'bg-amber-500 text-white'
+                            : 'bg-sky-600 text-white'
+                        }`}>
+                          {alert.severity}
+                        </span>
+                        <span className="text-xs font-black text-slate-900">{alert.title}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-600 mt-1">{alert.detail}</div>
+                    </div>
+                  </div>
+
+                  {actionLabel && (
+                    <button
+                      type="button"
+                      onClick={handleAction}
+                      className="shrink-0 px-3 py-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                    >
+                      {actionLabel}
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
