@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/api.js';
 import { db } from './server/db.js';
@@ -159,6 +159,65 @@ async function startServer() {
         const customerDisplayFullscreen =
             db.settings.customerDisplayFullscreen !== false;
 
+        // Production Windows installs include a dedicated native WebView2
+        // customer-display host. It renders the React customer screen as a
+        // KaBiRa POS window (not a Microsoft Edge browser window).
+        const nativeCustomerDisplayExe = path.resolve(
+            process.cwd(),
+            '..',
+            'CustomerDisplay',
+            'KaBiRaCustomerDisplay.exe'
+        );
+
+        if (fs.existsSync(nativeCustomerDisplayExe)) {
+            const launchNativeDisplay = () => {
+                try {
+                    const child = spawn(
+                        nativeCustomerDisplayExe,
+                        [
+                            `--url=${customerDisplayUrl}`,
+                            `--fullscreen=${customerDisplayFullscreen ? 'true' : 'false'}`,
+                        ],
+                        {
+                            detached: true,
+                            windowsHide: false,
+                            stdio: 'ignore',
+                        }
+                    );
+
+                    child.unref();
+
+                    return res.json({
+                        success: true,
+                        message:
+                            'KaBiRa native customer display launched on the secondary Windows display.',
+                    });
+                } catch (error: any) {
+                    console.error('[Customer Display Native]', error);
+                    return res.status(500).json({
+                        success: false,
+                        error:
+                            error?.message ||
+                            'KaBiRa native customer display could not be launched.',
+                    });
+                }
+            };
+
+            // Restart only the dedicated customer-display process so settings
+            // changes can reposition/reopen it without touching the cashier POS.
+            execFile(
+                'taskkill.exe',
+                ['/IM', 'KaBiRaCustomerDisplay.exe', '/F'],
+                { windowsHide: true },
+                () => {
+                    setTimeout(launchNativeDisplay, 250);
+                }
+            );
+            return;
+        }
+
+        // Development/fallback path: use Edge only when the native display host
+        // is not present (for example while running npm dev from source).
         const psScript = `
 Add-Type -AssemblyName System.Windows.Forms
 
