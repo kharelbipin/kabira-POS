@@ -1586,8 +1586,8 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
         0,
         totalOrderDiscount - itemDiscountTotal - validatedPointsDiscount
     );
-    const adjustedSubtotal = Math.max(0, calculatedSubtotal - itemDiscountTotal);
-    const subtotalAfterOrderDiscount = Math.max(0, adjustedSubtotal - orderLevelDiscount);
+    const adjustedSubtotal = calculatedSubtotal - itemDiscountTotal;
+    const subtotalAfterOrderDiscount = adjustedSubtotal - orderLevelDiscount;
     const orderDiscountFactor =
         adjustedSubtotal > 0 ? subtotalAfterOrderDiscount / adjustedSubtotal : 0;
 
@@ -1617,10 +1617,8 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
         calculatedTax += itemTax;
     }
 
-    const grandTotal = Math.max(
-        0,
-        Math.round((calculatedSubtotal - totalOrderDiscount + calculatedTax) * 100) / 100
-    );
+    const grandTotal =
+        Math.round((calculatedSubtotal - totalOrderDiscount + calculatedTax) * 100) / 100;
 
     // CA-07 & US-MULTI-PAY: Payment verification (Single Tender or Multi-Payment Engine)
     const incomingPayments = (payments && Array.isArray(payments) && payments.length > 0)
