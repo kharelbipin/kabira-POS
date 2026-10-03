@@ -730,20 +730,30 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
             </div>
 
-            {/* REMAINING */}
+            {/* REMAINING / PAYOUT */}
             <div className="space-y-0.5 pl-1">
               <div className={`text-[10px] sm:text-xs uppercase tracking-wider font-semibold ${
-                remainingBalance <= 0.005 ? 'text-emerald-400' : 'text-[#C5A059]'
+                isPayoutTransaction
+                  ? 'text-rose-400'
+                  : remainingBalance <= 0.005
+                    ? 'text-emerald-400'
+                    : 'text-[#C5A059]'
               }`}>
-                Remaining
+                {isPayoutTransaction ? 'Payout Due' : 'Remaining'}
               </div>
               <div className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${
-                remainingBalance <= 0.005 ? 'text-emerald-400' : 'text-[#C5A059]'
+                isPayoutTransaction
+                  ? 'text-rose-400'
+                  : remainingBalance <= 0.005
+                    ? 'text-emerald-400'
+                    : 'text-[#C5A059]'
               }`}>
-                ${remainingBalance.toFixed(2)}
+                ${(isPayoutTransaction ? Math.abs(effectiveGrandTotal) : remainingBalance).toFixed(2)}
               </div>
               <div className="text-[10px]">
-                {remainingBalance <= 0.005 ? (
+                {isPayoutTransaction ? (
+                  <span className="text-rose-300 font-bold">Cash to Customer</span>
+                ) : remainingBalance <= 0.005 ? (
                   <span className="text-emerald-400 font-bold flex items-center gap-1">
                     <Check className="w-3 h-3" /> Paid in Full
                   </span>
@@ -1138,13 +1148,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                TRANSACTION PAID IN FULL CELEBRATION BANNER
                When remainingBalance <= 0
                ======================================================== */
-            <div className="bg-emerald-950/40 border border-emerald-700/60 rounded-xl p-4 text-center space-y-2">
-              <div className="flex items-center justify-center space-x-2 text-emerald-400 font-bold text-sm uppercase">
+            <div className={`rounded-xl p-4 text-center space-y-2 border ${
+              isPayoutTransaction
+                ? 'bg-rose-950/30 border-rose-700/60'
+                : 'bg-emerald-950/40 border-emerald-700/60'
+            }`}>
+              <div className={`flex items-center justify-center space-x-2 font-bold text-sm uppercase ${
+                isPayoutTransaction ? 'text-rose-400' : 'text-emerald-400'
+              }`}>
                 <CheckCircle2 className="w-5 h-5" />
-                <span>Order Paid in Full (${(effectiveGrandTotal || 0).toFixed(2)})</span>
+                <span>
+                  {isPayoutTransaction
+                    ? `Lotto Payout Ready ($${Math.abs(effectiveGrandTotal).toFixed(2)})`
+                    : `Order Paid in Full ($${effectiveGrandTotal.toFixed(2)})`}
+                </span>
               </div>
               <p className="text-xs text-zinc-300">
-                All payments have been successfully recorded. Ready to complete transaction and print receipt.
+                {isPayoutTransaction
+                  ? 'No customer payment is required. Complete the payout transaction to record it, print the receipt, and open the cash drawer.'
+                  : 'All payments have been successfully recorded. Ready to complete transaction and print receipt.'}
               </p>
             </div>
           )}
@@ -1320,7 +1342,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 ? 'Processing...'
                 : remainingBalance > 0.005
                 ? `Remaining Due: $${remainingBalance.toFixed(2)}`
-                : `Complete Sale & Print Receipt ($${(effectiveGrandTotal || 0).toFixed(2)})`}
+                : isPayoutTransaction
+                ? `Complete Payout & Print Receipt (-${Math.abs(effectiveGrandTotal).toFixed(2)})`
+                : `Complete Sale & Print Receipt (${effectiveGrandTotal.toFixed(2)})`}
             </span>
           </button>
         </div>
