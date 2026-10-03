@@ -111,6 +111,7 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showPaymentAuditModal, setShowPaymentAuditModal] = useState(false);
+  const persistedManagerSettings = (settings?.managerSettings || {}) as Record<string, any>;
 
   // Form State initialized with store settings + full manager controls
   const [formData, setFormData] = useState({
@@ -269,11 +270,20 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
     cloudSyncStatus: 'Online & Synced (Cloud Run Container)',
     offlineTransactionCacheLimit: 500,
     autoDailyBackupHour: 3,
+
+    // Rehydrate every advanced manager control saved previously.
+    ...persistedManagerSettings,
   });
 
   const [dbStats, setDbStats] = useState<any>(null);
   const [isFlushingDb, setIsFlushingDb] = useState<boolean>(false);
   const [dbFlushMsg, setDbFlushMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (settings?.managerSettings) {
+      setFormData(prev => ({ ...prev, ...settings.managerSettings }));
+    }
+  }, [settings]);
 
   useEffect(() => {
     if (activeSection === 'backup') {
@@ -358,6 +368,19 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
         terminalAutoFallbackOnFailure: formData.terminalAutoFallbackOnFailure,
         paymentSessionExpiryMinutes: formData.paymentSessionExpiryMinutes,
         paymentTerminalIp: formData.paymentTerminalIp,
+        website: formData.website,
+        timezone: formData.timezone,
+        currency: formData.currency,
+        managerSettings: formData,
+        directReceiptPrinting: {
+          ...(settings?.directReceiptPrinting || {}),
+          enabled: true,
+          autoPrintOnSale: formData.autoOpenDrawerOnCash,
+          primaryPrinterName: formData.activePrinterModel,
+          printCustomerCopy: formData.printCustomerCopyCard,
+          printMerchantCopy: formData.printMerchantCopyCard,
+          cutPaperAfterPrint: true,
+        },
       });
 
       // Persist scope-level overrides locally
