@@ -103,6 +103,11 @@ CREATE TABLE Products (
     ShelfLocation NVARCHAR(64) NULL,
     ImageUrl NVARCHAR(1024) NULL,
     Description NVARCHAR(MAX) NULL,
+    ProductHeading NVARCHAR(64) NULL,
+    ManufacturerName NVARCHAR(256) NULL,
+    DistributorName NVARCHAR(256) NULL,
+    ScanDataEligible BIT NOT NULL DEFAULT 0,
+    DefaultProgramId NVARCHAR(64) NULL,
     Active BIT NOT NULL DEFAULT 1,
     CreatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
     UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
@@ -197,6 +202,11 @@ CREATE TABLE OrderItems (
     UnitPrice DECIMAL(18, 2) NOT NULL,
     CostPrice DECIMAL(18, 2) NOT NULL DEFAULT 0.00,
     DiscountAmount DECIMAL(18, 2) NOT NULL DEFAULT 0.00,
+    ManufacturerDiscountAmount DECIMAL(18, 2) NOT NULL DEFAULT 0.00,
+    ManufacturerProgramId NVARCHAR(64) NULL,
+    ManufacturerProgramName NVARCHAR(256) NULL,
+    ManufacturerCompany NVARCHAR(256) NULL,
+    ManufacturerReimbursementExpected DECIMAL(18, 2) NOT NULL DEFAULT 0.00,
     TaxRate DECIMAL(6, 4) NOT NULL DEFAULT 0.0825,
     LineTotal DECIMAL(18, 2) NOT NULL,
     AgeVerificationBypassReason NVARCHAR(128) NULL,
@@ -300,7 +310,142 @@ CREATE TABLE InventoryAdjustments (
 );
 
 -- ----------------------------------------------------------------------------
--- 12. INITIAL SEED DATA (SYSTEM CONFIGURATION ONLY)
+-- 12. MANUFACTURER / VENDOR PROMOTION PROGRAMS
+-- ----------------------------------------------------------------------------
+CREATE TABLE Promotions (
+    PromotionId NVARCHAR(64) NOT NULL PRIMARY KEY,
+    Name NVARCHAR(256) NOT NULL,
+    Code NVARCHAR(64) NOT NULL UNIQUE,
+    DiscountType NVARCHAR(32) NOT NULL, -- percentage, fixed, flat_amount
+    DiscountValue DECIMAL(18, 4) NOT NULL,
+    StartDate DATETIMEOFFSET NOT NULL,
+    EndDate DATETIMEOFFSET NOT NULL,
+    Active BIT NOT NULL DEFAULT 1,
+    TargetType NVARCHAR(32) NULL, -- all, category, product
+    TargetId NVARCHAR(64) NULL,
+    TargetName NVARCHAR(256) NULL,
+    MinPurchaseAmount DECIMAL(18, 2) NULL,
+    MaxDiscount DECIMAL(18, 2) NULL,
+    MaxUsages INT NULL,
+    CurrentUsages INT NOT NULL DEFAULT 0,
+    FundingSource NVARCHAR(32) NOT NULL DEFAULT 'store', -- store, manufacturer, vendor
+    ManufacturerName NVARCHAR(256) NULL,
+    DistributorName NVARCHAR(256) NULL,
+    ProductHeading NVARCHAR(64) NULL,
+    ProgramType NVARCHAR(64) NULL,
+    CustomerPhoneRequired BIT NOT NULL DEFAULT 0,
+    LoyaltyRequired BIT NOT NULL DEFAULT 0,
+    AgeVerificationRequired BIT NOT NULL DEFAULT 0,
+    ReimbursementPerUnit DECIMAL(18, 2) NULL,
+    ReportingFrequency NVARCHAR(32) NULL,
+    ExportTemplate NVARCHAR(128) NULL,
+    CustomerIdentifierMode NVARCHAR(32) NOT NULL DEFAULT 'token',
+    CreatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+    UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+);
+
+CREATE INDEX IX_Promotions_Manufacturer_Active
+ON Promotions (ManufacturerName, Active, StartDate, EndDate);
+
+CREATE INDEX IX_Promotions_ProductHeading_Active
+ON Promotions (ProductHeading, Active);
+
+-- ----------------------------------------------------------------------------
+-- 13. MANUFACTURER SCAN-DATA / REBATE LEDGER
+-- ----------------------------------------------------------------------------
+CREATE TABLE ScanDataTransactions (
+    ScanDataTransactionId NVARCHAR(128) NOT NULL PRIMARY KEY,
+    OrderId NVARCHAR(64) NOT NULL,
+    OrderNumber NVARCHAR(32) NOT NULL,
+    OrderCreatedAt DATETIMEOFFSET NOT NULL,
+    StoreId NVARCHAR(64) NOT NULL,
+    RegisterId NVARCHAR(64) NOT NULL,
+    CashierId NVARCHAR(64) NOT NULL,
+    CashierName NVARCHAR(128) NOT NULL,
+    CustomerId NVARCHAR(64) NULL,
+    CustomerPhoneToken NVARCHAR(128) NULL,
+    ProductId NVARCHAR(64) NOT NULL,
+    Upc NVARCHAR(64) NOT NULL,
+    ProductName NVARCHAR(256) NOT NULL,
+    BrandName NVARCHAR(256) NULL,
+    ProductHeading NVARCHAR(64) NOT NULL,
+    ManufacturerName NVARCHAR(256) NOT NULL,
+    DistributorName NVARCHAR(256) NULL,
+    ProgramId NVARCHAR(64) NOT NULL,
+    ProgramCode NVARCHAR(64) NOT NULL,
+    ProgramName NVARCHAR(256) NOT NULL,
+    ProgramType NVARCHAR(64) NULL,
+    Quantity INT NOT NULL,
+    RegularPrice DECIMAL(18, 2) NOT NULL,
+    DiscountPerUnit DECIMAL(18, 2) NOT NULL,
+    ManufacturerDiscountTotal DECIMAL(18, 2) NOT NULL,
+    CustomerPaid DECIMAL(18, 2) NOT NULL,
+    ExpectedReimbursement DECIMAL(18, 2) NOT NULL,
+    PhoneRequired BIT NOT NULL DEFAULT 0,
+    LoyaltyRequired BIT NOT NULL DEFAULT 0,
+    AgeVerificationRequired BIT NOT NULL DEFAULT 0,
+    SaleStatus NVARCHAR(32) NOT NULL DEFAULT 'sale',
+    SubmissionStatus NVARCHAR(32) NOT NULL DEFAULT 'pending',
+    ExportBatchId NVARCHAR(64) NULL,
+    ReimbursementStatus NVARCHAR(32) NULL,
+    CreatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+    UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+    CONSTRAINT FK_ScanData_Order FOREIGN KEY (OrderId) REFERENCES Orders(OrderId),
+    CONSTRAINT FK_ScanData_Product FOREIGN KEY (ProductId) REFERENCES Products(ProductId),
+    CONSTRAINT FK_ScanData_Cashier FOREIGN KEY (CashierId) REFERENCES Users(UserId),
+    CONSTRAINT FK_ScanData_Customer FOREIGN KEY (CustomerId) REFERENCES Customers(CustomerId)
+);
+
+CREATE INDEX IX_ScanData_Manufacturer_Status_Date
+ON ScanDataTransactions (ManufacturerName, SubmissionStatus, OrderCreatedAt DESC);
+
+CREATE INDEX IX_ScanData_Heading_Status_Date
+ON ScanDataTransactions (ProductHeading, SubmissionStatus, OrderCreatedAt DESC);
+
+CREATE INDEX IX_ScanData_Program_Status
+ON ScanDataTransactions (ProgramId, SubmissionStatus);
+
+-- ----------------------------------------------------------------------------
+-- 14. SCAN-DATA EXPORT / REIMBURSEMENT BATCHES
+-- ----------------------------------------------------------------------------
+CREATE TABLE ScanDataExportBatches (
+    BatchId NVARCHAR(64) NOT NULL PRIMARY KEY,
+    BatchNumber NVARCHAR(64) NOT NULL UNIQUE,
+    ManufacturerName NVARCHAR(256) NULL,
+    ProductHeading NVARCHAR(64) NULL,
+    ProgramId NVARCHAR(64) NULL,
+    ProgramName NVARCHAR(256) NULL,
+    StartDate DATE NULL,
+    EndDate DATE NULL,
+    TransactionCount INT NOT NULL,
+    ExpectedReimbursement DECIMAL(18, 2) NOT NULL DEFAULT 0.00,
+    PaidAmount DECIMAL(18, 2) NULL,
+    ExportTemplate NVARCHAR(128) NOT NULL DEFAULT 'Generic CSV',
+    FileName NVARCHAR(512) NOT NULL,
+    Status NVARCHAR(32) NOT NULL DEFAULT 'validated',
+    Notes NVARCHAR(MAX) NULL,
+    CreatedByUserId NVARCHAR(64) NOT NULL,
+    CreatedByUserName NVARCHAR(128) NOT NULL,
+    CreatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+    UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+    SubmittedAt DATETIMEOFFSET NULL,
+    AcceptedAt DATETIMEOFFSET NULL,
+    PaidAt DATETIMEOFFSET NULL,
+    CONSTRAINT FK_ScanDataBatch_CreatedBy FOREIGN KEY (CreatedByUserId) REFERENCES Users(UserId)
+);
+
+CREATE TABLE ScanDataExportBatchTransactions (
+    BatchId NVARCHAR(64) NOT NULL,
+    ScanDataTransactionId NVARCHAR(128) NOT NULL,
+    PRIMARY KEY (BatchId, ScanDataTransactionId),
+    CONSTRAINT FK_ScanDataBatchItems_Batch
+        FOREIGN KEY (BatchId) REFERENCES ScanDataExportBatches(BatchId) ON DELETE CASCADE,
+    CONSTRAINT FK_ScanDataBatchItems_Transaction
+        FOREIGN KEY (ScanDataTransactionId) REFERENCES ScanDataTransactions(ScanDataTransactionId)
+);
+
+-- ----------------------------------------------------------------------------
+-- 15. INITIAL SEED DATA (SYSTEM CONFIGURATION ONLY)
 -- ----------------------------------------------------------------------------
 -- Production operator accounts are intentionally NOT seeded here.
 -- The first Admin is created through the KaBiRa POS first-run setup flow.
