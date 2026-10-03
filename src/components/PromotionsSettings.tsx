@@ -259,7 +259,12 @@ export const PromotionsSettings: React.FC = () => {
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[#737373]">Expected Rebate:</span>
-                        <span className="font-mono text-emerald-400">{'
+                        <span className="font-mono text-emerald-400">
+                          {'$'}{Number(promo.reimbursementPerUnit || 0).toFixed(2)} / unit
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between items-center pt-1 border-t border-[#262626]/60 text-[11px]">
                     <span className="text-[#737373] flex items-center space-x-1">
                       <Calendar className="w-3 h-3 text-[#525252]" />
