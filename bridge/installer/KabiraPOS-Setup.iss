@@ -158,6 +158,14 @@ DestDir: "{app}\Bridge"; \
 Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; ------------------------------------------------------------------------------
+; Native KaBiRa Customer Display (embedded WebView2, no Edge browser chrome)
+; ------------------------------------------------------------------------------
+
+Source: "..\..\dist\customer-display\*"; \
+DestDir: "{app}\CustomerDisplay"; \
+Flags: ignoreversion recursesubdirs createallsubdirs
+
+; ------------------------------------------------------------------------------
 ; Hardware Bridge service installation script
 ; ------------------------------------------------------------------------------
 
@@ -217,6 +225,11 @@ Filename: "powershell.exe"; \
 Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Stop-Service -Name 'KaBiRaPOSBridge' -Force -ErrorAction SilentlyContinue; sc.exe delete KaBiRaPOSBridge | Out-Null"""; \
 Flags: runhidden waituntilterminated
 
+; Stop native KaBiRa customer display.
+Filename: "powershell.exe"; \
+Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-Process -Name 'KaBiRaCustomerDisplay' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue"""; \
+Flags: runhidden waituntilterminated
+
 ; Stop only the KaBiRa POS Node backend.
 ; Do NOT terminate unrelated Node processes.
 Filename: "powershell.exe"; \
@@ -239,6 +252,17 @@ begin
   Exec(
     'powershell.exe',
     '-NoProfile -ExecutionPolicy Bypass -Command "Stop-Service -Name ''KaBiRaPOSBridge'' -Force -ErrorAction SilentlyContinue"',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  );
+
+  { Stop native customer display before replacing its executable. }
+
+  Exec(
+    'powershell.exe',
+    '-NoProfile -ExecutionPolicy Bypass -Command "Get-Process -Name ''KaBiRaCustomerDisplay'' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue"',
     '',
     SW_HIDE,
     ewWaitUntilTerminated,
