@@ -593,7 +593,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             onClick={() => {
               setImportResult(null);
               setCsvText(
-                `name,sku,barcode,category,price,costPrice,stockQuantity,size\n"Glenlivet 15yr French Oak","GLEN-15-750","080480015099","Whiskey & Bourbon",84.99,52.00,18,"750ml"`
+                `name,sku,barcode,category,price,costPrice,stockQuantity,size,productHeading,manufacturer,distributor,scanDataEligible,defaultProgramId\n"Glenlivet 15yr French Oak","GLEN-15-750","080480015099","Whiskey & Bourbon",84.99,52.00,18,"750ml"`
               );
               setShowImportModal(true);
             }}
