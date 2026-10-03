@@ -112,7 +112,7 @@ export const InvoiceHistoryView: React.FC<InvoiceHistoryViewProps> = ({
             className="flex items-center space-x-1.5 px-4 py-2 bg-[#C5A059] hover:bg-[#D4AF37] text-black font-bold text-xs uppercase tracking-wider rounded-lg transition-colors shadow-md cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5 text-black" />
-            <span>AI Invoice Scan</span>
+            <span>Take / Upload Invoice</span>
           </button>
         </div>
       </div>
