@@ -183,6 +183,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   };
   const [showCancelWarning, setShowCancelWarning] = useState<boolean>(false);
   const [showNumpad, setShowNumpad] = useState<boolean>(false);
+  const useOnScreenKeypad = settings?.useOnScreenKeypad ?? true;
+  const fixedKeypad = settings?.showFixedKeypad ?? false;
 
   // ----------------------------------------------------
   // Dynamic Core Calculations
@@ -210,6 +212,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setShowOtherMenu(false);
       setOtherMethodType(null);
       setShowCancelWarning(false);
+      setShowNumpad(useOnScreenKeypad && fixedKeypad);
       setManagerApproved(false);
       setManagerPin('');
       setManagerApprovalError(null);
@@ -217,7 +220,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setApplyLoyaltyPoints(false);
       setPointsToRedeem(0);
     }
-  }, [isOpen]);
+  }, [isOpen, useOnScreenKeypad, fixedKeypad]);
 
   const handleCardTimeout = () => {
     playBeep('error');
@@ -887,13 +890,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       (Leave blank to pay full remaining ${remainingBalance.toFixed(2)})
                     </span>
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowNumpad(!showNumpad)}
-                    className="text-[11px] text-[#C5A059] hover:underline cursor-pointer"
-                  >
-                    {showNumpad ? 'Hide Numpad' : 'Touch Keypad'}
-                  </button>
+                  {useOnScreenKeypad && !fixedKeypad && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNumpad(!showNumpad)}
+                      className="text-[11px] text-[#C5A059] hover:underline cursor-pointer"
+                    >
+                      {showNumpad ? 'Hide Numpad' : 'Touch Keypad'}
+                    </button>
+                  )}
                 </div>
 
                 <div className="relative">
@@ -904,8 +909,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     inputMode="decimal"
                     placeholder={remainingBalance.toFixed(2)}
                     value={tenderInput}
-                    onFocus={() => setShowNumpad(true)}
-                    onClick={() => setShowNumpad(true)}
+                    onFocus={() => { if (useOnScreenKeypad) setShowNumpad(true); }}
+                    onClick={() => { if (useOnScreenKeypad) setShowNumpad(true); }}
                     onChange={e => {
                       const val = e.target.value;
                       if (/^\d*\.?\d{0,2}$/.test(val) || val === '') {
@@ -971,7 +976,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
 
               {/* Touch Numpad (Collapsible) */}
-              {showNumpad && (
+              {useOnScreenKeypad && showNumpad && (
                 <div className="bg-[#0C0C0C] p-2.5 rounded-xl border border-[#222222] max-w-[260px] mx-auto">
                   <div className="grid grid-cols-3 gap-1.5">
                     {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => (
