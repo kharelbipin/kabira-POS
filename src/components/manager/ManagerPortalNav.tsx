@@ -52,7 +52,16 @@ export const ManagerPortalNav: React.FC<ManagerPortalNavProps> = ({
           const active =
             currentTab === item.id ||
             (item.id === 'inventory' &&
-              ['inventory-catalog', 'inventory-history', 'inventory-ledger', 'receiving'].includes(currentTab));
+              [
+                'inventory-catalog',
+                'inventory-add',
+                'inventory-import',
+                'inventory-vendors',
+                'inventory-count',
+                'inventory-history',
+                'inventory-ledger',
+                'receiving',
+              ].includes(currentTab));
           return (
             <button
               key={item.id}
