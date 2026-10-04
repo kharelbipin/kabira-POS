@@ -1,8 +1,6 @@
 import React from 'react';
 import {
   LayoutDashboard,
-  Store,
-  MonitorCog,
   Users,
   BarChart3,
   Activity,
