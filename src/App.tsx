@@ -29,7 +29,6 @@ import { ManagerSettingsCenter } from './components/settings/ManagerSettingsCent
 import { CheckUploadDirectView } from './components/checks/CheckUploadDirectView';
 import { MobileFastCameraView } from './components/mobile/MobileFastCameraView';
 import { MobileQueueBusterView } from './components/mobile/MobileQueueBusterView';
-import { PosBridgeHubModal } from './components/bridge/PosBridgeHubModal';
 import { CustomerDisplayView } from './components/display/CustomerDisplayView';
 import { hardwareStore, bridgeClient } from './hardware';
 import { IdentifyDisplaysOverlay } from './components/display/IdentifyDisplaysOverlay';
@@ -210,7 +209,6 @@ export default function App() {
   const [showScannerModal, setShowScannerModal] = useState<boolean>(false);
   const [showCustomerSelectModal, setShowCustomerSelectModal] = useState<boolean>(false);
   const [itemDiscountTarget, setItemDiscountTarget] = useState<CartItem | null>(null);
-  const [showBridgeHubModal, setShowBridgeHubModal] = useState<boolean>(false);
   const [showPrintLabelModal, setShowPrintLabelModal] = useState<boolean>(false);
   const [showCustomerDisplayModal, setShowCustomerDisplayModal] = useState<boolean>(false);
   const [showPaymentFallbackModal, setShowPaymentFallbackModal] = useState<boolean>(false);
@@ -1218,7 +1216,6 @@ export default function App() {
                 isOffline={isOffline}
                 onToggleOffline={handleToggleOffline}
                 settings={settings}
-                onOpenBridgeHub={() => setShowBridgeHubModal(true)}
                 onOpenManagerPortal={() => {
                   if (currentUser?.role === 'Manager' || currentUser?.role === 'Admin') {
                     setShowAllFunctionsModal(true);
@@ -1727,12 +1724,7 @@ export default function App() {
         onApplyDiscount={handleApplyItemDiscount}
       />
 
-      {/* POS Bridge Local Hardware Hub Modal (PB-001 to PB-040) */}
-      <PosBridgeHubModal
-        isOpen={showBridgeHubModal}
-        onClose={() => setShowBridgeHubModal(false)}
-        onOpenHardwareManager={() => setCurrentTab('hardware-manager')}
-      />
+
 
       {/* Secondary Customer Display In-App Window (PB-018) */}
       {showCustomerDisplayModal && (
