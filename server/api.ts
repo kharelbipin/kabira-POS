@@ -3522,7 +3522,20 @@ apiRouter.get('/reports/sales', (req: Request, res: Response) => {
 // Settings & Audit Logs
 // ----------------------------------------------------
 apiRouter.get('/settings', (req: Request, res: Response) => {
-    res.json(db.settings);
+    const storeId = String(req.query.storeId || '').trim();
+
+    if (!storeId || storeId === 'store-1') {
+        return res.json(db.settings);
+    }
+
+    if (!db.storeSettingsById[storeId]) {
+        db.storeSettingsById[storeId] = {
+            ...db.settings,
+            storeName: String(req.query.storeName || db.settings.storeName),
+        };
+    }
+
+    return res.json(db.storeSettingsById[storeId]);
 });
 
 apiRouter.put('/settings', asyncHandler(async (req: Request, res: Response) => {
@@ -3531,10 +3544,21 @@ apiRouter.put('/settings', asyncHandler(async (req: Request, res: Response) => {
         return res.status(403).json({ error: 'Only Admins and Managers can modify store settings' });
     }
 
+    const storeId = String(req.query.storeId || '').trim();
+    const isPrimaryStore = !storeId || storeId === 'store-1';
+
+    if (!isPrimaryStore && !db.storeSettingsById[storeId]) {
+        db.storeSettingsById[storeId] = { ...db.settings };
+    }
+
+    const currentSettings = isPrimaryStore
+        ? db.settings
+        : db.storeSettingsById[storeId];
+
     if (
         Object.prototype.hasOwnProperty.call(req.body, 'requireManagerToOpenDrawerNoSale') &&
         currentUser.role !== 'Admin' &&
-        Boolean(req.body.requireManagerToOpenDrawerNoSale) !== Boolean(db.settings.requireManagerToOpenDrawerNoSale)
+        Boolean(req.body.requireManagerToOpenDrawerNoSale) !== Boolean(currentSettings.requireManagerToOpenDrawerNoSale)
     ) {
         return res.status(403).json({ error: 'Only Admins can change manual drawer approval requirements' });
     }
@@ -3542,16 +3566,22 @@ apiRouter.put('/settings', asyncHandler(async (req: Request, res: Response) => {
     if (
         Object.prototype.hasOwnProperty.call(req.body, 'customerDisplayFullscreen') &&
         currentUser.role !== 'Admin' &&
-        Boolean(req.body.customerDisplayFullscreen) !== (db.settings.customerDisplayFullscreen !== false)
+        Boolean(req.body.customerDisplayFullscreen) !== (currentSettings.customerDisplayFullscreen !== false)
     ) {
         return res.status(403).json({ error: 'Only Admins can change customer display fullscreen mode' });
     }
 
-    const before = { ...db.settings };
-    db.settings = { ...db.settings, ...req.body };
+    const before = { ...currentSettings };
+    const updatedSettings = { ...currentSettings, ...req.body };
 
-    // Synchronize payment fallback service configuration
-    if (paymentFallbackService) {
+    if (isPrimaryStore) {
+        db.settings = updatedSettings;
+    } else {
+        db.storeSettingsById[storeId] = updatedSettings;
+    }
+
+    // Only the active local store should change this backend process's payment runtime.
+    if (isPrimaryStore && paymentFallbackService) {
         paymentFallbackService.updateConfig({
             fallbackEnabled: db.settings.paymentFallbackEnabled !== false,
             tapToPayPhoneEnabled: db.settings.tapToPayPhoneEnabled !== false,
@@ -3562,9 +3592,23 @@ apiRouter.put('/settings', asyncHandler(async (req: Request, res: Response) => {
         });
     }
 
-    db.addAudit(currentUser.id, currentUser.name, currentUser.role, 'SETTINGS_UPDATE', 'settings', 'global', 'Updated store configuration & payment fallback settings', before, db.settings);
+    db.addAudit(
+        currentUser.id,
+        currentUser.name,
+        currentUser.role,
+        'SETTINGS_UPDATE',
+        'settings',
+        storeId || 'store-1',
+        'Updated store configuration & payment fallback settings',
+        before,
+        updatedSettings,
+        {
+            storeId: storeId || 'store-1',
+            module: 'Settings',
+        }
+    );
 
-    res.json(db.settings);
+    res.json(updatedSettings);
 }));
 
 apiRouter.get('/audit-logs', (req: Request, res: Response) => {
