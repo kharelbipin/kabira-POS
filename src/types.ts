@@ -539,6 +539,9 @@ export interface StoreSettings {
   email: string;
   website?: string;
   logoUrl?: string;
+  printLogoOnReceipt?: boolean;
+  printLogoOnLabel?: boolean;
+  useStoreNameAsReceiptHeader?: boolean;
   address: string;
   city?: string;
   state?: string;
