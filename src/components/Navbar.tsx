@@ -57,7 +57,6 @@ interface NavbarProps {
   searchQuery?: string;
   onSearchChange?: (val: string) => void;
   onOpenHelp?: () => void;
-  onOpenBridgeHub?: () => void;
   onOpenManagerPortal?: () => void;
   onOpenPrintLabel?: () => void;
   onOpenCustomerDisplay?: () => void;
@@ -81,7 +80,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   searchQuery = '',
   onSearchChange,
   onOpenHelp,
-  onOpenBridgeHub,
   onOpenManagerPortal,
   onOpenPrintLabel,
   onOpenCustomerDisplay,
