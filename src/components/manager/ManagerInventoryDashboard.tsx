@@ -103,6 +103,27 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
     [activeProducts]
   );
 
+  const inventoryTotals = useMemo(
+    () =>
+      activeProducts.reduce(
+        (totals, product) => {
+          const quantity = Math.max(0, Number(product.stockQuantity) || 0);
+          const cost = Math.max(0, Number(product.cost) || 0);
+          const retail = Math.max(0, Number(product.price) || 0);
+          totals.totalCost += quantity * cost;
+          totals.retailValue += quantity * retail;
+          return totals;
+        },
+        { totalCost: 0, retailValue: 0 }
+      ),
+    [activeProducts]
+  );
+
+  const estimatedMarginValue = Math.max(
+    0,
+    inventoryTotals.retailValue - inventoryTotals.totalCost
+  );
+
   const navItems = [
     { label: 'Items', icon: Boxes, tab: 'inventory', active: true },
     { label: 'Receive Inventory', icon: Truck, tab: 'receiving' },
@@ -177,7 +198,23 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <div className="h-11 min-w-[142px] px-3 rounded-lg bg-white border border-slate-200 shadow-sm flex flex-col justify-center">
+                <span className="text-[9px] uppercase tracking-wider font-bold text-slate-500">Total Inventory Cost</span>
+                <span className="text-sm font-black text-[#10234a]">{money(inventoryTotals.totalCost)}</span>
+              </div>
+              <div className="h-11 min-w-[142px] px-3 rounded-lg bg-white border border-slate-200 shadow-sm flex flex-col justify-center">
+                <span className="text-[9px] uppercase tracking-wider font-bold text-slate-500">Retail Value</span>
+                <span className="text-sm font-black text-[#10234a]">{money(inventoryTotals.retailValue)}</span>
+              </div>
+              <div className="h-11 min-w-[142px] px-3 rounded-lg bg-emerald-50 border border-emerald-200 shadow-sm flex flex-col justify-center">
+                <span className="text-[9px] uppercase tracking-wider font-bold text-emerald-700">Margin Value</span>
+                <span className="text-sm font-black text-emerald-700">{money(estimatedMarginValue)}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 justify-end">
             <button type="button" onClick={() => onNavigate('inventory-add')} className="h-11 px-4 rounded-lg bg-[#c78d20] hover:bg-[#b57d18] text-white text-xs font-black flex items-center gap-2 cursor-pointer shadow-sm">
               <Plus className="w-4 h-4" />
               Add Item
@@ -198,6 +235,7 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
               <PackageCheck className="w-4 h-4" />
               Print Label
             </button>
+            </div>
           </div>
         </div>
 
