@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { PosConfiguration, RegisterProfile, StoreProfile } from '../types/industryConfig';
+import { api } from '../utils/api';
 
 export interface PosDeploymentOptions {
   installHardwareBridge: boolean;
@@ -77,16 +78,38 @@ class PosDeploymentService {
     options: PosDeploymentOptions
   ): Promise<PosDeploymentRecord> {
     const createdAt = new Date();
-    const expiresAt = new Date(createdAt.getTime() + Math.max(1, options.expiresInDays) * 86400000);
-    const id = 'deploy-' + Date.now() + '-' + randomToken(4);
-    const oneTimeToken = randomToken(24);
-    const code = createActivationCode();
-    const fileName = 'KaBiRaPOS-' + slugify(store.name) + '-' + slugify(register.name) + '-v' + config.version + '-Setup.zip';
+    const response = await api.createDeployment({
+      storeId: store.id,
+      registerId: register.id,
+      storeName: store.name,
+      registerName: register.name,
+      configurationVersion: config.version,
+      environment: options.environment,
+      expiresInDays: options.expiresInDays,
+      options,
+    });
+
+    const serverDeployment = response.deployment;
+    const oneTimeToken = response.oneTimeDeploymentToken;
+    const id = serverDeployment.id;
+    const code = serverDeployment.activationCode;
+    const expiresAt = new Date(serverDeployment.expiresAt);
+    const fileName =
+      'KaBiRaPOS-' + slugify(store.name) + '-' + slugify(register.name) + '-v' + config.version + '-Setup.zip';
 
     const record: PosDeploymentRecord = {
-      id, storeId: store.id, registerId: register.id, storeName: store.name, registerName: register.name,
-      configurationVersion: config.version, activationCode: code, createdAt: createdAt.toISOString(),
-      expiresAt: expiresAt.toISOString(), status: 'ready', fileName, options,
+      id,
+      storeId: store.id,
+      registerId: register.id,
+      storeName: store.name,
+      registerName: register.name,
+      configurationVersion: config.version,
+      activationCode: code,
+      createdAt: serverDeployment.createdAt || createdAt.toISOString(),
+      expiresAt: serverDeployment.expiresAt,
+      status: serverDeployment.status || 'ready',
+      fileName,
+      options,
     };
 
     const manifest = {
