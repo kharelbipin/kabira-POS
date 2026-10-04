@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   User,
   Product,
@@ -15,18 +15,6 @@ import { useAdminStore } from './contexts/AdminStoreContext';
 
 import { Navbar } from './components/Navbar';
 import { POSView } from './components/POSView';
-import { OrdersView } from './components/OrdersView';
-import { InventoryView } from './components/InventoryView';
-import { CustomersView } from './components/CustomersView';
-import { ReportsView } from './components/ReportsView';
-import { DashboardView } from './components/DashboardView';
-import { UsersView } from './components/UsersView';
-import { AuditLogsView } from './components/AuditLogsView';
-import { UserActivityTrackerView } from './components/UserActivityTrackerView';
-import { ShiftsView } from './components/shifts/ShiftsView';
-import { ChecksView } from './components/checks/ChecksView';
-import { OnlineStoreView } from './components/onlineStore/OnlineStoreView';
-import { ManagerSettingsCenter } from './components/settings/ManagerSettingsCenter';
 import { CheckUploadDirectView } from './components/checks/CheckUploadDirectView';
 import { MobileFastCameraView } from './components/mobile/MobileFastCameraView';
 import { MobileQueueBusterView } from './components/mobile/MobileQueueBusterView';
@@ -54,17 +42,6 @@ import { KitchenKdsModal } from './components/restaurant/KitchenKdsModal';
 import { RestaurantTablesView } from './components/restaurant/RestaurantTablesView';
 import { AdminPosDesigner } from './components/admin/AdminPosDesigner';
 import { StoreFeatureManagementModal } from './components/admin/StoreFeatureManagementModal';
-import { AdminPortalNav } from './components/admin/AdminPortalNav';
-import { AdminHealthDashboard } from './components/admin/AdminHealthDashboard';
-import { AdminStoreSettingsView } from './components/admin/AdminStoreSettingsView';
-import { AdminRegistersView } from './components/admin/AdminRegistersView';
-import { AdminHardwareStoreView } from './components/admin/AdminHardwareStoreView';
-import { ManagerPortalNav } from './components/manager/ManagerPortalNav';
-import { ManagerOperationsDashboard } from './components/manager/ManagerOperationsDashboard';
-import { ManagerInventoryDashboard } from './components/manager/ManagerInventoryDashboard';
-import { ManagerCategoriesView } from './components/manager/ManagerCategoriesView';
-import { ManagerReportsCenter } from './components/manager/ManagerReportsCenter';
-import { ManagerPromotionScanDataCenter } from './components/manager/ManagerPromotionScanDataCenter';
 
 const HELD_ORDERS_STORAGE_KEY = 'kabira_pos_held_orders_v1';
 
@@ -310,26 +287,28 @@ export default function App() {
 
       setCurrentUser(u);
 
-      const [prods, cats, usrs, setts] = await Promise.all([
+      // Only register-critical catalog/configuration data blocks startup.
+      // Users, orders and customers are management/history data and load after
+      // the selling screen is already usable.
+      const [prods, cats, setts] = await Promise.all([
         api.getProducts().catch(() => []),
         api.getCategories().catch(() => []),
-        api.getUsers().catch(() => []),
         api.getSettings().catch(() => null),
       ]);
 
       setProducts(prods);
       setCategories(cats);
-      setUsers(usrs);
       if (setts) setSettings(setts);
 
-      // History is useful, but should not block the selling screen.
       void Promise.all([
         api.getOrders().catch(() => []),
         api.getCustomers().catch(() => []),
+        api.getUsers().catch(() => []),
       ])
-        .then(([ords, custs]) => {
+        .then(([ords, custs, usrs]) => {
           setOrders(ords);
           setCustomers(custs);
+          setUsers(usrs);
         })
         .catch(err => {
           console.error('Failed to load background POS data:', err);
@@ -341,6 +320,43 @@ export default function App() {
     } finally {
       setIsAuthenticating(false);
     }
+  }, []);
+
+  // Fast post-login hydration. The login response already contains the verified
+  // operator, so do not make a second /auth/me round trip or bring back the
+  // full-screen startup spinner. Render the correct portal immediately and
+  // hydrate its data in parallel.
+  const hydrateAfterLogin = useCallback((user: User) => {
+    setCurrentUser(user);
+    setIsAuthenticating(false);
+
+    void Promise.all([
+      api.getProducts().catch(() => []),
+      api.getCategories().catch(() => []),
+      api.getSettings().catch(() => null),
+    ])
+      .then(([prods, cats, setts]) => {
+        setProducts(prods);
+        setCategories(cats);
+        if (setts) setSettings(setts);
+      })
+      .catch(err => {
+        console.error('Failed to hydrate register data after login:', err);
+      });
+
+    void Promise.all([
+      api.getOrders().catch(() => []),
+      api.getCustomers().catch(() => []),
+      api.getUsers().catch(() => []),
+    ])
+      .then(([ords, custs, usrs]) => {
+        setOrders(ords);
+        setCustomers(custs);
+        setUsers(usrs);
+      })
+      .catch(err => {
+        console.error('Failed to hydrate background data after login:', err);
+      });
   }, []);
   useEffect(() => {
     if (isCustomerDisplayMode || checkUploadSession || shelfCameraSession || mobileSessionParam) {
@@ -1140,7 +1156,6 @@ export default function App() {
             // A register cannot be used without an authenticated operator.
           }}
           onLoginSuccess={user => {
-            setCurrentUser(user);
             setCurrentTab(
               user.role === 'Admin'
                 ? 'dashboard'
@@ -1149,7 +1164,7 @@ export default function App() {
                 : 'pos'
             );
             setShowLoginModal(false);
-            void loadAllData();
+            hydrateAfterLogin(user);
           }}
         />
       </div>
@@ -1171,12 +1186,13 @@ export default function App() {
 
   return (
     <div
-      className={`flex ${currentUser.role === 'Admin' || currentUser.role === 'Manager' ? 'flex-row' : 'flex-col'} h-screen w-screen overflow-hidden bg-[#0A0A0A] font-sans text-[#E5E5E5] antialiased selection:bg-[#C5A059] selection:text-black`}
+      className={`kb-shell ${currentUser.role === 'Admin' ? 'kb-admin-shell' : currentUser.role === 'Manager' ? 'kb-manager-shell' : 'kb-cashier-shell'} flex ${currentUser.role === 'Admin' || currentUser.role === 'Manager' ? 'flex-row' : 'flex-col'} h-screen w-screen overflow-hidden bg-[var(--kb-bg)] font-sans text-[var(--kb-text)] antialiased selection:bg-[var(--kb-gold)] selection:text-black`}
       style={{
         zoom: (settings?.windowZoomPercent ?? 100) / 100,
         fontSize: `${settings?.posScreenFontSizePx ?? 16}px`,
       }}
     >
+      <Suspense fallback={<ScreenLoadingFallback />}>
       {currentUser.role === 'Admin' ? (
         <AdminPortalNav
           currentTab={currentTab}
@@ -1639,13 +1655,13 @@ export default function App() {
           )
         )}
       </main>
+      </Suspense>
 
       {/* Global Modals */}
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
         onLoginSuccess={user => {
-          setCurrentUser(user);
           setCurrentTab(
               user.role === 'Admin'
                 ? 'dashboard'
@@ -1654,7 +1670,7 @@ export default function App() {
                 : 'pos'
             );
           setShowLoginModal(false);
-          void loadAllData();
+          hydrateAfterLogin(user);
         }}
         currentUserId={currentUser?.id}
       />
@@ -1663,14 +1679,13 @@ export default function App() {
         isOpen={showManagerPortalLogin}
         onClose={() => setShowManagerPortalLogin(false)}
         onLoginSuccess={user => {
-          setCurrentUser(user);
           setShowManagerPortalLogin(false);
           if (user.role === 'Admin') {
             setCurrentTab('dashboard');
           } else {
             setCurrentTab('manager-dashboard');
           }
-          void loadAllData();
+          hydrateAfterLogin(user);
         }}
         currentUserId={currentUser?.id}
         managerOnly={true}
@@ -1983,7 +1998,7 @@ export default function App() {
       />
 
       {/* Auto-Open Customer Display 2 Screen Banner & Floating Controller (Webform & Dual-Display) */}
-      {(settings?.autoLaunchCustomerScreen ?? true) && !isCustomerDisplayMode && !checkUploadSession && !shelfCameraSession && !mobileSessionParam && (
+      {currentUser.role === 'Cashier' && (settings?.autoLaunchCustomerScreen ?? true) && !isCustomerDisplayMode && !checkUploadSession && !shelfCameraSession && !mobileSessionParam && (
         <CustomerDisplayAutoBanner
           onOpenCustomerDisplayModal={() => setShowCustomerDisplayModal(true)}
         />
