@@ -1,21 +1,35 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BarChart3,
-  Banknote,
-  Boxes,
-  Calendar,
-  CreditCard,
+  CalendarDays,
+  ChevronDown,
   Download,
-  Package,
-  ReceiptText,
-  RefreshCw,
-  Ticket,
-  Users,
+  Printer,
+  Search,
 } from 'lucide-react';
 import { Order, Product, SalesReport, Shift } from '../../types';
 import { api } from '../../utils/api';
 
-type ReportTab = 'sales' | 'payment' | 'product' | 'inventory' | 'cashier' | 'shift' | 'tax' | 'lotto';
+type ReportType =
+  | 'summary'
+  | 'tender'
+  | 'sales'
+  | 'day'
+  | 'expenses'
+  | 'compare'
+  | 'current_stock'
+  | 'dead_stock'
+  | 'over_stock'
+  | 'tax'
+  | 'receive'
+  | 'transfer'
+  | 'items_not_found'
+  | 'notes'
+  | 'payroll'
+  | 'modification'
+  | 'variance'
+  | 'house_account'
+  | 'customer_history';
 
 interface ManagerReportsCenterProps {
   orders: Order[];
@@ -23,20 +37,42 @@ interface ManagerReportsCenterProps {
 }
 
 const money = (value: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value || 0);
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
+
+const REPORT_OPTIONS: { id: ReportType; label: string }[] = [
+  { id: 'summary', label: 'Summary' },
+  { id: 'tender', label: 'Tender Report' },
+  { id: 'sales', label: 'Sales Report' },
+  { id: 'day', label: 'Day Report' },
+  { id: 'expenses', label: 'Expenses' },
+  { id: 'compare', label: 'Compare Period' },
+  { id: 'current_stock', label: 'Current Stock' },
+  { id: 'dead_stock', label: 'Dead Stock' },
+  { id: 'over_stock', label: 'Over Stock' },
+  { id: 'tax', label: 'Tax Breakdown' },
+  { id: 'receive', label: 'Receive Report' },
+  { id: 'transfer', label: 'Transfer Report' },
+  { id: 'items_not_found', label: 'Items Not Found' },
+  { id: 'notes', label: 'Notes Report' },
+  { id: 'payroll', label: 'Payroll Report' },
+  { id: 'modification', label: 'Modification Report' },
+  { id: 'variance', label: 'Variance Report' },
+  { id: 'house_account', label: 'House Account Report' },
+  { id: 'customer_history', label: 'Customer History' },
+];
 
 export const ManagerReportsCenter: React.FC<ManagerReportsCenterProps> = ({ orders, products }) => {
-  const [tab, setTab] = useState<ReportTab>('sales');
+  const [reportType, setReportType] = useState<ReportType>('summary');
+  const [shiftFilter, setShiftFilter] = useState('all');
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'custom' | 'all'>('today');
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString().slice(0, 10);
-  });
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [report, setReport] = useState<SalesReport | null>(null);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resultSearch, setResultSearch] = useState('');
+  const [entries, setEntries] = useState(100);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -65,473 +101,405 @@ export const ManagerReportsCenter: React.FC<ManagerReportsCenterProps> = ({ orde
     return orders.filter(order => {
       if (order.status !== 'completed' && order.status !== 'refunded') return false;
       const created = new Date(order.createdAt);
+
+      if (shiftFilter !== 'all') {
+        const selectedShift = shifts.find(shift => shift.id === shiftFilter);
+        if (selectedShift?.cashierId && order.cashierId !== selectedShift.cashierId) return false;
+      }
+
       if (period === 'all') return true;
       if (period === 'today') return created.toDateString() === now.toDateString();
       if (period === 'week') return created >= new Date(now.getTime() - 7 * 86400000);
       if (period === 'month') return created >= new Date(now.getFullYear(), now.getMonth(), 1);
-      if (period === 'custom') {
-        const from = new Date(startDate + 'T00:00:00');
-        const to = new Date(endDate + 'T23:59:59');
-        return created >= from && created <= to;
-      }
-      return true;
-    });
-  }, [orders, period, startDate, endDate]);
 
-  const lotto = useMemo(() => {
-    let sales = 0;
-    let payouts = 0;
-    let saleCount = 0;
-    let payoutCount = 0;
+      const from = new Date(startDate + 'T00:00:00');
+      const to = new Date(endDate + 'T23:59:59');
+      return created >= from && created <= to;
+    });
+  }, [orders, period, startDate, endDate, shiftFilter, shifts]);
+
+  const salesByCategory = useMemo(() => {
+    const totals: Record<string, { salesCount: number; total: number }> = {};
+
     filteredOrders.forEach(order => {
       order.items.forEach(item => {
-        const sku = String(item.product?.sku || '').toUpperCase();
-        const id = String(item.product?.id || '').toLowerCase();
-        const amount = Number(item.lineTotal ?? item.unitPrice * item.quantity ?? 0);
-        if (sku === 'LOTTO-PAYOUT' || id.startsWith('lotto-payout-')) {
-          payouts += Math.abs(amount);
-          payoutCount += 1;
-        } else if (sku.includes('LOTTO') || item.product?.categoryName?.toLowerCase() === 'lotto') {
-          sales += Math.abs(amount);
-          saleCount += 1;
-        }
+        const category = item.product?.categoryName || 'Other';
+        if (!totals[category]) totals[category] = { salesCount: 0, total: 0 };
+        totals[category].salesCount += Math.max(0, Number(item.quantity || 0));
+        totals[category].total += Math.max(
+          0,
+          Number(item.lineTotal ?? Number(item.unitPrice || 0) * Number(item.quantity || 0))
+        );
       });
     });
-    return { sales, payouts, saleCount, payoutCount, net: sales - payouts };
+
+    return Object.entries(totals)
+      .map(([category, values]) => ({ category, ...values }))
+      .sort((a, b) => b.total - a.total);
   }, [filteredOrders]);
 
-  const inventoryRows = useMemo(
+  const currentStockRows = useMemo(
     () =>
-      [...products]
-        .filter(p => p.active)
-        .sort((a, b) => Number(b.stockQuantity || 0) * Number(b.price || 0) - Number(a.stockQuantity || 0) * Number(a.price || 0)),
+      products
+        .filter(product => product.active)
+        .map(product => ({
+          category: product.name,
+          salesCount: Number(product.stockQuantity || 0),
+          total: Number(product.stockQuantity || 0) * Number(product.price || 0),
+        }))
+        .sort((a, b) => b.total - a.total),
     [products]
   );
 
-  const salesByCategory = useMemo(() => {
-    const totals: Record<string, { sales: number; units: number }> = {};
-    filteredOrders.forEach(order => {
-      order.items.forEach(item => {
-        const category = item.product?.categoryName || 'Uncategorized';
-        const lineAmount = Number(item.lineTotal ?? item.unitPrice * item.quantity ?? 0);
-        if (!totals[category]) totals[category] = { sales: 0, units: 0 };
-        totals[category].sales += Math.max(0, lineAmount);
-        totals[category].units += Math.max(0, Number(item.quantity || 0));
-      });
-    });
-    return Object.entries(totals)
-      .map(([name, value]) => ({ name, ...value }))
-      .sort((a, b) => b.sales - a.sales);
-  }, [filteredOrders]);
+  const tenderRows = useMemo(() => {
+    if (!report) return [];
+    return Object.entries(report.salesByPaymentMethod || {}).map(([method, total]) => ({
+      category: method.toUpperCase(),
+      salesCount: filteredOrders.filter(
+        order => String(order.payment?.method || '').toLowerCase() === method.toLowerCase()
+      ).length,
+      total: Number(total || 0),
+    }));
+  }, [report, filteredOrders]);
 
-  const salesByHour = useMemo(() => {
-    const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, sales: 0, transactions: 0 }));
-    filteredOrders.forEach(order => {
-      const hour = new Date(order.createdAt).getHours();
-      hours[hour].sales += Math.max(0, Number(order.grandTotal || 0));
-      hours[hour].transactions += 1;
-    });
-    return hours.filter(row => row.transactions > 0);
-  }, [filteredOrders]);
-
-  const recentSales = useMemo(
-    () => [...filteredOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 12),
-    [filteredOrders]
+  const taxRows = useMemo(
+    () => [
+      {
+        category: 'Taxable Sales',
+        salesCount: filteredOrders.length,
+        total: Number(report?.totalSales || 0),
+      },
+      {
+        category: 'Sales Tax Collected',
+        salesCount: filteredOrders.length,
+        total: Number(report?.taxTotal || 0),
+      },
+    ],
+    [filteredOrders, report]
   );
 
-  const maxCategorySales = Math.max(1, ...salesByCategory.map(row => row.sales));
-  const maxHourlySales = Math.max(1, ...salesByHour.map(row => row.sales));
+  const baseRows = useMemo(() => {
+    if (reportType === 'tender') return tenderRows;
+    if (reportType === 'current_stock') return currentStockRows;
+    if (reportType === 'tax') return taxRows;
+    return salesByCategory;
+  }, [reportType, tenderRows, currentStockRows, taxRows, salesByCategory]);
 
-  const reportTabs = [
-    { id: 'sales' as const, label: 'Sales Report', icon: BarChart3 },
-    { id: 'payment' as const, label: 'Payment Report', icon: CreditCard },
-    { id: 'product' as const, label: 'Product Report', icon: Package },
-    { id: 'inventory' as const, label: 'Inventory Report', icon: Boxes },
-    { id: 'cashier' as const, label: 'Cashier Report', icon: Users },
-    { id: 'shift' as const, label: 'Shift Report', icon: ReceiptText },
-    { id: 'tax' as const, label: 'Tax Report', icon: Banknote },
-    { id: 'lotto' as const, label: 'Lotto Report', icon: Ticket },
-  ];
+  const visibleRows = useMemo(() => {
+    const q = resultSearch.trim().toLowerCase();
+    const rows = q ? baseRows.filter(row => row.category.toLowerCase().includes(q)) : baseRows;
+    return rows.slice(0, entries);
+  }, [baseRows, resultSearch, entries]);
+
+  const totalSalesCount = visibleRows.reduce((sum, row) => sum + Number(row.salesCount || 0), 0);
+  const totalAmount = visibleRows.reduce((sum, row) => sum + Number(row.total || 0), 0);
+
+  const selectedReportLabel = REPORT_OPTIONS.find(option => option.id === reportType)?.label || 'Summary';
+
+  const rangeText = useMemo(() => {
+    if (period === 'today') {
+      const date = new Date();
+      const d = date.toLocaleDateString();
+      return `${d} 12:00 AM - ${d} 11:59 PM`;
+    }
+    if (period === 'week') return 'Last 7 Days';
+    if (period === 'month') return 'This Month';
+    if (period === 'all') return 'All Time';
+    return `${startDate} 12:00 AM - ${endDate} 11:59 PM`;
+  }, [period, startDate, endDate]);
 
   const downloadCsv = () => {
-    const rows: string[][] = [];
-    const title = reportTabs.find(item => item.id === tab)?.label || 'Report';
+    const rows = [['Department / Category', '# Sales', 'Total']];
+    visibleRows.forEach(row =>
+      rows.push([row.category, String(row.salesCount), Number(row.total).toFixed(2)])
+    );
+    rows.push(['Total', String(totalSalesCount), totalAmount.toFixed(2)]);
 
-    if (tab === 'sales' && report) {
-      rows.push(['Metric', 'Value']);
-      rows.push(['Total Sales', report.totalSales.toFixed(2)]);
-      rows.push(['Transactions', String(report.completedOrdersCount)]);
-      rows.push(['Average Ticket', report.averageOrderValue.toFixed(2)]);
-      rows.push(['Discounts', report.discountsTotal.toFixed(2)]);
-      rows.push(['Refunds', report.refundsTotal.toFixed(2)]);
-    } else if (tab === 'payment' && report) {
-      rows.push(['Payment Method', 'Amount']);
-      Object.entries(report.salesByPaymentMethod || {}).forEach(([method, amount]) =>
-        rows.push([method, Number(amount || 0).toFixed(2)])
-      );
-    } else if (tab === 'product' && report) {
-      rows.push(['Product', 'Units Sold', 'Revenue']);
-      report.topSellingProducts.forEach(item =>
-        rows.push([item.name, String(item.quantitySold), item.revenue.toFixed(2)])
-      );
-    } else if (tab === 'inventory') {
-      rows.push(['Product', 'SKU', 'On Hand', 'Cost', 'Price', 'Retail Value']);
-      inventoryRows.forEach(item =>
-        rows.push([
-          item.name,
-          item.sku,
-          String(item.stockQuantity),
-          Number(item.cost ?? item.costPrice ?? 0).toFixed(2),
-          Number(item.price || 0).toFixed(2),
-          (Number(item.stockQuantity || 0) * Number(item.price || 0)).toFixed(2),
-        ])
-      );
-    } else if (tab === 'cashier' && report) {
-      rows.push(['Cashier', 'Transactions', 'Sales', 'Average Ticket']);
-      report.cashierPerformance.forEach(item =>
-        rows.push([item.cashierName, String(item.orderCount), item.totalSales.toFixed(2), item.averageTicket.toFixed(2)])
-      );
-    } else if (tab === 'shift') {
-      rows.push(['Shift', 'Cashier', 'Register', 'Status', 'Net Sales', 'Expected Cash', 'Actual Cash', 'Variance']);
-      shifts.forEach(shift =>
-        rows.push([
-          shift.shiftNumber,
-          shift.cashierName,
-          shift.registerName,
-          shift.status,
-          Number(shift.summary?.netSales || shift.currentSales || 0).toFixed(2),
-          Number(shift.reconciliation?.expectedCash || shift.summary?.expectedCash || 0).toFixed(2),
-          Number(shift.reconciliation?.actualCash || shift.summary?.actualCash || 0).toFixed(2),
-          Number(shift.reconciliation?.variance || shift.summary?.variance || 0).toFixed(2),
-        ])
-      );
-    } else if (tab === 'tax' && report) {
-      rows.push(['Metric', 'Value']);
-      rows.push(['Sales', report.totalSales.toFixed(2)]);
-      rows.push(['Tax Collected', report.taxTotal.toFixed(2)]);
-    } else if (tab === 'lotto') {
-      rows.push(['Metric', 'Value']);
-      rows.push(['Lotto Sales', lotto.sales.toFixed(2)]);
-      rows.push(['Lotto Payouts', lotto.payouts.toFixed(2)]);
-      rows.push(['Net Lotto', lotto.net.toFixed(2)]);
-      rows.push(['Sale Transactions', String(lotto.saleCount)]);
-      rows.push(['Payout Transactions', String(lotto.payoutCount)]);
-    }
-
-    const csv = rows.map(row => row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')).join('\n');
+    const csv = rows
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = title.toLowerCase().replace(/\s+/g, '-') + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+    link.download =
+      selectedReportLabel.toLowerCase().replace(/\s+/g, '-') +
+      '-' +
+      new Date().toISOString().slice(0, 10) +
+      '.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const empty = <div className="py-10 text-center text-sm text-slate-400">No report data for this period.</div>;
-
   return (
-    <div className="h-full overflow-y-auto bg-[#eef3f8] text-[#10234a]">
-      <div className="px-4 md:px-5 py-4 space-y-4">
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
-          <div>
-            <div className="text-[10px] text-slate-500 mb-1">Manager Portal › Reports</div>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight">Report Center</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Sales, payments, products, inventory, cashiers, shifts, tax, and lotto reporting.
-            </p>
+    <div className="h-full overflow-y-auto bg-[#07111f] text-slate-100">
+      <div className="p-5 md:p-6 space-y-4 max-w-[1600px] mx-auto">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl border border-amber-500/60 bg-amber-500/10 flex items-center justify-center">
+              <BarChart3 className="w-7 h-7 text-amber-400" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black text-white tracking-tight">Reports</h1>
+              <p className="text-sm text-slate-400 mt-0.5">
+                View detailed reports on sales, inventory, customers and more.
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button onClick={downloadCsv} className="h-10 px-4 rounded-lg bg-[#08274d] text-white text-xs font-black flex items-center gap-2 cursor-pointer">
-              <Download className="w-4 h-4" />
-              Download Report
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={downloadCsv}
+              className="h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm flex items-center gap-2 cursor-pointer"
+            >
+              <Download className="w-5 h-5" />
+              Export CSV
             </button>
-            <button onClick={load} className="h-10 px-3 rounded-lg bg-white border border-slate-300 text-[#10234a] cursor-pointer">
-              <RefreshCw className={'w-4 h-4 ' + (loading ? 'animate-spin' : '')} />
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="h-12 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm flex items-center gap-2 cursor-pointer"
+            >
+              <Printer className="w-5 h-5" />
+              Print
             </button>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            {(['today', 'week', 'month', 'all'] as const).map(value => (
-              <button
-                key={value}
-                onClick={() => setPeriod(value)}
-                className={'h-9 px-4 rounded-lg text-xs font-black cursor-pointer ' + (period === value ? 'bg-[#08274d] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}
-              >
-                {value === 'all' ? 'All Time' : value === 'week' ? '7 Days' : value === 'month' ? 'This Month' : 'Today'}
-              </button>
-            ))}
+        <div className="rounded-2xl border border-slate-700/60 bg-[#0b1828] p-4 shadow-xl">
+          <div className="grid grid-cols-1 xl:grid-cols-[1.05fr_0.8fr_1.8fr_auto] gap-4 items-end">
+            <div>
+              <label className="text-xs font-bold text-slate-300 block mb-2">Report Type</label>
+              <div className="relative">
+                <select
+                  value={reportType}
+                  onChange={e => setReportType(e.target.value as ReportType)}
+                  className="w-full h-12 appearance-none rounded-xl border border-amber-500 bg-[#0d1b2d] px-4 pr-10 text-sm font-bold text-white outline-none cursor-pointer"
+                >
+                  {REPORT_OPTIONS.map(option => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 absolute right-3 top-4 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-300 block mb-2">Shift</label>
+              <div className="relative">
+                <select
+                  value={shiftFilter}
+                  onChange={e => setShiftFilter(e.target.value)}
+                  className="w-full h-12 appearance-none rounded-xl border border-slate-600 bg-[#0d1b2d] px-4 pr-10 text-sm text-white outline-none cursor-pointer"
+                >
+                  <option value="all">All Shifts</option>
+                  {shifts.map(shift => (
+                    <option key={shift.id} value={shift.id}>
+                      {shift.shiftNumber} · {shift.cashierName}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 absolute right-3 top-4 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-300 block mb-2">Range:</label>
+              <div className="h-12 rounded-xl border border-slate-600 bg-[#0d1b2d] flex items-center">
+                <div className="h-full w-12 flex items-center justify-center border-r border-slate-600">
+                  <CalendarDays className="w-5 h-5 text-slate-300" />
+                </div>
+                <div className="flex-1 px-4 text-sm font-medium text-slate-200 truncate">{rangeText}</div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(prev => !prev)}
+                  className="h-full w-12 flex items-center justify-center border-l border-slate-600 hover:bg-white/5 cursor-pointer"
+                >
+                  <ChevronDown className="w-4 h-4 text-slate-300" />
+                </button>
+              </div>
+            </div>
+
             <button
-              onClick={() => setPeriod('custom')}
-              className={'h-9 px-4 rounded-lg text-xs font-black flex items-center gap-2 cursor-pointer ' + (period === 'custom' ? 'bg-[#c78d20] text-white' : 'bg-slate-100 text-slate-600')}
+              type="button"
+              onClick={() => setShowAdvanced(prev => !prev)}
+              className="h-12 px-5 rounded-xl border border-amber-500 text-white bg-transparent hover:bg-amber-500/10 font-bold text-sm flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
             >
-              <Calendar className="w-4 h-4" />
-              Date Range
+              <Search className="w-5 h-5 text-amber-400" />
+              Advance Search
             </button>
           </div>
 
-          {period === 'custom' && (
-            <div className="flex flex-wrap items-center gap-2">
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9 rounded-lg border border-slate-300 px-2 text-xs" />
-              <span className="text-xs text-slate-400">to</span>
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-9 rounded-lg border border-slate-300 px-2 text-xs" />
-              <button onClick={load} className="h-9 px-4 rounded-lg bg-[#08274d] text-white text-xs font-black cursor-pointer">Apply</button>
+          {showAdvanced && (
+            <div className="mt-4 pt-4 border-t border-slate-700 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+              {[
+                ['today', 'Today'],
+                ['week', '7 Days'],
+                ['month', 'This Month'],
+                ['all', 'All Time'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPeriod(value as typeof period)}
+                  className={
+                    'h-10 rounded-lg border text-xs font-black cursor-pointer ' +
+                    (period === value
+                      ? 'bg-amber-500 text-slate-950 border-amber-500'
+                      : 'bg-[#0d1b2d] text-slate-300 border-slate-600')
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setPeriod('custom')}
+                className={
+                  'h-10 rounded-lg border text-xs font-black cursor-pointer ' +
+                  (period === 'custom'
+                    ? 'bg-amber-500 text-slate-950 border-amber-500'
+                    : 'bg-[#0d1b2d] text-slate-300 border-slate-600')
+                }
+              >
+                Custom Range
+              </button>
+
+              {period === 'custom' && (
+                <div className="md:col-span-2 xl:col-span-5 flex flex-wrap items-center gap-3 pt-1">
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="h-10 rounded-lg border border-slate-600 bg-[#0d1b2d] px-3 text-xs text-white"
+                  />
+                  <span className="text-xs text-slate-500">to</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="h-10 rounded-lg border border-slate-600 bg-[#0d1b2d] px-3 text-xs text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={load}
+                    className="h-10 px-5 rounded-lg bg-amber-500 text-slate-950 text-xs font-black cursor-pointer"
+                  >
+                    Apply Range
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
-          {reportTabs.map(item => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setTab(item.id)}
-                className={'h-20 rounded-xl border flex flex-col items-center justify-center gap-2 text-[11px] font-black cursor-pointer ' + (tab === item.id ? 'bg-[#08274d] text-white border-[#08274d]' : 'bg-white text-[#10234a] border-slate-200 hover:border-[#c78d20]')}
-              >
-                <Icon className="w-5 h-5" />
-                {item.label}
-              </button>
-            );
-          })}
+        <div className="rounded-2xl border border-slate-700/60 bg-[#0b1828] px-6 py-6 text-center shadow-xl">
+          <h2 className="text-3xl font-black text-white">
+            {selectedReportLabel} - {shiftFilter === 'all' ? 'All' : 'Selected Shift'} - All
+          </h2>
+          <p className="text-sm text-slate-300 mt-2">Range: {rangeText}</p>
         </div>
 
-        {loading ? (
-          <div className="bg-white rounded-xl border border-slate-200 py-20 text-center text-sm text-slate-400">Loading report...</div>
-        ) : (
-          <div className="space-y-4">
-            {tab === 'sales' && report && (
-              <>
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-                  {[
-                    ['Net Sales', money(report.totalSales)],
-                    ['Transactions', String(report.completedOrdersCount)],
-                    ['Average Ticket', money(report.averageOrderValue)],
-                    ['Tax Collected', money(report.taxTotal)],
-                    ['Discounts', money(report.discountsTotal)],
-                    ['Refunds', money(report.refundsTotal)],
-                  ].map(([label, value]) => (
-                    <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                      <div className="text-[10px] uppercase font-black text-slate-500">{label}</div>
-                      <div className="text-xl font-black mt-2">{value}</div>
-                    </div>
-                  ))}
-                </div>
+        <div className="rounded-2xl border border-slate-700/60 bg-[#0b1828] p-4 shadow-xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+            <div className="relative w-full md:max-w-sm">
+              <Search className="w-5 h-5 absolute left-3 top-3 text-slate-400" />
+              <input
+                value={resultSearch}
+                onChange={e => setResultSearch(e.target.value)}
+                placeholder="Search within results..."
+                className="w-full h-11 rounded-xl border border-slate-600 bg-[#0d1b2d] pl-11 pr-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-amber-500"
+              />
+            </div>
 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <div className="font-black">Sales by Category</div>
-                        <div className="text-[10px] text-slate-500">Revenue and units sold from completed transactions</div>
-                      </div>
-                    </div>
-                    {salesByCategory.length === 0 ? empty : (
-                      <div className="space-y-3">
-                        {salesByCategory.slice(0, 10).map(row => (
-                          <div key={row.name}>
-                            <div className="flex items-center justify-between text-xs mb-1">
-                              <span className="font-bold">{row.name}</span>
-                              <span className="font-black">{money(row.sales)} <span className="text-slate-400 font-medium">· {row.units} units</span></span>
-                            </div>
-                            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                              <div className="h-full bg-[#c78d20]" style={{ width: Math.max(2, (row.sales / maxCategorySales) * 100) + '%' }} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-                    <div className="font-black">Sales by Hour</div>
-                    <div className="text-[10px] text-slate-500 mb-4">See the busiest sales hours for the selected period</div>
-                    {salesByHour.length === 0 ? empty : (
-                      <div className="flex items-end gap-2 h-52 overflow-x-auto pb-2">
-                        {salesByHour.map(row => (
-                          <div key={row.hour} className="min-w-[42px] flex-1 h-full flex flex-col justify-end items-center">
-                            <div className="text-[9px] font-black text-slate-500 mb-1">{money(row.sales)}</div>
-                            <div
-                              className="w-full max-w-[34px] rounded-t-md bg-[#08274d]"
-                              style={{ height: Math.max(8, (row.sales / maxHourlySales) * 150) + 'px' }}
-                              title={row.transactions + ' transactions'}
-                            />
-                            <div className="text-[9px] font-bold text-slate-500 mt-1">
-                              {String(row.hour).padStart(2, '0')}:00
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                    <div className="px-4 py-3 border-b border-slate-200 font-black">Top Selling Products</div>
-                    {report.topSellingProducts.length === 0 ? empty : (
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 text-slate-500">
-                          <tr><th className="px-4 py-2">Product</th><th className="px-4 py-2 text-right">Units</th><th className="px-4 py-2 text-right">Revenue</th></tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {report.topSellingProducts.slice(0, 8).map(item => (
-                            <tr key={item.name}>
-                              <td className="px-4 py-3 font-bold">{item.name}</td>
-                              <td className="px-4 py-3 text-right">{item.quantitySold}</td>
-                              <td className="px-4 py-3 text-right font-black">{money(item.revenue)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-
-                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                    <div className="px-4 py-3 border-b border-slate-200 font-black">Recent Sales</div>
-                    {recentSales.length === 0 ? empty : (
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 text-slate-500">
-                          <tr><th className="px-4 py-2">Order</th><th className="px-4 py-2">Cashier</th><th className="px-4 py-2">Time</th><th className="px-4 py-2 text-right">Total</th></tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {recentSales.map(order => (
-                            <tr key={order.id}>
-                              <td className="px-4 py-3 font-mono font-bold">{order.orderNumber}</td>
-                              <td className="px-4 py-3">{order.cashierName}</td>
-                              <td className="px-4 py-3 text-slate-500">{new Date(order.createdAt).toLocaleString()}</td>
-                              <td className="px-4 py-3 text-right font-black">{money(order.grandTotal)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {tab === 'payment' && report && (
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                <div className="px-4 py-3 border-b border-slate-200 font-black">Payment Breakdown</div>
-                {Object.keys(report.salesByPaymentMethod || {}).length === 0 ? empty : (
-                  <div className="divide-y divide-slate-100">
-                    {Object.entries(report.salesByPaymentMethod || {}).map(([method, amount]) => {
-                      const pct = report.totalSales > 0 ? (Number(amount) / report.totalSales) * 100 : 0;
-                      return (
-                        <div key={method} className="px-4 py-3">
-                          <div className="flex justify-between text-xs font-bold">
-                            <span className="uppercase">{method}</span>
-                            <span>{money(Number(amount))} · {pct.toFixed(1)}%</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-slate-100 mt-2 overflow-hidden">
-                            <div className="h-full bg-[#c78d20]" style={{ width: Math.min(100, pct) + '%' }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {tab === 'product' && report && (
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                <div className="px-4 py-3 border-b border-slate-200 font-black">Top Selling Products</div>
-                {report.topSellingProducts.length === 0 ? empty : (
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-2">Product</th><th className="px-4 py-2 text-right">Units</th><th className="px-4 py-2 text-right">Revenue</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {report.topSellingProducts.map(item => (
-                        <tr key={item.name}><td className="px-4 py-3 font-bold">{item.name}</td><td className="px-4 py-3 text-right">{item.quantitySold}</td><td className="px-4 py-3 text-right font-black">{money(item.revenue)}</td></tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-
-            {tab === 'inventory' && report && (
-              <>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-[10px] uppercase font-black text-slate-500">Units On Hand</div><div className="text-xl font-black mt-2">{report.inventoryValuation.totalUnitsOnHand}</div></div>
-                  <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-[10px] uppercase font-black text-slate-500">Cost Value</div><div className="text-xl font-black mt-2">{money(report.inventoryValuation.inventoryCostValue)}</div></div>
-                  <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-[10px] uppercase font-black text-slate-500">Retail Value</div><div className="text-xl font-black mt-2">{money(report.inventoryValuation.inventoryRetailValue)}</div></div>
-                  <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-[10px] uppercase font-black text-slate-500">Low Stock</div><div className="text-xl font-black mt-2 text-amber-600">{report.inventoryValuation.lowStockItemCount}</div></div>
-                </div>
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                  <div className="px-4 py-3 border-b border-slate-200 font-black">Highest Inventory Value</div>
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-2">Product</th><th className="px-4 py-2">SKU</th><th className="px-4 py-2 text-right">On Hand</th><th className="px-4 py-2 text-right">Retail Value</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {inventoryRows.slice(0, 10).map(item => (
-                        <tr key={item.id}><td className="px-4 py-3 font-bold">{item.name}</td><td className="px-4 py-3 font-mono text-slate-500">{item.sku}</td><td className="px-4 py-3 text-right">{item.stockQuantity}</td><td className="px-4 py-3 text-right font-black">{money(Number(item.stockQuantity || 0) * Number(item.price || 0))}</td></tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-
-            {tab === 'cashier' && report && (
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                <div className="px-4 py-3 border-b border-slate-200 font-black">Cashier Performance</div>
-                {report.cashierPerformance.length === 0 ? empty : (
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-2">Cashier</th><th className="px-4 py-2 text-right">Transactions</th><th className="px-4 py-2 text-right">Sales</th><th className="px-4 py-2 text-right">Avg Ticket</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {report.cashierPerformance.map(item => (
-                        <tr key={item.cashierName}><td className="px-4 py-3 font-bold">{item.cashierName}</td><td className="px-4 py-3 text-right">{item.orderCount}</td><td className="px-4 py-3 text-right font-black">{money(item.totalSales)}</td><td className="px-4 py-3 text-right">{money(item.averageTicket)}</td></tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-
-            {tab === 'shift' && (
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                <div className="px-4 py-3 border-b border-slate-200 font-black">Shift Summary</div>
-                {shifts.length === 0 ? empty : (
-                  <table className="w-full text-left text-xs min-w-[900px]">
-                    <thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-2">Shift</th><th className="px-4 py-2">Cashier</th><th className="px-4 py-2">Register</th><th className="px-4 py-2">Status</th><th className="px-4 py-2 text-right">Net Sales</th><th className="px-4 py-2 text-right">Expected Cash</th><th className="px-4 py-2 text-right">Actual Cash</th><th className="px-4 py-2 text-right">Variance</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {shifts.slice(0, 20).map(shift => {
-                        const variance = Number(shift.reconciliation?.variance ?? shift.summary?.variance ?? 0);
-                        return (
-                          <tr key={shift.id}><td className="px-4 py-3 font-bold">{shift.shiftNumber}</td><td className="px-4 py-3">{shift.cashierName}</td><td className="px-4 py-3">{shift.registerName}</td><td className="px-4 py-3 capitalize">{shift.status}</td><td className="px-4 py-3 text-right font-black">{money(Number(shift.summary?.netSales || shift.currentSales || 0))}</td><td className="px-4 py-3 text-right">{money(Number(shift.reconciliation?.expectedCash || shift.summary?.expectedCash || 0))}</td><td className="px-4 py-3 text-right">{money(Number(shift.reconciliation?.actualCash || shift.summary?.actualCash || 0))}</td><td className={'px-4 py-3 text-right font-black ' + (variance < 0 ? 'text-rose-600' : variance > 0 ? 'text-amber-600' : 'text-emerald-600')}>{money(variance)}</td></tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-
-            {tab === 'tax' && report && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="bg-white rounded-xl border border-slate-200 p-5"><div className="text-[10px] uppercase font-black text-slate-500">Sales</div><div className="text-2xl font-black mt-2">{money(report.totalSales)}</div></div>
-                <div className="bg-white rounded-xl border border-slate-200 p-5"><div className="text-[10px] uppercase font-black text-slate-500">Tax Collected</div><div className="text-2xl font-black mt-2">{money(report.taxTotal)}</div></div>
-                <div className="bg-white rounded-xl border border-slate-200 p-5"><div className="text-[10px] uppercase font-black text-slate-500">Effective Tax %</div><div className="text-2xl font-black mt-2">{report.totalSales > 0 ? ((report.taxTotal / report.totalSales) * 100).toFixed(2) : '0.00'}%</div></div>
-              </div>
-            )}
-
-            {tab === 'lotto' && (
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-[10px] uppercase font-black text-slate-500">Lotto Sales</div><div className="text-xl font-black mt-2 text-emerald-600">{money(lotto.sales)}</div></div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-[10px] uppercase font-black text-slate-500">Payouts</div><div className="text-xl font-black mt-2 text-rose-600">{money(lotto.payouts)}</div></div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-[10px] uppercase font-black text-slate-500">Net Lotto</div><div className="text-xl font-black mt-2">{money(lotto.net)}</div></div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-[10px] uppercase font-black text-slate-500">Sale Lines</div><div className="text-xl font-black mt-2">{lotto.saleCount}</div></div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4"><div className="text-[10px] uppercase font-black text-slate-500">Payout Lines</div><div className="text-xl font-black mt-2">{lotto.payoutCount}</div></div>
-              </div>
-            )}
+            <div className="flex items-center justify-end gap-3 text-sm text-slate-300">
+              <span>Show</span>
+              <select
+                value={entries}
+                onChange={e => setEntries(Number(e.target.value))}
+                className="h-11 rounded-xl border border-slate-600 bg-[#0d1b2d] px-3 text-white"
+              >
+                {[25, 50, 100, 250].map(value => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+              <span>Entries</span>
+            </div>
           </div>
-        )}
+
+          <div className="overflow-x-auto rounded-xl border border-slate-700">
+            <table className="w-full min-w-[720px] border-collapse text-sm">
+              <thead>
+                <tr className="bg-[#142238] text-left text-slate-100">
+                  <th className="px-5 py-4 font-black border-r border-slate-700" rowSpan={2}>
+                    Department / Category
+                  </th>
+                  <th className="px-5 py-3 font-black text-center border-b border-slate-700" colSpan={2}>
+                    This
+                  </th>
+                </tr>
+                <tr className="bg-[#16263d] text-slate-200">
+                  <th className="px-5 py-3 font-black text-center border-r border-slate-700"># Sales</th>
+                  <th className="px-5 py-3 font-black text-left">Total</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={3} className="px-5 py-16 text-center text-slate-400">
+                      Loading report...
+                    </td>
+                  </tr>
+                ) : visibleRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-5 py-16 text-center text-slate-400">
+                      No report data found for this selection.
+                    </td>
+                  </tr>
+                ) : (
+                  visibleRows.map((row, index) => (
+                    <tr
+                      key={row.category}
+                      className={index % 2 === 0 ? 'bg-[#081526]' : 'bg-[#0e1c2f]'}
+                    >
+                      <td className="px-5 py-3 border-r border-slate-800 font-medium text-slate-100">
+                        {row.category}
+                      </td>
+                      <td className="px-5 py-3 border-r border-slate-800 text-center">
+                        <span className="text-sky-400 underline underline-offset-2 font-bold">
+                          {row.salesCount}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 font-medium text-slate-100">{money(row.total)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+
+              {!loading && visibleRows.length > 0 && (
+                <tfoot>
+                  <tr className="bg-amber-500/20 border-t border-amber-500/40">
+                    <td className="px-5 py-4 font-black text-amber-300 border-r border-amber-500/20">
+                      Total
+                    </td>
+                    <td className="px-5 py-4 font-black text-center text-amber-300 border-r border-amber-500/20">
+                      {totalSalesCount}
+                    </td>
+                    <td className="px-5 py-4 font-black text-amber-300">{money(totalAmount)}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );
