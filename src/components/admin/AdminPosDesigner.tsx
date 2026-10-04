@@ -15,6 +15,7 @@ import {
   SAMPLE_REGISTERS,
 } from '../../services/industryConfigService';
 import { playBeep } from '../../utils/audio';
+import { useAdminStore } from '../../contexts/AdminStoreContext';
 import {
   posDeploymentService,
   PosDeploymentOptions,
@@ -65,8 +66,20 @@ export const AdminPosDesigner: React.FC<AdminPosDesignerProps> = ({
   onClose,
   onApplyConfiguration,
 }) => {
-  const [selectedStoreId, setSelectedStoreId] = useState<string>('store-1');
-  const [selectedRegisterId, setSelectedRegisterId] = useState<string>('reg-101');
+  const {
+    selectedStoreId: adminStoreId,
+    isAllStores,
+    setSelectedStoreId: setAdminStoreId,
+  } = useAdminStore();
+  const initialStoreId =
+    !isAllStores && SAMPLE_STORES.some(store => store.id === adminStoreId)
+      ? adminStoreId
+      : SAMPLE_STORES[0]?.id || 'store-1';
+  const initialRegisterId =
+    SAMPLE_STORES.find(store => store.id === initialStoreId)?.registers[0]?.id || 'reg-1-01';
+
+  const [selectedStoreId, setSelectedStoreId] = useState<string>(initialStoreId);
+  const [selectedRegisterId, setSelectedRegisterId] = useState<string>(initialRegisterId);
   const [hierarchyLevel, setHierarchyLevel] = useState<ConfigHierarchyLevel>('store');
   const [activeTab, setActiveTab] = useState<
     'features' | 'layout' | 'navigation' | 'actions' | 'workflow' | 'hardware' | 'theme' | 'history'
@@ -74,7 +87,7 @@ export const AdminPosDesigner: React.FC<AdminPosDesignerProps> = ({
 
   // Active configuration being edited
   const [currentConfig, setCurrentConfig] = useState<PosConfiguration>(() =>
-    industryConfigService.resolveActiveConfiguration('store-1', 'reg-101', 'Admin')
+    industryConfigService.resolveActiveConfiguration(initialStoreId, initialRegisterId, 'Admin')
   );
 
   const [devicePreview, setDevicePreview] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
@@ -95,6 +108,19 @@ export const AdminPosDesigner: React.FC<AdminPosDesignerProps> = ({
   const [publishTarget, setPublishTarget] = useState<'company' | 'store' | 'register'>('store');
   const [publishMessage, setPublishMessage] = useState<string>('');
   const [publishSuccessBanner, setPublishSuccessBanner] = useState<string | null>(null);
+
+  // Synchronize the Designer with the persistent Admin store selector.
+  useEffect(() => {
+    if (isAllStores || !adminStoreId || adminStoreId === selectedStoreId) return;
+    const store = SAMPLE_STORES.find(item => item.id === adminStoreId);
+    if (!store) return;
+    const nextRegisterId = store.registers[0]?.id || selectedRegisterId;
+    setSelectedStoreId(store.id);
+    setSelectedRegisterId(nextRegisterId);
+    setCurrentConfig(
+      industryConfigService.resolveActiveConfiguration(store.id, nextRegisterId, 'Admin')
+    );
+  }, [adminStoreId, isAllStores]);
   const [featureSearch, setFeatureSearch] = useState<string>('');
   const [featureCategoryFilter, setFeatureCategoryFilter] = useState<string>('ALL');
 
@@ -267,10 +293,15 @@ export const AdminPosDesigner: React.FC<AdminPosDesignerProps> = ({
           <select
             value={selectedStoreId}
             onChange={e => {
-              setSelectedStoreId(e.target.value);
+              const nextStoreId = e.target.value;
+              const nextStore = SAMPLE_STORES.find(store => store.id === nextStoreId);
+              const nextRegisterId = nextStore?.registers[0]?.id || selectedRegisterId;
+              setSelectedStoreId(nextStoreId);
+              setSelectedRegisterId(nextRegisterId);
+              setAdminStoreId(nextStoreId);
               const resolved = industryConfigService.resolveActiveConfiguration(
-                e.target.value,
-                selectedRegisterId,
+                nextStoreId,
+                nextRegisterId,
                 'Admin'
               );
               setCurrentConfig(resolved);
