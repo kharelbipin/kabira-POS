@@ -28,49 +28,10 @@ export interface PosDeploymentRecord {
   options: PosDeploymentOptions;
 }
 
-const STORAGE_KEY = 'kabira_pos_deployment_packages_v1';
-
 const slugify = (value: string) =>
   value.trim().replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'store';
 
-const randomToken = (bytes = 18) => {
-  const data = new Uint8Array(bytes);
-  crypto.getRandomValues(data);
-  return Array.from(data, value => value.toString(16).padStart(2, '0')).join('');
-};
-
-const createActivationCode = () => {
-  const token = randomToken(6).toUpperCase();
-  return token.slice(0, 4) + '-' + token.slice(4, 8) + '-' + token.slice(8, 12);
-};
-
 class PosDeploymentService {
-  private load(): PosDeploymentRecord[] {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  private save(records: PosDeploymentRecord[]) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records.slice(0, 100)));
-  }
-
-  list(): PosDeploymentRecord[] {
-    return this.load();
-  }
-
-  revoke(id: string): PosDeploymentRecord | null {
-    const records = this.load();
-    const index = records.findIndex(row => row.id === id);
-    if (index < 0) return null;
-    records[index] = { ...records[index], status: 'revoked' };
-    this.save(records);
-    return records[index];
-  }
-
   async buildPackage(
     store: StoreProfile,
     register: RegisterProfile,
@@ -180,9 +141,6 @@ class PosDeploymentService {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    const records = this.load();
-    records.unshift(record);
-    this.save(records);
     return record;
   }
 }
