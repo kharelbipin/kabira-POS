@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import { execFile, spawn } from 'child_process';
 import { apiRouter } from './server/api.js';
+import { paymentRouter } from './server/payment/paymentRoutes.js';
 import { db } from './server/db.js';
 
 const BRIDGE_BASE_URL = 'http://127.0.0.1:5055';
@@ -321,6 +322,7 @@ Start-Process -FilePath $edge -ArgumentList $displayArgs
         );
     });
 
+    app.use('/api/payments', paymentRouter);
     app.use('/api', apiRouter);
 
     app.get('/api/health', (_req, res) => {
