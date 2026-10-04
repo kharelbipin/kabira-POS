@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuditLog } from '../types';
 import { api } from '../utils/api';
+import { useAdminStore } from '../contexts/AdminStoreContext';
 import {
   FileClock,
   ShieldAlert,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 
 export const AuditLogsView: React.FC = () => {
+  const { selectedStoreId, selectedStore, isAllStores } = useAdminStore();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -20,7 +22,7 @@ export const AuditLogsView: React.FC = () => {
   const fetchLogs = async () => {
     setIsLoading(true);
     try {
-      const data = await api.getAuditLogs();
+      const data = await api.getAuditLogs(isAllStores ? 'all' : selectedStoreId);
       setLogs(data);
     } catch (err) {
       console.error(err);
@@ -31,7 +33,7 @@ export const AuditLogsView: React.FC = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, []);
+  }, [selectedStoreId, isAllStores]);
 
   const filteredLogs = logs.filter(l => {
     if (actionFilter !== 'all' && !l.action.toLowerCase().includes(actionFilter.toLowerCase())) {
@@ -58,7 +60,9 @@ export const AuditLogsView: React.FC = () => {
             <span>Immutable Compliance Audit Log</span>
           </h2>
           <p className="text-xs text-[#737373] mt-0.5 font-sans">
-            Cryptographically timestamped operational trace of all logins, voids, refunds, and price modifications
+            {isAllStores
+              ? 'Corporate audit activity across all stores'
+              : `Operational activity for ${selectedStore?.name || 'the selected store'}`}
           </p>
         </div>
 
