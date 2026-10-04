@@ -21,6 +21,7 @@ import { KabiraEmblem } from '../common/KabiraLogo';
 import { IdentifyDisplaysOverlay } from './IdentifyDisplaysOverlay';
 import { hardwareStore } from '../../hardware/HardwareStore';
 import { playBeep } from '../../utils/audio';
+import { createDisplay2MediaUrl } from '../../utils/displayMediaStore';
 
 const DEFAULT_DISPLAY_STATE: CustomerDisplayState = {
   screenState: 'welcome',
@@ -70,6 +71,8 @@ export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settin
   });
 
   const [promoIndex, setPromoIndex] = useState(0);
+  const [display2MediaUrl, setDisplay2MediaUrl] = useState<string | null>(null);
+  const [display2MediaMimeType, setDisplay2MediaMimeType] = useState<string>('');
 
   // Customer Touchscreen Interactions (WV-049 - WV-053)
   const [showLoyaltyKeypad, setShowLoyaltyKeypad] = useState<boolean>(false);
@@ -97,6 +100,47 @@ export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settin
       badge: 'Cold Cooler',
     },
   ];
+
+  useEffect(() => {
+    let currentObjectUrl: string | null = null;
+
+    const loadDisplay2Media = async () => {
+      try {
+        const stored = await createDisplay2MediaUrl();
+        if (currentObjectUrl) {
+          URL.revokeObjectURL(currentObjectUrl);
+          currentObjectUrl = null;
+        }
+
+        if (stored) {
+          currentObjectUrl = stored.url;
+          setDisplay2MediaUrl(stored.url);
+          setDisplay2MediaMimeType(stored.record.mimeType || '');
+        } else {
+          setDisplay2MediaUrl(null);
+          setDisplay2MediaMimeType('');
+        }
+      } catch {
+        setDisplay2MediaUrl(null);
+        setDisplay2MediaMimeType('');
+      }
+    };
+
+    loadDisplay2Media();
+
+    const handleMediaStorageChange = (event: StorageEvent) => {
+      if (event.key === 'kabira_display2_media_changed') {
+        loadDisplay2Media();
+      }
+    };
+
+    window.addEventListener('storage', handleMediaStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleMediaStorageChange);
+      if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+    };
+  }, []);
 
   useEffect(() => {
     // BroadcastChannel synchronization (WV-030)
@@ -240,6 +284,11 @@ export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settin
   const hasItems = displayState.items && displayState.items.length > 0;
   const isIdleAdvertising = !hasItems && displayState.screenState === 'welcome';
   const currentPromo = PROMO_SLIDES[promoIndex];
+  const shouldShowCustomIdleMedia =
+    isIdleAdvertising &&
+    Boolean(settings?.display2MediaEnabled) &&
+    (settings?.display2ShowMediaWhenIdle ?? true) &&
+    Boolean(display2MediaUrl);
 
   return (
     <div
@@ -558,6 +607,31 @@ export const CustomerDisplayView: React.FC<CustomerDisplayViewProps> = ({ settin
                 ))}
               </div>
             </>
+          ) : shouldShowCustomIdleMedia ? (
+            /* CUSTOM MANAGER-UPLOADED DISPLAY 2 MEDIA */
+            <div className="flex-1 relative overflow-hidden min-h-screen bg-black">
+              {settings?.display2MediaType === 'video' || display2MediaMimeType.startsWith('video/') ? (
+                <video
+                  key={display2MediaUrl || 'display2-video'}
+                  src={display2MediaUrl || undefined}
+                  autoPlay
+                  loop
+                  playsInline
+                  muted={settings?.display2MediaMuted ?? true}
+                  className={`absolute inset-0 w-full h-full ${
+                    settings?.display2MediaFit === 'contain' ? 'object-contain' : 'object-cover'
+                  }`}
+                />
+              ) : (
+                <img
+                  src={display2MediaUrl || undefined}
+                  alt="Store promotion"
+                  className={`absolute inset-0 w-full h-full ${
+                    settings?.display2MediaFit === 'contain' ? 'object-contain' : 'object-cover'
+                  }`}
+                />
+              )}
+            </div>
           ) : (
             /* SCREEN STATE: WELCOME / IDLE DISPLAY */
             <div className="flex-1 flex flex-col items-center justify-center p-10 text-center relative overflow-hidden min-h-screen">
