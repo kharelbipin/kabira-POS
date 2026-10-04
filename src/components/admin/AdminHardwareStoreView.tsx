@@ -4,13 +4,7 @@ import { api } from '../../utils/api';
 import { useAdminStore } from '../../contexts/AdminStoreContext';
 import { HardwareDeviceManager } from './HardwareDeviceManager';
 
-interface AdminHardwareStoreViewProps {
-  onOpenCustomerDisplay: () => void;
-}
-
-export const AdminHardwareStoreView: React.FC<AdminHardwareStoreViewProps> = ({
-  onOpenCustomerDisplay,
-}) => {
+export const AdminHardwareStoreView: React.FC = () => {
   const { selectedStoreId, selectedStore, isAllStores } = useAdminStore();
   const [telemetry, setTelemetry] = useState<any[]>([]);
   const [registers, setRegisters] = useState<any[]>([]);
@@ -135,7 +129,7 @@ export const AdminHardwareStoreView: React.FC<AdminHardwareStoreViewProps> = ({
               Hardware Device Manager — {selectedStore.name}
             </span>
           </div>
-          <HardwareDeviceManager onOpenCustomerDisplay={onOpenCustomerDisplay} />
+          <HardwareDeviceManager />
         </div>
       </div>
     </div>
