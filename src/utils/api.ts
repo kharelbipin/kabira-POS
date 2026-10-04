@@ -301,8 +301,10 @@ class ApiService {
     });
   }
 
-  async getUsers() {
-    return this.request<User[]>('/users');
+  async getUsers(storeId?: string) {
+    const q = new URLSearchParams();
+    if (storeId) q.set('storeId', storeId);
+    return this.request<User[]>(`/users?${q.toString()}`);
   }
 
   async createUser(data: Partial<User>) {
@@ -647,7 +649,7 @@ class ApiService {
     });
   }
 
-  async getRegisters(): Promise<{ registers: Array<{
+  async getRegisters(storeId?: string): Promise<{ registers: Array<{
     id: string;
     name: string;
     location: string;
@@ -655,15 +657,19 @@ class ApiService {
     currentCashier: string | null;
     activeShiftId: string | null;
   }> }> {
-    return this.request('/registers');
+    const q = new URLSearchParams();
+    if (storeId) q.set('storeId', storeId);
+    return this.request(`/registers?${q.toString()}`);
   }
 
-  async getBridgeTelemetry(): Promise<{
+  async getBridgeTelemetry(storeId?: string): Promise<{
     terminals: any[];
     count: number;
     serverTime: string;
   }> {
-    return this.request('/bridge/telemetry');
+    const q = new URLSearchParams();
+    if (storeId) q.set('storeId', storeId);
+    return this.request(`/bridge/telemetry?${q.toString()}`);
   }
 
   async restartBridgeService(): Promise<{ success: boolean; message: string }> {
@@ -738,6 +744,8 @@ class ApiService {
     payments?: any[];
     cashierId?: string;
     cashierName?: string;
+    storeId?: string;
+    registerId?: string;
   }) {
     return this.request<Order>('/orders', {
       method: 'POST',
@@ -745,12 +753,13 @@ class ApiService {
     });
   }
 
-  async getOrders(params?: { search?: string; cashierId?: string; status?: string; paymentMethod?: string }) {
+  async getOrders(params?: { search?: string; cashierId?: string; status?: string; paymentMethod?: string; storeId?: string }) {
     const q = new URLSearchParams();
     if (params?.search) q.set('search', params.search);
     if (params?.cashierId) q.set('cashierId', params.cashierId);
     if (params?.status) q.set('status', params.status);
     if (params?.paymentMethod) q.set('paymentMethod', params.paymentMethod);
+    if (params?.storeId) q.set('storeId', params.storeId);
 
     return this.request<Order[]>(`/orders?${q.toString()}`);
   }
@@ -891,7 +900,7 @@ class ApiService {
   }
 
   // Reports
-  async getSalesReport(period: string = 'today', startDate?: string, endDate?: string): Promise<SalesReport> {
+  async getSalesReport(period: string = 'today', startDate?: string, endDate?: string, storeId?: string): Promise<SalesReport> {
     const query = new URLSearchParams();
     query.set('period', period);
     if (startDate) query.set('startDate', startDate);
@@ -912,8 +921,10 @@ class ApiService {
   }
 
   // Audit Logs
-  async getAuditLogs() {
-    return this.request<AuditLog[]>('/audit-logs');
+  async getAuditLogs(storeId?: string) {
+    const q = new URLSearchParams();
+    if (storeId) q.set('storeId', storeId);
+    return this.request<AuditLog[]>(`/audit-logs?${q.toString()}`);
   }
 
   // --------------------------------------------------
