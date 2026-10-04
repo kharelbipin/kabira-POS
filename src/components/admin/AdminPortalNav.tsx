@@ -4,7 +4,6 @@ import {
   Store,
   MonitorCog,
   Users,
-  Boxes,
   BarChart3,
   Activity,
   Settings,
@@ -29,7 +28,6 @@ const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'pos', label: 'POS Register', icon: ShoppingCart },
   { id: 'users', label: 'Users & Roles', icon: Users },
-  { id: 'inventory', label: 'Inventory Control', icon: Boxes },
   { id: 'hardware-manager', label: 'Hardware', icon: Cpu },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
   { id: 'user-activity', label: 'Audit & Activity', icon: Activity },
@@ -103,25 +101,6 @@ export const AdminPortalNav: React.FC<AdminPortalNavProps> = ({
           <span>POS Designer</span>
         </button>
 
-        <div className="mt-4 px-2 pt-3 pb-1 border-t border-slate-800 text-[10px] uppercase tracking-wider text-slate-600 font-bold">
-          Platform
-        </div>
-
-        <div className="px-3 py-2 rounded-xl border border-slate-800 bg-slate-900/60">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
-            <Store className="w-4 h-4 text-sky-400" />
-            <span>Stores</span>
-          </div>
-          <p className="mt-1 text-[10px] text-slate-500">Multi-store control will live here.</p>
-        </div>
-
-        <div className="px-3 py-2 rounded-xl border border-slate-800 bg-slate-900/60">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
-            <MonitorCog className="w-4 h-4 text-violet-400" />
-            <span>Deployments</span>
-          </div>
-          <p className="mt-1 text-[10px] text-slate-500">Publish, version, and rollback controls.</p>
-        </div>
       </nav>
 
       <div className="p-3 border-t border-slate-800">
