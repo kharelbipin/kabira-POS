@@ -129,6 +129,9 @@ class Database {
     },
   ];
 
+  deploymentPackages: any[] = [];
+  registeredTerminals: any[] = [];
+
   devices: PosDevice[] = [
     {
       id: 'dev-1',
@@ -1124,6 +1127,8 @@ class Database {
       'brands',
       'promotions',
       'devices',
+      'deploymentPackages',
+      'registeredTerminals',
       'products',
       'customers',
       'orders',
@@ -1247,6 +1252,8 @@ class Database {
         scanDataTransactions: this.scanDataTransactions.length,
         scanDataExportBatches: this.scanDataExportBatches.length,
         devices: this.devices.length,
+        deploymentPackages: this.deploymentPackages.length,
+        registeredTerminals: this.registeredTerminals.length,
       },
     };
   }
