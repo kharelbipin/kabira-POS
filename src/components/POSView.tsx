@@ -433,18 +433,6 @@ export const POSView: React.FC<POSViewProps> = ({
             <span>Add Item (F4)</span>
           </button>
 
-          {/* [||| Scan (F3)] in Dark Navy */}
-          <button
-            type="button"
-            onClick={() => {
-              playBeep('click');
-              if (onOpenScannerModal) onOpenScannerModal();
-            }}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#1E293B] hover:bg-[#0F172A] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-98 cursor-pointer shrink-0"
-          >
-            <ScanBarcode className="w-4 h-4" />
-            <span>Scan (F3)</span>
-          </button>
 
           {/* [🎫 Lotto Sale (F6)] in Emerald Green */}
           <button
