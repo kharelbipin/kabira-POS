@@ -1073,6 +1073,8 @@ class Database {
       deviceId?: string;
       terminalId?: string;
       module?: string;
+      storeId?: string;
+      registerId?: string;
     }
   ) {
     const log: AuditLog = {
@@ -1092,6 +1094,8 @@ class Database {
       deviceId: extra?.deviceId,
       terminalId: extra?.terminalId,
       module: extra?.module,
+      storeId: extra?.storeId,
+      registerId: extra?.registerId,
       timestamp: new Date().toISOString(),
     };
     this.auditLogs.unshift(log);
