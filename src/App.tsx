@@ -1250,7 +1250,6 @@ export default function App() {
               settings={settings}
               onOpenHardware={() => setCurrentTab('hardware-manager')}
               onOpenUsers={() => setCurrentTab('users')}
-              onOpenInventory={() => setCurrentTab('inventory')}
             />
           ) : (
             <DashboardView
