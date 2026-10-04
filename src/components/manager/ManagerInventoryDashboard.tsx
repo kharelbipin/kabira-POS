@@ -10,6 +10,9 @@ import {
   Truck,
   Upload,
   Download,
+  Edit2,
+  Save,
+  X,
   Users,
 } from 'lucide-react';
 import { Category, Product, ScannedInvoice, StoreSettings } from '../../types';
@@ -22,6 +25,7 @@ interface ManagerInventoryDashboardProps {
   onNavigate: (tab: string) => void;
   onOpenPrintLabel: () => void;
   onSettingsUpdated: (settings: StoreSettings) => void;
+  onProductUpdated: (product: Product) => void;
 }
 
 const money = (value: number) =>
@@ -34,6 +38,7 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
   onNavigate,
   onOpenPrintLabel,
   onSettingsUpdated,
+  onProductUpdated,
 }) => {
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('all');
@@ -41,6 +46,9 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
   const [status, setStatus] = useState('all');
   const [recentInvoices, setRecentInvoices] = useState<ScannedInvoice[]>([]);
   const [savingLabelSettings, setSavingLabelSettings] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editForm, setEditForm] = useState<Partial<Product>>({});
+  const [savingProduct, setSavingProduct] = useState(false);
 
   useEffect(() => {
     api
@@ -157,6 +165,56 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
       URL.revokeObjectURL(url);
     } catch (error: any) {
       alert(error?.message || 'Failed to download inventory.');
+    }
+  };
+
+  const handleOpenEdit = (product: Product) => {
+    setEditingProduct(product);
+    setEditForm({
+      name: product.name,
+      sku: product.sku,
+      barcode: product.barcode,
+      categoryId: product.categoryId,
+      categoryName: product.categoryName,
+      size: product.size,
+      stockQuantity: product.stockQuantity,
+      cost: Number(product.cost ?? product.costPrice ?? 0),
+      price: product.price,
+      vendor: product.vendor || '',
+      lowStockThreshold: product.lowStockThreshold,
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingProduct) return;
+    if (!String(editForm.name || '').trim()) {
+      alert('Item name is required.');
+      return;
+    }
+
+    setSavingProduct(true);
+    try {
+      const selectedCategory = categories.find(category => category.id === editForm.categoryId);
+      const saved = await api.updateProduct(editingProduct.id, {
+        ...editForm,
+        name: String(editForm.name || '').trim(),
+        sku: String(editForm.sku || '').trim(),
+        barcode: String(editForm.barcode || '').trim(),
+        categoryName: selectedCategory?.name || editForm.categoryName,
+        size: String(editForm.size || '').trim(),
+        vendor: String(editForm.vendor || '').trim() || undefined,
+        stockQuantity: Number(editForm.stockQuantity || 0),
+        cost: Number(editForm.cost || 0),
+        price: Number(editForm.price || 0),
+        lowStockThreshold: Number(editForm.lowStockThreshold || 0),
+      });
+      onProductUpdated(saved);
+      setEditingProduct(null);
+      setEditForm({});
+    } catch (error: any) {
+      alert(error?.message || 'Failed to update item.');
+    } finally {
+      setSavingProduct(false);
     }
   };
 
@@ -424,11 +482,12 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
                         <td className="px-3 py-2 text-center">
                           <button
                             type="button"
-                            onClick={() => onNavigate('inventory-catalog')}
-                            className="w-7 h-7 rounded-md border border-slate-300 text-[#203760] hover:bg-slate-100 cursor-pointer"
-                            title="Open product in inventory catalog"
+                            onClick={() => handleOpenEdit(product)}
+                            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 font-black cursor-pointer"
+                            title="Edit item"
                           >
-                            •••
+                            <Edit2 className="w-3.5 h-3.5" />
+                            Edit
                           </button>
                         </td>
                       </tr>
@@ -548,6 +607,77 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
           <span className="font-bold text-emerald-600">Shared inventory source: Manager Portal + Cashier POS + Online Store</span>
         </div>
       </div>
+
+      {editingProduct && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-black text-[#10234a]">Edit Item</h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">{editingProduct.name}</p>
+              </div>
+              <button type="button" onClick={() => setEditingProduct(null)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <label className="space-y-1">
+                <span className="font-bold text-slate-600">Item Name</span>
+                <input value={String(editForm.name || '')} onChange={e => setEditForm({ ...editForm, name: e.target.value })} className="w-full h-10 rounded-lg border border-slate-300 px-3" />
+              </label>
+              <label className="space-y-1">
+                <span className="font-bold text-slate-600">SKU</span>
+                <input value={String(editForm.sku || '')} onChange={e => setEditForm({ ...editForm, sku: e.target.value })} className="w-full h-10 rounded-lg border border-slate-300 px-3" />
+              </label>
+              <label className="space-y-1">
+                <span className="font-bold text-slate-600">UPC / Barcode</span>
+                <input value={String(editForm.barcode || '')} onChange={e => setEditForm({ ...editForm, barcode: e.target.value })} className="w-full h-10 rounded-lg border border-slate-300 px-3 font-mono" />
+              </label>
+              <label className="space-y-1">
+                <span className="font-bold text-slate-600">Category</span>
+                <select value={String(editForm.categoryId || '')} onChange={e => setEditForm({ ...editForm, categoryId: e.target.value })} className="w-full h-10 rounded-lg border border-slate-300 px-3 bg-white">
+                  {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="font-bold text-slate-600">Size</span>
+                <input value={String(editForm.size || '')} onChange={e => setEditForm({ ...editForm, size: e.target.value })} className="w-full h-10 rounded-lg border border-slate-300 px-3" />
+              </label>
+              <label className="space-y-1">
+                <span className="font-bold text-slate-600">Vendor</span>
+                <input value={String(editForm.vendor || '')} onChange={e => setEditForm({ ...editForm, vendor: e.target.value })} className="w-full h-10 rounded-lg border border-slate-300 px-3" />
+              </label>
+              <label className="space-y-1">
+                <span className="font-bold text-slate-600">On Hand</span>
+                <input type="number" min="0" value={Number(editForm.stockQuantity ?? 0)} onChange={e => setEditForm({ ...editForm, stockQuantity: Number(e.target.value) })} className="w-full h-10 rounded-lg border border-slate-300 px-3" />
+              </label>
+              <label className="space-y-1">
+                <span className="font-bold text-slate-600">Reorder Level</span>
+                <input type="number" min="0" value={Number(editForm.lowStockThreshold ?? 0)} onChange={e => setEditForm({ ...editForm, lowStockThreshold: Number(e.target.value) })} className="w-full h-10 rounded-lg border border-slate-300 px-3" />
+              </label>
+              <label className="space-y-1">
+                <span className="font-bold text-slate-600">Cost</span>
+                <input type="number" min="0" step="0.01" value={Number(editForm.cost ?? 0)} onChange={e => setEditForm({ ...editForm, cost: Number(e.target.value) })} className="w-full h-10 rounded-lg border border-slate-300 px-3" />
+              </label>
+              <label className="space-y-1">
+                <span className="font-bold text-slate-600">Retail Price</span>
+                <input type="number" min="0" step="0.01" value={Number(editForm.price ?? 0)} onChange={e => setEditForm({ ...editForm, price: Number(e.target.value) })} className="w-full h-10 rounded-lg border border-slate-300 px-3" />
+              </label>
+            </div>
+
+            <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+              <button type="button" onClick={() => setEditingProduct(null)} className="h-10 px-4 rounded-lg border border-slate-300 bg-white text-slate-700 font-bold cursor-pointer">
+                Cancel
+              </button>
+              <button type="button" disabled={savingProduct} onClick={handleSaveEdit} className="h-10 px-5 rounded-lg bg-[#08274d] text-white font-black flex items-center gap-2 cursor-pointer disabled:opacity-50">
+                <Save className="w-4 h-4" />
+                {savingProduct ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
