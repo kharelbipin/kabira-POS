@@ -32,7 +32,7 @@ const navItems = [
   { id: 'orders', label: 'Sales', icon: BarChart3 },
   { id: 'inventory', label: 'Inventory', icon: Boxes },
   { id: 'manager-promotions', label: 'Promotions & Scan Data', icon: Tag },
-  { id: 'shifts', label: 'Shifts', icon: Clock3 },
+  { id: 'shifts', label: 'Cash Reconcile', icon: Clock3 },
   { id: 'reports', label: 'Reports', icon: ShoppingCart },
   { id: 'users', label: 'Users', icon: Users },
   { id: 'settings', label: 'Settings', icon: Settings },
