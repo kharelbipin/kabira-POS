@@ -43,6 +43,42 @@ import { RestaurantTablesView } from './components/restaurant/RestaurantTablesVi
 import { AdminPosDesigner } from './components/admin/AdminPosDesigner';
 import { StoreFeatureManagementModal } from './components/admin/StoreFeatureManagementModal';
 
+const DashboardView = lazy(() => import('./components/DashboardView').then(m => ({ default: m.DashboardView })));
+const OrdersView = lazy(() => import('./components/OrdersView').then(m => ({ default: m.OrdersView })));
+const InventoryView = lazy(() => import('./components/InventoryView').then(m => ({ default: m.InventoryView })));
+const CustomersView = lazy(() => import('./components/CustomersView').then(m => ({ default: m.CustomersView })));
+const ReportsView = lazy(() => import('./components/ReportsView').then(m => ({ default: m.ReportsView })));
+const UsersView = lazy(() => import('./components/UsersView').then(m => ({ default: m.UsersView })));
+const AuditLogsView = lazy(() => import('./components/AuditLogsView').then(m => ({ default: m.AuditLogsView })));
+const UserActivityTrackerView = lazy(() => import('./components/UserActivityTrackerView').then(m => ({ default: m.UserActivityTrackerView })));
+const ShiftsView = lazy(() => import('./components/shifts/ShiftsView').then(m => ({ default: m.ShiftsView })));
+const ChecksView = lazy(() => import('./components/checks/ChecksView').then(m => ({ default: m.ChecksView })));
+const OnlineStoreView = lazy(() => import('./components/onlineStore/OnlineStoreView').then(m => ({ default: m.OnlineStoreView })));
+const ManagerSettingsCenter = lazy(() => import('./components/settings/ManagerSettingsCenter').then(m => ({ default: m.ManagerSettingsCenter })));
+
+const AdminPortalNav = lazy(() => import('./components/admin/AdminPortalNav').then(m => ({ default: m.AdminPortalNav })));
+const AdminHealthDashboard = lazy(() => import('./components/admin/AdminHealthDashboard').then(m => ({ default: m.AdminHealthDashboard })));
+const AdminStoreSettingsView = lazy(() => import('./components/admin/AdminStoreSettingsView').then(m => ({ default: m.AdminStoreSettingsView })));
+const AdminRegistersView = lazy(() => import('./components/admin/AdminRegistersView').then(m => ({ default: m.AdminRegistersView })));
+const AdminHardwareStoreView = lazy(() => import('./components/admin/AdminHardwareStoreView').then(m => ({ default: m.AdminHardwareStoreView })));
+
+const ManagerPortalNav = lazy(() => import('./components/manager/ManagerPortalNav').then(m => ({ default: m.ManagerPortalNav })));
+const ManagerOperationsDashboard = lazy(() => import('./components/manager/ManagerOperationsDashboard').then(m => ({ default: m.ManagerOperationsDashboard })));
+const ManagerInventoryDashboard = lazy(() => import('./components/manager/ManagerInventoryDashboard').then(m => ({ default: m.ManagerInventoryDashboard })));
+const ManagerCategoriesView = lazy(() => import('./components/manager/ManagerCategoriesView').then(m => ({ default: m.ManagerCategoriesView })));
+const ManagerReportsCenter = lazy(() => import('./components/manager/ManagerReportsCenter').then(m => ({ default: m.ManagerReportsCenter })));
+const ManagerPromotionScanDataCenter = lazy(() => import('./components/manager/ManagerPromotionScanDataCenter').then(m => ({ default: m.ManagerPromotionScanDataCenter })));
+
+const ScreenLoadingFallback = () => (
+  <div className="h-full w-full flex items-center justify-center bg-[var(--kb-bg)] text-[var(--kb-text)]">
+    <div className="flex items-center gap-3 rounded-xl border border-[var(--kb-border)] bg-[var(--kb-panel)] px-5 py-4 shadow-lg">
+      <div className="h-5 w-5 rounded-full border-2 border-[var(--kb-border)] border-t-[var(--kb-gold)] animate-spin" />
+      <span className="text-xs font-bold uppercase tracking-wider text-[var(--kb-muted)]">Loading screen...</span>
+    </div>
+  </div>
+);
+
+
 const HELD_ORDERS_STORAGE_KEY = 'kabira_pos_held_orders_v1';
 
 export default function App() {
