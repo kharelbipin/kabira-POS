@@ -20,6 +20,7 @@ export const PromotionsSettings: React.FC = () => {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -187,6 +188,24 @@ export const PromotionsSettings: React.FC = () => {
     });
   };
 
+  const canContinueWizard = () => {
+    if (wizardStep === 1) {
+      return Boolean(formData.code.trim() && formData.name.trim() && Number(formData.value) > 0);
+    }
+    if (wizardStep === 2 && formData.dealType !== 'simple') {
+      const hasBuyGroup = formData.buyProductIds.length > 0 || formData.buyCategoryIds.length > 0;
+      const hasRewardGroup =
+        formData.rewardSelection === 'same_products' ||
+        formData.rewardProductIds.length > 0 ||
+        formData.rewardCategoryIds.length > 0;
+      return hasBuyGroup && hasRewardGroup;
+    }
+    if (wizardStep === 3) {
+      return Boolean(formData.startDate && formData.endDate);
+    }
+    return true;
+  };
+
   const handleToggleActive = async (promo: Promotion) => {
     try {
       await api.updatePromotion(promo.id, { active: !promo.active });
@@ -234,6 +253,7 @@ export const PromotionsSettings: React.FC = () => {
             type="button"
             onClick={() => {
               playBeep('click');
+              setWizardStep(1);
               setShowAddModal(true);
             }}
             className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-[#C5A059] hover:bg-[#D4B06A] text-black text-xs font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer"
@@ -381,7 +401,35 @@ export const PromotionsSettings: React.FC = () => {
               </button>
             </div>
 
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { step: 1, label: 'Deal Basics' },
+                { step: 2, label: 'IF / THEN Rules' },
+                { step: 3, label: 'Funding & Schedule' },
+                { step: 4, label: 'Review & Save' },
+              ].map(item => (
+                <div
+                  key={item.step}
+                  className={`rounded-lg border px-3 py-2 text-center ${
+                    wizardStep === item.step
+                      ? 'border-[#C5A059] bg-[#C5A059]/10 text-[#E9C979]'
+                      : wizardStep > item.step
+                      ? 'border-emerald-800/60 bg-emerald-950/20 text-emerald-400'
+                      : 'border-[#262626] bg-[#141414] text-[#666666]'
+                  }`}
+                >
+                  <div className="text-[10px] font-black uppercase tracking-wider">Step {item.step}</div>
+                  <div className="text-[11px] font-bold mt-0.5">{item.label}</div>
+                </div>
+              ))}
+            </div>
+            <div className="text-[10px] text-[#737373]">
+              Step {wizardStep} of 4 · Build the deal, choose qualifying items, configure funding, then review before saving.
+            </div>
+
             <form onSubmit={handleCreatePromo} className="space-y-4 text-xs">
+              {wizardStep === 1 && (
+                <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[#A3A3A3] font-bold uppercase tracking-wider mb-1">
@@ -474,6 +522,11 @@ export const PromotionsSettings: React.FC = () => {
                 </div>
               </div>
 
+                </div>
+              )}
+
+              {wizardStep === 2 && (
+                <div className="space-y-4">
               <div className="rounded-xl border border-[#3A3120] bg-[#0B0B0B] p-4 space-y-4">
                 <div>
                   <div className="text-xs font-black uppercase tracking-wider text-[#C5A059]">IF / THEN Promotion Builder</div>
@@ -669,6 +722,11 @@ export const PromotionsSettings: React.FC = () => {
                 </details>
               </div>
 
+                </div>
+              )}
+
+              {wizardStep === 3 && (
+                <div className="space-y-4">
               <div className="rounded-xl border border-[#2A2A2A] bg-[#0B0B0B] p-4 space-y-3">
                 <div>
                   <div className="text-xs font-black uppercase tracking-wider text-[#C5A059]">Promotion Funding & Reporting</div>
@@ -814,7 +872,59 @@ export const PromotionsSettings: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-[#262626]">
+                </div>
+              )}
+
+              {wizardStep === 4 && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-[#3A3120] bg-[#0B0B0B] p-4">
+                    <div className="text-xs font-black uppercase tracking-wider text-[#C5A059] mb-3">Promotion Review</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                      <div className="rounded-lg bg-[#141414] border border-[#262626] p-3">
+                        <div className="text-[#737373] uppercase text-[9px] font-black tracking-wider">Promotion</div>
+                        <div className="text-[#F5F5F5] font-bold mt-1">{formData.name || 'Untitled promotion'}</div>
+                        <div className="font-mono text-[#C5A059] mt-1">{formData.code || 'NO CODE'}</div>
+                      </div>
+                      <div className="rounded-lg bg-[#141414] border border-[#262626] p-3">
+                        <div className="text-[#737373] uppercase text-[9px] font-black tracking-wider">Discount</div>
+                        <div className="text-[#F5F5F5] font-bold mt-1">
+                          {formData.type === 'percentage' ? `${formData.value}% off` : `$${Number(formData.value).toFixed(2)} off`}
+                        </div>
+                        <div className="text-[#888888] mt-1">{formData.dealType.replace(/_/g, ' ')}</div>
+                      </div>
+                      <div className="rounded-lg bg-sky-950/10 border border-sky-900/40 p-3">
+                        <div className="text-sky-300 uppercase text-[9px] font-black tracking-wider">IF customer buys</div>
+                        <div className="text-[#D4D4D4] mt-1">
+                          {formData.buyQuantity} qualifying item(s) · {formData.buyProductIds.length} products · {formData.buyCategoryIds.length} categories
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-emerald-950/10 border border-emerald-900/40 p-3">
+                        <div className="text-emerald-300 uppercase text-[9px] font-black tracking-wider">THEN customer gets</div>
+                        <div className="text-[#D4D4D4] mt-1">
+                          {formData.rewardQuantity} reward item(s) · {formData.rewardProductIds.length} products · {formData.rewardCategoryIds.length} categories
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-[#141414] border border-[#262626] p-3">
+                        <div className="text-[#737373] uppercase text-[9px] font-black tracking-wider">Funding</div>
+                        <div className="text-[#F5F5F5] font-bold mt-1">{formData.fundingSource}</div>
+                        <div className="text-[#888888] mt-1">{formData.programType?.replace(/_/g, ' ')}</div>
+                      </div>
+                      <div className="rounded-lg bg-[#141414] border border-[#262626] p-3">
+                        <div className="text-[#737373] uppercase text-[9px] font-black tracking-wider">Schedule</div>
+                        <div className="text-[#F5F5F5] font-bold mt-1">{formData.startDate} → {formData.endDate}</div>
+                        <div className="text-[#888888] mt-1">Max {formData.maxUsages || 'unlimited'} redemptions</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-lg border border-[#40351f] bg-[#171208] p-3 text-[11px] text-[#D4B06A]">
+                      {formData.dealType === 'simple'
+                        ? 'Simple discount promotion is ready to save.'
+                        : `Buy any ${formData.buyQuantity} qualifying item(s), then apply the configured discount to ${formData.rewardQuantity} eligible reward item(s).`}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-4 border-t border-[#262626]">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
@@ -822,12 +932,36 @@ export const PromotionsSettings: React.FC = () => {
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-[#C5A059] hover:bg-[#D4B06A] text-black font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer"
-                >
-                  Save Promotion
-                </button>
+
+                <div className="flex items-center gap-2">
+                  {wizardStep > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setWizardStep((wizardStep - 1) as 1 | 2 | 3 | 4)}
+                      className="px-4 py-2 rounded-lg border border-[#3A3A3A] bg-[#141414] hover:bg-[#1A1A1A] text-[#E5E5E5] font-bold uppercase tracking-wider cursor-pointer"
+                    >
+                      Back
+                    </button>
+                  )}
+
+                  {wizardStep < 4 ? (
+                    <button
+                      type="button"
+                      disabled={!canContinueWizard()}
+                      onClick={() => setWizardStep((wizardStep + 1) as 1 | 2 | 3 | 4)}
+                      className="px-5 py-2 rounded-lg bg-[#C5A059] hover:bg-[#D4B06A] disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      className="px-5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer"
+                    >
+                      Save Promotion
+                    </button>
+                  )}
+                </div>
               </div>
             </form>
           </div>
