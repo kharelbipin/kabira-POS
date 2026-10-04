@@ -67,6 +67,32 @@ class ApiService {
 
   public isOffline: boolean = false;
   private offlineOrderQueue: any[] = [];
+  private bootstrapStatusCache: { requiresSetup: boolean } | null = null;
+  private bootstrapStatusPromise: Promise<{ requiresSetup: boolean }> | null = null;
+
+  private getSetupCompleteHint(): boolean {
+    try {
+      return localStorage.getItem('kabira_pos_setup_complete_v1') === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  private setSetupCompleteHint(complete: boolean) {
+    try {
+      if (complete) {
+        localStorage.setItem('kabira_pos_setup_complete_v1', '1');
+      } else {
+        localStorage.removeItem('kabira_pos_setup_complete_v1');
+      }
+    } catch {
+      // Local storage is only a startup hint; the server remains authoritative.
+    }
+  }
+
+  hasSetupCompleteHint() {
+    return this.getSetupCompleteHint();
+  }
 
   setUserId(id: string) {
     const normalizedId = id.trim();
@@ -194,8 +220,35 @@ class ApiService {
   }
 
   // Auth
-  async getBootstrapStatus(): Promise<{ requiresSetup: boolean }> {
-    return this.request<{ requiresSetup: boolean }>('/auth/bootstrap-status');
+  async getBootstrapStatus(
+    force: boolean = false
+  ): Promise<{ requiresSetup: boolean }> {
+    if (!force && this.bootstrapStatusCache) {
+      return this.bootstrapStatusCache;
+    }
+
+    if (!force && this.getSetupCompleteHint()) {
+      const configured = { requiresSetup: false };
+      this.bootstrapStatusCache = configured;
+      return configured;
+    }
+
+    if (!force && this.bootstrapStatusPromise) {
+      return this.bootstrapStatusPromise;
+    }
+
+    const pending = this.request<{ requiresSetup: boolean }>('/auth/bootstrap-status')
+      .then(status => {
+        this.bootstrapStatusCache = status;
+        this.setSetupCompleteHint(!status.requiresSetup);
+        return status;
+      })
+      .finally(() => {
+        this.bootstrapStatusPromise = null;
+      });
+
+    this.bootstrapStatusPromise = pending;
+    return pending;
   }
 
   async bootstrapAdmin(payload: {
@@ -224,6 +277,8 @@ class ApiService {
 
     if (res.token && res.user?.id) {
       this.setSession(res.token, res.user.id);
+      this.bootstrapStatusCache = { requiresSetup: false };
+      this.setSetupCompleteHint(true);
     }
 
     return res;
@@ -236,6 +291,8 @@ class ApiService {
     });
     if (res.token && res.user?.id) {
       this.setSession(res.token, res.user.id);
+      this.bootstrapStatusCache = { requiresSetup: false };
+      this.setSetupCompleteHint(true);
     }
     return res;
   }
