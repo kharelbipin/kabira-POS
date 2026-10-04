@@ -108,7 +108,6 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
     { label: 'Receive Inventory', icon: Truck, tab: 'receiving' },
     { label: 'Stock Count', icon: ClipboardList, tab: 'inventory-count' },
     { label: 'Vendors', icon: Users, tab: 'inventory-vendors' },
-    { label: 'Reports', icon: BarChart3, tab: 'reports' },
   ];
 
   const saveLabelSetting = async (patch: Partial<StoreSettings>) => {
