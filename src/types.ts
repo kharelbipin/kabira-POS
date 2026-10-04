@@ -65,6 +65,18 @@ export interface Promotion {
   reportingFrequency?: 'daily' | 'weekly' | 'monthly' | 'custom';
   exportTemplate?: string;
   customerIdentifierMode?: 'token' | 'raw_phone' | 'none';
+
+  // Advanced IF / THEN promotion builder
+  dealType?: 'simple' | 'buy_x_get_percent' | 'buy_x_get_free' | 'mix_match' | 'bundle_price' | 'quantity_break';
+  buyProductIds?: string[];
+  rewardProductIds?: string[];
+  buyCategoryIds?: string[];
+  rewardCategoryIds?: string[];
+  buyQuantity?: number;
+  rewardQuantity?: number;
+  maxRewardsPerTransaction?: number;
+  repeatable?: boolean;
+  rewardSelection?: 'cheapest' | 'most_expensive' | 'any_eligible' | 'same_products';
 }
 
 export type ScanDataSaleStatus = 'sale' | 'void' | 'refund';
