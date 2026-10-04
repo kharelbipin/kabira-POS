@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SalesReport } from '../types';
 import { api } from '../utils/api';
 import { playBeep } from '../utils/audio';
+import { useAdminStore } from '../contexts/AdminStoreContext';
 import {
   BarChart3,
   TrendingUp,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 
 export const ReportsView: React.FC = () => {
+  const { selectedStoreId, selectedStore, isAllStores } = useAdminStore();
   const [report, setReport] = useState<SalesReport | null>(null);
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'custom' | 'all'>('all');
   const [startDate, setStartDate] = useState<string>(() => {
@@ -43,7 +45,8 @@ export const ReportsView: React.FC = () => {
       const data = await api.getSalesReport(
         activePeriod,
         activePeriod === 'custom' ? start : undefined,
-        activePeriod === 'custom' ? end : undefined
+        activePeriod === 'custom' ? end : undefined,
+        isAllStores ? 'all' : selectedStoreId
       );
       setReport(data);
     } catch (err) {
@@ -55,7 +58,7 @@ export const ReportsView: React.FC = () => {
 
   useEffect(() => {
     fetchReport();
-  }, [period]);
+  }, [period, selectedStoreId, isAllStores]);
 
   const handleApplyCustomRange = () => {
     playBeep('click');
@@ -143,7 +146,9 @@ export const ReportsView: React.FC = () => {
               <span>Executive Sales & Inventory Analytics</span>
             </h2>
             <p className="text-xs text-[#737373] mt-0.5 font-sans">
-              Real-time revenue, register metrics, date-range analysis, and staff performance
+              {isAllStores
+                ? 'Corporate revenue and performance across all stores'
+                : `Revenue and performance for ${selectedStore?.name || 'the selected store'}`}
             </p>
           </div>
 
