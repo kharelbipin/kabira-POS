@@ -37,3 +37,159 @@
   background: #94A3B8;
 }
 
+
+
+/* ========================================================================== */
+/* KaBiRa Unified Application Theme                                           */
+/* Dashboard is the visual source of truth for Admin, Manager, and Cashier.   */
+/* ========================================================================== */
+:root {
+  --kb-bg: #07111f;
+  --kb-sidebar: #061326;
+  --kb-panel: #0b1828;
+  --kb-panel-2: #102036;
+  --kb-panel-3: #14283e;
+  --kb-border: #263a4d;
+  --kb-border-soft: #1d3145;
+  --kb-text: #f8fafc;
+  --kb-muted: #8fa3b8;
+  --kb-blue: #38bdf8;
+  --kb-gold: #f5bd47;
+  --kb-green: #4ade80;
+  --kb-red: #fb7185;
+}
+
+@layer base {
+  body {
+    background-color: var(--kb-bg);
+    color: var(--kb-text);
+  }
+}
+
+.kb-shell,
+.kb-shell main {
+  background: var(--kb-bg);
+  color: var(--kb-text);
+}
+
+.kb-shell .bg-white,
+.kb-shell .bg-slate-50,
+.kb-shell .bg-gray-50,
+.kb-shell [class*="bg-[#eef3f8]"],
+.kb-shell [class*="bg-[#F4F7FB]"],
+.kb-shell [class*="bg-[#f4f7fb]"],
+.kb-shell [class*="bg-[#F8FAFC]"],
+.kb-shell [class*="bg-[#f8fafc]"],
+.kb-shell [class*="bg-[#F1F5F9]"],
+.kb-shell [class*="bg-[#f1f5f9]"] {
+  background-color: var(--kb-panel) !important;
+}
+
+.kb-shell .bg-slate-100,
+.kb-shell .bg-gray-100,
+.kb-shell .hover\:bg-slate-100:hover,
+.kb-shell .hover\:bg-slate-50:hover {
+  background-color: var(--kb-panel-2) !important;
+}
+
+.kb-shell .text-slate-950,
+.kb-shell .text-slate-900,
+.kb-shell .text-slate-800,
+.kb-shell .text-gray-900,
+.kb-shell [class*="text-[#10234a]"],
+.kb-shell [class*="text-[#0f172a]"] {
+  color: var(--kb-text) !important;
+}
+
+.kb-shell .text-slate-700,
+.kb-shell .text-slate-600,
+.kb-shell .text-gray-700,
+.kb-shell .text-gray-600 {
+  color: #cbd5e1 !important;
+}
+
+.kb-shell .text-slate-500,
+.kb-shell .text-slate-400,
+.kb-shell .text-gray-500,
+.kb-shell .text-gray-400 {
+  color: var(--kb-muted) !important;
+}
+
+.kb-shell .border-slate-100,
+.kb-shell .border-slate-200,
+.kb-shell .border-slate-300,
+.kb-shell .border-gray-200,
+.kb-shell .border-gray-300 {
+  border-color: var(--kb-border) !important;
+}
+
+.kb-shell input:not([type="checkbox"]):not([type="radio"]),
+.kb-shell select,
+.kb-shell textarea {
+  background-color: var(--kb-panel-2) !important;
+  border-color: var(--kb-border) !important;
+  color: var(--kb-text) !important;
+}
+
+.kb-shell input::placeholder,
+.kb-shell textarea::placeholder {
+  color: #64748b !important;
+}
+
+.kb-shell option {
+  background: var(--kb-panel-2);
+  color: var(--kb-text);
+}
+
+.kb-shell table { color: var(--kb-text); }
+
+.kb-shell thead,
+.kb-shell thead.bg-slate-50,
+.kb-shell thead.bg-slate-100 {
+  background: var(--kb-panel-3) !important;
+}
+
+.kb-shell tbody tr { border-color: var(--kb-border-soft) !important; }
+.kb-shell tbody tr:hover { background-color: rgba(255, 255, 255, 0.035); }
+
+.kb-shell .bg-emerald-50,
+.kb-shell .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.14) !important; }
+.kb-shell .bg-amber-50,
+.kb-shell .bg-amber-100 { background-color: rgba(245, 158, 11, 0.14) !important; }
+.kb-shell .bg-rose-50,
+.kb-shell .bg-rose-100,
+.kb-shell .bg-red-50 { background-color: rgba(244, 63, 94, 0.14) !important; }
+.kb-shell .bg-blue-50,
+.kb-shell .bg-sky-50 { background-color: rgba(14, 165, 233, 0.14) !important; }
+
+.kb-shell button,
+.kb-shell input,
+.kb-shell select,
+.kb-shell textarea {
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 100ms ease;
+}
+.kb-shell button:active:not(:disabled) { transform: translateY(1px); }
+
+.kb-shell ::-webkit-scrollbar-track { background: var(--kb-bg); }
+.kb-shell ::-webkit-scrollbar-thumb { background: #334155; }
+.kb-shell ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+.kb-shell button.bg-amber-400.text-slate-950,
+.kb-shell button.bg-yellow-400.text-slate-950,
+.kb-shell [class*="bg-[#F5BD47]"].text-slate-950,
+.kb-shell [class*="bg-[#f5bd47]"].text-slate-950,
+.kb-shell [class*="bg-[#C5A059]"].text-black,
+.kb-shell [class*="bg-[#c5a059]"].text-black {
+  color: #07111f !important;
+}
+
+.kb-shell .text-emerald-700,
+.kb-shell .text-emerald-800 { color: #6ee7b7 !important; }
+.kb-shell .text-amber-700,
+.kb-shell .text-amber-800 { color: #fcd34d !important; }
+.kb-shell .text-rose-700,
+.kb-shell .text-red-700 { color: #fda4af !important; }
+.kb-shell .text-blue-600,
+.kb-shell .text-blue-700,
+.kb-shell .text-sky-600,
+.kb-shell .text-sky-700 { color: #7dd3fc !important; }
