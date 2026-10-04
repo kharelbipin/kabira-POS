@@ -3,7 +3,6 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { execFile, spawn } from 'child_process';
-import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/api.js';
 import { db } from './server/db.js';
 
@@ -141,9 +140,6 @@ async function startServer() {
         }
     });
     
-    // Launch the customer display in the logged-in Windows desktop session.
-    // This runs in the local POS backend, not the Windows Bridge service,
-    // so the browser can be positioned on the actual secondary monitor.
     app.post('/api/customer-display/open', (_req, res) => {
         if (process.platform !== 'win32') {
             return res.status(501).json({
@@ -152,16 +148,11 @@ async function startServer() {
             });
         }
 
-        // Use the dedicated SPA route. App.tsx recognizes /customer-display
-        // as standalone customer-display mode.
         const customerDisplayUrl =
             'http://127.0.0.1:3000/customer-display';
         const customerDisplayFullscreen =
             db.settings.customerDisplayFullscreen !== false;
 
-        // Production Windows installs include a dedicated native WebView2
-        // customer-display host. It renders the React customer screen as a
-        // KaBiRa POS window (not a Microsoft Edge browser window).
         const nativeCustomerDisplayExe = path.resolve(
             process.cwd(),
             '..',
@@ -203,8 +194,6 @@ async function startServer() {
                 }
             };
 
-            // Restart only the dedicated customer-display process so settings
-            // changes can reposition/reopen it without touching the cashier POS.
             execFile(
                 'taskkill.exe',
                 ['/IM', 'KaBiRaCustomerDisplay.exe', '/F'],
@@ -216,8 +205,6 @@ async function startServer() {
             return;
         }
 
-        // Development/fallback path: use Edge only when the native display host
-        // is not present (for example while running npm dev from source).
         const psScript = `
 Add-Type -AssemblyName System.Windows.Forms
 
@@ -248,23 +235,15 @@ if (-not $edge) {
     throw "Microsoft Edge was not found."
 }
 
-# Give the customer display its own Edge profile. This prevents Edge from
-# reusing the cashier browser window and opening the display as another tab.
 $profileDir = Join-Path $env:LOCALAPPDATA "KaBiRaPOS-CustomerDisplay"
 New-Item -ItemType Directory -Force -Path $profileDir | Out-Null
 
-# Prevent Edge first-run/import pages from hijacking kiosk startup.
-# The customer display is a dedicated POS surface and should never import
-# Chrome/other browser data or navigate to edge://settings during launch.
-$edgePolicyPath = "HKCU:\Software\Policies\Microsoft\Edge"
+$edgePolicyPath = "HKCU:\\Software\\Policies\\Microsoft\\Edge"
 New-Item -Path $edgePolicyPath -Force | Out-Null
 New-ItemProperty -Path $edgePolicyPath -Name "AutoImportAtFirstRun" -PropertyType DWord -Value 4 -Force | Out-Null
 New-ItemProperty -Path $edgePolicyPath -Name "ImportOnEachLaunch" -PropertyType DWord -Value 0 -Force | Out-Null
 New-ItemProperty -Path $edgePolicyPath -Name "HideFirstRunExperience" -PropertyType DWord -Value 1 -Force | Out-Null
 
-# Close only previous KaBiRa customer-display Edge processes before relaunching.
-# This prevents duplicate display windows and also makes the Restart button
-# actually reposition the window on the current secondary monitor.
 $existing = Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" -ErrorAction SilentlyContinue |
     Where-Object {
         $_.CommandLine -and
@@ -291,16 +270,12 @@ $commonArgs = @(
 )
 
 if (${customerDisplayFullscreen ? '$true' : '$false'}) {
-    # Edge kiosk fullscreen removes normal window chrome so customers cannot
-    # minimize, maximize, resize, or close the customer display from Display 2.
     $displayArgs = @(
         "--kiosk",
         "${customerDisplayUrl}",
         "--edge-kiosk-type=fullscreen"
     ) + $commonArgs
 } else {
-    # Admin-disabled lock mode: open as a normal app window with standard
-    # Windows controls available.
     $displayArgs = @(
         "--app=${customerDisplayUrl}"
     ) + $commonArgs
@@ -346,16 +321,14 @@ Start-Process -FilePath $edge -ArgumentList $displayArgs
         );
     });
 
-    // Mount POS Backend REST API
     app.use('/api', apiRouter);
 
-    // Health check endpoint
     app.get('/api/health', (_req, res) => {
         res.json({ status: 'ok', time: new Date().toISOString() });
     });
 
-    // Vite middleware for development
     if (process.env.NODE_ENV !== 'production') {
+        const { createServer: createViteServer } = await import('vite');
         const vite = await createViteServer({
             server: {
                 middlewareMode: true,
@@ -365,39 +338,34 @@ Start-Process -FilePath $edge -ArgumentList $displayArgs
         });
         app.use(vite.middlewares);
     } else {
-        // Installer places index.html and assets directly in the Client working directory.
         const distPath = process.cwd();
-const assetsPath = path.join(distPath, 'assets');
+        const assetsPath = path.join(distPath, 'assets');
 
-// Serve Vite CSS/JS assets before the SPA fallback
-app.use(
-  '/assets',
-  express.static(assetsPath, {
-    fallthrough: false,
-    index: false,
-    maxAge: '1y',
-    immutable: true,
-  })
-);
+        app.use(
+          '/assets',
+          express.static(assetsPath, {
+            fallthrough: false,
+            index: false,
+            maxAge: '1y',
+            immutable: true,
+          })
+        );
 
-// Serve remaining static files
-app.use(express.static(distPath, { index: false }));
+        app.use(express.static(distPath, { index: false }));
 
-// SPA fallback only for application routes
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/assets/')) {
-    return res.status(404).type('text/plain').send('Asset not found');
-  }
+        app.get('*', (req, res, next) => {
+          if (req.path.startsWith('/assets/')) {
+            return res.status(404).type('text/plain').send('Asset not found');
+          }
 
-  if (path.extname(req.path)) {
-    return next();
-  }
+          if (path.extname(req.path)) {
+            return next();
+          }
 
-  return res.sendFile(path.join(distPath, 'index.html'));
-});
+          return res.sendFile(path.join(distPath, 'index.html'));
+        });
     }
 
-    // Global error handler middleware
     app.use(
         (
             err: any,
@@ -415,7 +383,6 @@ app.get('*', (req, res, next) => {
         }
     );
 
-    // Local-only POS server. Do not expose the register backend to the LAN.
     const server = app.listen(PORT, '127.0.0.1', () => {
         console.log(`[POS Server] Running on http://127.0.0.1:${PORT}`);
         console.log(`[Bridge Proxy] Using token file: ${BRIDGE_TOKEN_PATH}`);
