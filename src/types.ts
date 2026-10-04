@@ -13,6 +13,7 @@ export interface User {
 
   active: boolean;
   avatar?: string;
+  storeIds?: string[]; // Admin can be 'all'; managers/cashiers can be assigned to one or more stores.
   createdAt: string;
 }
 
@@ -98,6 +99,8 @@ export interface ScanDataTransaction {
   registerId: string;
   cashierId: string;
   cashierName: string;
+  storeId?: string;
+  registerId?: string;
   customerId?: string;
   customerPhoneToken?: string;
   productId: string;
@@ -529,6 +532,8 @@ export interface AuditLog {
   deviceId?: string;
   terminalId?: string;
   module?: string;
+  storeId?: string;
+  registerId?: string;
   timestamp: string;
 }
 
