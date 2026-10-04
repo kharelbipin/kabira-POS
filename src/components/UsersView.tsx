@@ -17,6 +17,10 @@ interface UsersViewProps {
 
 export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefresh }) => {
   const canManageUsers = currentUser?.role === 'Admin';
+  const visibleUsers =
+    currentUser?.role === 'Manager'
+      ? users.filter(user => user.role !== 'Admin')
+      : users;
 
   const [showAddEditModal, setShowAddEditModal] = useState<boolean>(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -180,7 +184,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
             </tr>
           </thead>
           <tbody className="divide-y divide-[#1F1F1F]">
-            {users.map(u => (
+            {visibleUsers.map(u => (
               <tr key={u.id} className="hover:bg-[#161616] transition-colors">
                 <td className="px-4 py-3 font-medium text-[#F5F5F5] font-sans">
                   <div className="flex items-center space-x-2.5">
