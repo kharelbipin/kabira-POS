@@ -62,6 +62,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   onOpenMobileCaptureSimulator,
 }) => {
   const [subTab, setSubTab] = useState<'catalog' | 'invoices' | 'vendors' | 'ledger' | 'history' | 'unified-ledger' | 'ats'>(initialSubTab);
+  const useManagerSidebarNavigation = currentUser?.role === 'Manager';
   const [showScannerModal, setShowScannerModal] = useState<boolean>(false);
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
   const [showMultiBarcodeModal, setShowMultiBarcodeModal] = useState<boolean>(false);
@@ -369,6 +370,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         </div>
       )}
 
+      {!useManagerSidebarNavigation && (
+        <>
       {/* Sub-Navigation Strip for Inventory / Receiving */}
       <div className="bg-[#0D0D0D] border-b border-[#262626] px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center space-x-1 sm:space-x-2 overflow-x-auto no-scrollbar">
@@ -506,6 +509,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           </button>
         </div>
       </div>
+
+
+        </>
+      )}
 
       {subTab === 'invoices' && (
         <InvoiceHistoryView
