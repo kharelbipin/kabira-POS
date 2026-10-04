@@ -566,6 +566,87 @@ class ApiService {
     }>(`/users/${id}/activity`);
   }
 
+  async createDeployment(payload: {
+    storeId: string;
+    registerId: string;
+    storeName: string;
+    registerName: string;
+    configurationVersion: number;
+    environment: 'production' | 'test';
+    expiresInDays: number;
+    options: Record<string, any>;
+  }) {
+    return this.request<{
+      deployment: any;
+      oneTimeDeploymentToken: string;
+    }>('/deployments', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getDeployments() {
+    return this.request<{ deployments: any[] }>('/deployments');
+  }
+
+  async revokeDeployment(id: string) {
+    return this.request<{ success: boolean; deployment: any }>(`/deployments/${id}/revoke`, {
+      method: 'POST',
+    });
+  }
+
+  async activateDevice(payload: {
+    activationCode: string;
+    deploymentToken: string;
+    deviceId: string;
+    deviceName?: string;
+    hostname?: string;
+    posVersion?: string;
+    bridgeVersion?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      terminal: any;
+      deviceCredential: string;
+    }>('/device-activation', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getRegisteredTerminals() {
+    return this.request<{ terminals: any[] }>('/terminals');
+  }
+
+  async updateRegisteredTerminal(id: string, payload: { enabled?: boolean; registerName?: string }) {
+    return this.request<any>(`/terminals/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async revokeRegisteredTerminal(id: string) {
+    return this.request<{ success: boolean }>(`/terminals/${id}/revoke`, {
+      method: 'POST',
+    });
+  }
+
+  async terminalHeartbeat(payload: {
+    terminalId: string;
+    deviceCredential: string;
+    posVersion?: string;
+    bridgeVersion?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      configurationVersion: number;
+      serverTime: string;
+    }>('/terminal-heartbeat', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
   async getRegisters(): Promise<{ registers: Array<{
     id: string;
     name: string;
