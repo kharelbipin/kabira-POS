@@ -17,7 +17,8 @@ import {
   ExternalLink,
   QrCode,
   Barcode,
-  Sparkles
+  Sparkles,
+  Plus
 } from 'lucide-react';
 
 interface InvoiceHistoryViewProps {
@@ -25,6 +26,7 @@ interface InvoiceHistoryViewProps {
   onReviewInvoice?: (invoice: ScannedInvoice) => void;
   onOpenQrModal?: () => void;
   onOpenMultiBarcodeModal?: () => void;
+  onOpenManualInvoice?: () => void;
 }
 
 export const InvoiceHistoryView: React.FC<InvoiceHistoryViewProps> = ({
@@ -32,6 +34,7 @@ export const InvoiceHistoryView: React.FC<InvoiceHistoryViewProps> = ({
   onReviewInvoice,
   onOpenQrModal,
   onOpenMultiBarcodeModal,
+  onOpenManualInvoice,
 }) => {
   const [invoices, setInvoices] = useState<ScannedInvoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,6 +106,17 @@ export const InvoiceHistoryView: React.FC<InvoiceHistoryViewProps> = ({
             >
               <Barcode className="w-3.5 h-3.5 text-[#C5A059]" />
               <span>Multi-Barcode Scan</span>
+            </button>
+          )}
+
+          {onOpenManualInvoice && (
+            <button
+              type="button"
+              onClick={onOpenManualInvoice}
+              className="flex items-center space-x-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors shadow-md cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Item / Manual Invoice</span>
             </button>
           )}
 
