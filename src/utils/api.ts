@@ -909,12 +909,17 @@ class ApiService {
   }
 
   // Settings
-  async getSettings() {
-    return this.request<StoreSettings>('/settings');
+  async getSettings(storeId?: string, storeName?: string) {
+    const q = new URLSearchParams();
+    if (storeId) q.set('storeId', storeId);
+    if (storeName) q.set('storeName', storeName);
+    return this.request<StoreSettings>(`/settings?${q.toString()}`);
   }
 
-  async updateSettings(data: Partial<StoreSettings>) {
-    return this.request<StoreSettings>('/settings', {
+  async updateSettings(data: Partial<StoreSettings>, storeId?: string) {
+    const q = new URLSearchParams();
+    if (storeId) q.set('storeId', storeId);
+    return this.request<StoreSettings>(`/settings?${q.toString()}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
