@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, UserRole } from '../types';
 import { api } from '../utils/api';
 import { playBeep } from '../utils/audio';
+import { useAdminStore } from '../contexts/AdminStoreContext';
 import {
   UserCheck,
   UserPlus,
@@ -17,10 +18,15 @@ interface UsersViewProps {
 
 export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefresh }) => {
   const canManageUsers = currentUser?.role === 'Admin';
-  const visibleUsers =
-    currentUser?.role === 'Manager'
-      ? users.filter(user => user.role !== 'Admin')
-      : users;
+  const { stores, selectedStoreId, selectedStore, isAllStores } = useAdminStore();
+
+  const visibleUsers = users.filter(user => {
+    if (currentUser?.role === 'Manager' && user.role === 'Admin') return false;
+    if (currentUser?.role !== 'Admin' || isAllStores) return true;
+
+    const storeIds = user.storeIds ?? (user.role === 'Admin' ? ['all'] : ['store-1']);
+    return storeIds.includes('all') || storeIds.includes(selectedStoreId);
+  });
 
   const [showAddEditModal, setShowAddEditModal] = useState<boolean>(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -31,6 +37,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
   const [pin, setPin] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [active, setActive] = useState<boolean>(true);
+  const [assignedStoreIds, setAssignedStoreIds] = useState<string[]>([]);
 
   const handleOpenAdd = () => {
     setEditingUser(null);
@@ -40,6 +47,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
     setPin('');
     setPassword('');
     setActive(true);
+    setAssignedStoreIds(
+      currentUser?.role === 'Admin'
+        ? (isAllStores ? [] : [selectedStoreId])
+        : []
+    );
     setShowAddEditModal(true);
   };
 
@@ -51,6 +63,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
     setPin('');
     setPassword('');
     setActive(u.active);
+    setAssignedStoreIds(u.storeIds ?? (u.role === 'Admin' ? ['all'] : ['store-1']));
     setShowAddEditModal(true);
   };
 
@@ -100,6 +113,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
           email: trimmedEmail,
           role,
           active,
+          storeIds: role === 'Admin' && assignedStoreIds.length === 0 ? ['all'] : assignedStoreIds,
           ...(normalizedPin ? { pin: normalizedPin } : {}),
           ...(password ? { password } : {}),
         });
@@ -110,6 +124,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
           role,
           pin: normalizedPin,
           active,
+          storeIds: role === 'Admin' && assignedStoreIds.length === 0 ? ['all'] : assignedStoreIds,
           ...(password ? { password } : {}),
         });
       }
@@ -153,7 +168,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
           </h2>
           <p className="text-xs text-[#737373] mt-0.5 font-sans">
             {canManageUsers
-              ? 'Configure staff roles, register access, and account status'
+              ? `Configure staff roles and access for ${isAllStores ? 'all stores' : selectedStore?.name || 'the selected store'}`
               : 'View staff roles and terminal access'}
           </p>
         </div>
@@ -356,6 +371,49 @@ export const UsersView: React.FC<UsersViewProps> = ({ users, currentUser, onRefr
                   </p>
                 </div>
               </div>
+
+              {canManageUsers && (
+                <div className="rounded-xl border border-[#262626] bg-[#121212] p-3">
+                  <div className="text-[#A3A3A3] font-bold uppercase tracking-wider mb-2">
+                    Store Access
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {stores.map(store => {
+                      const checked = assignedStoreIds.includes('all') || assignedStoreIds.includes(store.id);
+                      return (
+                        <label key={store.id} className="flex items-center gap-2 rounded-lg border border-[#262626] bg-[#0F0F0F] px-3 py-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={assignedStoreIds.includes('all')}
+                            onChange={e => {
+                              setAssignedStoreIds(prev =>
+                                e.target.checked
+                                  ? Array.from(new Set([...prev.filter(id => id !== 'all'), store.id]))
+                                  : prev.filter(id => id !== store.id)
+                              );
+                            }}
+                            className="rounded bg-[#141414] border-[#262626] text-[#C5A059] focus:ring-[#C5A059]"
+                          />
+                          <span className="text-[11px] text-[#D4D4D4]">{store.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {role === 'Admin' && (
+                    <label className="mt-2 flex items-center gap-2 text-[11px] text-emerald-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={assignedStoreIds.includes('all')}
+                        onChange={e => setAssignedStoreIds(e.target.checked ? ['all'] : [])}
+                        className="rounded bg-[#141414] border-[#262626] text-emerald-500"
+                      />
+                      Corporate Admin — access all stores
+                    </label>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center space-x-2 pt-2">
                 <input
