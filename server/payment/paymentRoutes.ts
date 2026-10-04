@@ -52,7 +52,7 @@ paymentRouter.post('/sale', async (req: Request, res: Response) => {
       cashierId: user.id,
       cashierName: user.name,
     });
-    res.status(tx.status === 'approved' ? 200 : 402).json(tx);
+    res.json(tx);
   } catch (error: any) {
     res.status(400).json({ error: error?.message || 'Payment sale failed.' });
   }
