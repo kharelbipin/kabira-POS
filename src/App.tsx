@@ -54,7 +54,6 @@ import { KitchenKdsModal } from './components/restaurant/KitchenKdsModal';
 import { RestaurantTablesView } from './components/restaurant/RestaurantTablesView';
 import { AdminPosDesigner } from './components/admin/AdminPosDesigner';
 import { StoreFeatureManagementModal } from './components/admin/StoreFeatureManagementModal';
-import { HardwareDeviceManager } from './components/admin/HardwareDeviceManager';
 import { AdminPortalNav } from './components/admin/AdminPortalNav';
 import { AdminHealthDashboard } from './components/admin/AdminHealthDashboard';
 import { AdminStoreSettingsView } from './components/admin/AdminStoreSettingsView';
@@ -1619,11 +1618,7 @@ export default function App() {
 
         {(currentTab === 'hardware-manager' || currentTab === 'device-manager') && (
           currentUser.role === 'Admin' ? (
-            <AdminHardwareStoreView
-              onOpenCustomerDisplay={() => {
-                setShowCustomerDisplayModal(true);
-              }}
-            />
+            <AdminHardwareStoreView />
           ) : (
             <div className="h-full flex items-center justify-center bg-[#0A0A0A] p-6">
               <div className="max-w-md w-full rounded-2xl border border-red-900/50 bg-[#141414] p-8 text-center">
