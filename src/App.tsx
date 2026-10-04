@@ -1849,8 +1849,6 @@ export default function App() {
             setShowScannerModal(true);
           } else if (modalName === 'customer-display') {
             setShowCustomerDisplayModal(true);
-          } else if (modalName === 'bridge-hub') {
-            setShowBridgeHubModal(true);
           } else if (modalName === 'health-check') {
             setShowStartupHealthModal(true);
           } else if (modalName === 'scale-plu') {
