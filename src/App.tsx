@@ -1445,7 +1445,19 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'inventory-history' && (
+        {currentTab === 'inventory-receiving-ledger' && (
+          <InventoryView
+            products={products}
+            categories={categories}
+            currentUser={currentUser}
+            settings={settings}
+            onRefresh={() => api.getProducts().then(setProducts)}
+            initialSubTab="ledger"
+            onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
+          />
+        )}
+
+        {currentTab === 'inventory-updates' && (
           <InventoryView
             products={products}
             categories={categories}
