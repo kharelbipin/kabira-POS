@@ -2111,6 +2111,78 @@ class ApiService {
     return this.request('/scan-data/summary');
   }
 
+  // Universal payment terminal integration
+  async getPaymentConfig(storeId: string = 'store-1', registerId: string = 'reg-01') {
+    return this.request<any>(
+      `/payments/config?storeId=${encodeURIComponent(storeId)}&registerId=${encodeURIComponent(registerId)}`
+    );
+  }
+
+  async savePaymentConfig(config: any) {
+    return this.request<any>('/payments/config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    });
+  }
+
+  async getPaymentTerminalStatus(storeId: string = 'store-1', registerId: string = 'reg-01') {
+    return this.request<any>(
+      `/payments/status?storeId=${encodeURIComponent(storeId)}&registerId=${encodeURIComponent(registerId)}`
+    );
+  }
+
+  async connectPaymentTerminal(storeId: string = 'store-1', registerId: string = 'reg-01') {
+    return this.request<any>('/payments/connect', {
+      method: 'POST',
+      body: JSON.stringify({ storeId, registerId }),
+    });
+  }
+
+  async paymentSale(payload: {
+    storeId?: string;
+    registerId?: string;
+    orderId: string;
+    amount: number;
+    testOutcome?: 'approved' | 'declined' | 'cancelled' | 'timeout' | 'error';
+  }) {
+    return this.request<any>('/payments/sale', {
+      method: 'POST',
+      body: JSON.stringify({
+        storeId: payload.storeId || 'store-1',
+        registerId: payload.registerId || 'reg-01',
+        ...payload,
+      }),
+    });
+  }
+
+  async paymentCancel(storeId: string = 'store-1', registerId: string = 'reg-01', transactionId?: string) {
+    return this.request<{ success: boolean }>('/payments/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ storeId, registerId, transactionId }),
+    });
+  }
+
+  async paymentRefund(payload: any) {
+    return this.request<any>('/payments/refund', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async paymentVoid(payload: any) {
+    return this.request<any>('/payments/void', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getPaymentTransactions(storeId: string = 'store-1', registerId: string = 'reg-01') {
+    return this.request<any[]>(
+      `/payments/transactions?storeId=${encodeURIComponent(storeId)}&registerId=${encodeURIComponent(registerId)}`
+    );
+  }
+
+
   // Database Management
   async getDatabaseStatus(): Promise<{
     status: string;
