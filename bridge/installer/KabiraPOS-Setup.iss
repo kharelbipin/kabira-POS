@@ -28,6 +28,8 @@ OutputBaseFilename=KabiraPOS-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\..\public\favicon.ico
+UninstallDisplayIcon={app}\Client\favicon.ico
 
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
@@ -43,16 +45,6 @@ SetupLogging=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-
-; ==============================================================================
-; TASKS
-; ==============================================================================
-
-[Tasks]
-
-Name: "desktopicon"; \
-Description: "{cm:CreateDesktopIcon}"; \
-GroupDescription: "{cm:AdditionalIcons}"
 
 ; ==============================================================================
 ; FILES
@@ -189,8 +181,7 @@ Name: "{autodesktop}\{#MyAppName}"; \
 Filename: "{sys}\wscript.exe"; \
 Parameters: """{app}\Launch-KaBiRaPOS.vbs"""; \
 WorkingDir: "{app}"; \
-IconFilename: "{app}\Client\favicon.ico"; \
-Tasks: desktopicon
+IconFilename: "{app}\Client\favicon.ico"
 
 Name: "{group}\Uninstall {#MyAppName}"; \
 Filename: "{uninstallexe}"
