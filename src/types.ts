@@ -736,6 +736,7 @@ export interface ScannedInvoice {
   id: string;
   invoiceNumber: string; // e.g. "INV-98452"
   invoiceDate: string; // e.g. "2026-09-08"
+  dueDate?: string;
   receivedDate: string;
   vendorId?: string;
   vendorName: string;
