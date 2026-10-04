@@ -1247,9 +1247,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         />
       )}
 
-      {/* Continuous Multi-Barcode Receiving Modal (INV-MB-01 to INV-MB-20) */}
-      {showMultiBarcodeModal && (
-        <ManualInvoiceModal
+      <ManualInvoiceModal
         isOpen={showManualInvoiceModal}
         products={products}
         onClose={() => setShowManualInvoiceModal(false)}
@@ -1262,7 +1260,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         }}
       />
 
-      <MultiBarcodeReceivingModal
+      {/* Continuous Multi-Barcode Receiving Modal (INV-MB-01 to INV-MB-20) */}
+      {showMultiBarcodeModal && (
+        <MultiBarcodeReceivingModal
           isOpen={showMultiBarcodeModal}
           onClose={() => setShowMultiBarcodeModal(false)}
           onComplete={receivingNumber => {
