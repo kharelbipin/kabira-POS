@@ -114,16 +114,38 @@ apiRouter.use(onlineStoreRouter);
 apiRouter.use(inventoryAiRouter);
 
 // Registers and Terminals
-apiRouter.get('/registers', (_req: Request, res: Response) => {
-    const buildRegister = (
-        id: string,
-        name: string,
-        location: string
-    ) => {
+apiRouter.get('/registers', (req: Request, res: Response) => {
+    const storeId = String(req.query.storeId || 'all');
+
+    const enrolled = db.registeredTerminals
+        .filter((terminal: any) => storeId === 'all' || terminal.storeId === storeId)
+        .map((terminal: any) => {
+            const activeShift = db.shifts.find(
+                s => s.status === 'open' && s.registerId === terminal.registerId
+            );
+            return {
+                id: terminal.registerId,
+                name: terminal.registerName || terminal.deviceName || terminal.registerId,
+                location: terminal.storeName || 'Registered POS Terminal',
+                status: terminal.enabled === false ? 'disabled' : (terminal.status || 'offline'),
+                currentCashier: activeShift?.cashierName || null,
+                activeShiftId: activeShift?.id || null,
+                storeId: terminal.storeId,
+                terminalId: terminal.id,
+                posVersion: terminal.posVersion,
+                configurationVersion: terminal.configurationVersion,
+                lastSeenAt: terminal.lastSeenAt,
+            };
+        });
+
+    if (enrolled.length > 0 || (storeId !== 'all' && storeId !== 'store-1')) {
+        return res.json({ registers: enrolled });
+    }
+
+    const buildRegister = (id: string, name: string, location: string) => {
         const activeShift = db.shifts.find(
             s => s.status === 'open' && s.registerId === id
         );
-
         return {
             id,
             name,
@@ -131,23 +153,16 @@ apiRouter.get('/registers', (_req: Request, res: Response) => {
             status: 'active',
             currentCashier: activeShift?.cashierName || null,
             activeShiftId: activeShift?.id || null,
+            storeId: 'store-1',
         };
     };
 
-    const registers = [
-        buildRegister(
-            'reg-1',
-            'Terminal #01 (Front Register)',
-            'Main Checkout Counter'
-        ),
-        buildRegister(
-            'reg-2',
-            'Terminal #02 (Express / Drive-Thru)',
-            'Secondary Express Counter'
-        ),
-    ];
-
-    res.json({ registers });
+    return res.json({
+        registers: [
+            buildRegister('reg-1', 'Terminal #01 (Front Register)', 'Main Checkout Counter'),
+            buildRegister('reg-2', 'Terminal #02 (Express / Drive-Thru)', 'Secondary Express Counter'),
+        ],
+    });
 });
 
 // POS Deployment & Terminal Enrollment
@@ -532,6 +547,7 @@ function toPublicUser(user: User) {
         role: user.role,
         active: user.active,
         avatar: user.avatar,
+        storeIds: user.storeIds ?? (user.role === 'Admin' ? ['all'] : ['store-1']),
         createdAt: user.createdAt,
     };
 }
@@ -611,6 +627,9 @@ apiRouter.post('/auth/bootstrap-admin', asyncHandler(async (req: Request, res: R
     const email = String(req.body?.email || '').trim().toLowerCase();
     const pin = String(req.body?.pin || '').trim();
     const password = String(req.body?.password || '');
+    const requestedStoreIds = Array.isArray(req.body?.storeIds)
+        ? req.body.storeIds.map((value: any) => String(value)).filter(Boolean)
+        : [];
 
     if (!name) {
         return res.status(400).json({ error: 'Admin name is required.' });
@@ -640,6 +659,9 @@ apiRouter.post('/auth/bootstrap-admin', asyncHandler(async (req: Request, res: R
         pin: hashCredential(pin),
         password: hashCredential(password),
         active: true,
+        storeIds: role === 'Admin'
+            ? (requestedStoreIds.length > 0 ? requestedStoreIds : ['all'])
+            : (requestedStoreIds.length > 0 ? requestedStoreIds : ['store-1']),
         createdAt: new Date().toISOString(),
     };
 
@@ -798,7 +820,14 @@ apiRouter.get('/users', asyncHandler(async (req: Request, res: Response) => {
     if (currentUser.role !== 'Admin' && currentUser.role !== 'Manager') {
         return res.status(403).json({ error: 'Access denied: Requires Manager or Admin role' });
     }
-    res.json(db.users.map(toPublicUser));
+    const storeId = String(req.query.storeId || '').trim();
+    const users = storeId && storeId !== 'all'
+        ? db.users.filter(user => {
+            const storeIds = user.storeIds ?? (user.role === 'Admin' ? ['all'] : ['store-1']);
+            return storeIds.includes('all') || storeIds.includes(storeId);
+        })
+        : db.users;
+    res.json(users.map(toPublicUser));
 }));
 
 apiRouter.post('/users', asyncHandler(async (req: Request, res: Response) => {
@@ -979,6 +1008,16 @@ apiRouter.put('/users/:id', asyncHandler(async (req: Request, res: Response) => 
             user.password = hashCredential(password);
             revokeUserSessions(user.id);
         }
+    }
+
+    if (req.body?.storeIds !== undefined) {
+        if (!Array.isArray(req.body.storeIds)) {
+            return res.status(400).json({ error: 'storeIds must be an array.' });
+        }
+        const storeIds = req.body.storeIds.map((value: any) => String(value)).filter(Boolean);
+        user.storeIds = user.role === 'Admin'
+            ? (storeIds.length > 0 ? storeIds : ['all'])
+            : (storeIds.length > 0 ? storeIds : ['store-1']);
     }
 
     if (req.body?.active !== undefined) {
@@ -2259,7 +2298,7 @@ apiRouter.get('/scan-data/summary', (req: Request, res: Response) => {
 // ----------------------------------------------------
 apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
     const currentUser = getAuthUser(req);
-    const { items, customerId, discountTotal, payment, pointsRedeemed, pointsDiscountAmount, payments, registerId } = req.body;
+    const { items, customerId, discountTotal, payment, pointsRedeemed, pointsDiscountAmount, payments, registerId, storeId } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: 'Order must have at least one line item' });
@@ -2626,6 +2665,8 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
         orderNumber,
         cashierId: currentUser.id,
         cashierName: currentUser.name,
+        storeId: String(storeId || 'store-1'),
+        registerId: String(registerId || 'reg-01'),
         customerId: customer?.id,
         customerName: customer?.name,
         customerPhone: customer?.phone,
@@ -3331,9 +3372,12 @@ apiRouter.post('/inventory/receive', asyncHandler(async (req: Request, res: Resp
 // RP-01 to RP-05 & BE-11: Reports & Analytics API
 // ----------------------------------------------------
 apiRouter.get('/reports/sales', (req: Request, res: Response) => {
-    const { period, startDate, endDate } = req.query; // 'today', 'week', 'month', 'custom', 'all'
+    const { period, startDate, endDate, storeId } = req.query; // 'today', 'week', 'month', 'custom', 'all'
 
     let filtered = db.orders.filter(o => o.status === 'completed');
+    if (storeId && storeId !== 'all') {
+        filtered = filtered.filter(o => (o.storeId || 'store-1') === String(storeId));
+    }
 
     const now = new Date();
     if (startDate && endDate) {
@@ -3419,7 +3463,10 @@ apiRouter.get('/reports/sales', (req: Request, res: Response) => {
     }));
 
     // Refunds calculation
-    const refundedOrders = db.orders.filter(o => o.status === 'refunded');
+    const refundedOrders = db.orders.filter(o =>
+        o.status === 'refunded' &&
+        (!storeId || storeId === 'all' || (o.storeId || 'store-1') === String(storeId))
+    );
     const refundsTotal = refundedOrders.reduce((sum, o) => sum + (o.refundAmount || o.grandTotal || 0), 0);
 
     // Inventory valuation summary
@@ -3518,8 +3565,12 @@ apiRouter.get('/audit-logs', (req: Request, res: Response) => {
         return res.status(403).json({ error: 'Only Managers and Admins can view audit logs' });
     }
 
-    const { search, userId, action, targetType, limit } = req.query;
+    const { search, userId, action, targetType, limit, storeId } = req.query;
     let logs = [...db.auditLogs];
+
+    if (storeId && storeId !== 'all') {
+        logs = logs.filter(log => (log.storeId || 'store-1') === String(storeId));
+    }
 
     if (userId) {
         logs = logs.filter(l => l.userId === userId);
