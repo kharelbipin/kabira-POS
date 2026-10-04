@@ -575,6 +575,8 @@ class Database {
 
   loyaltyTransactions: LoyaltyTransaction[] = [];
 
+  storeSettingsById: Record<string, StoreSettings> = {};
+
   settings: StoreSettings = {
     storeName: 'KABIRA POS',
     tagline: 'Fine Liquors, Craft Spirits, Wine & Beer',
@@ -1141,6 +1143,7 @@ class Database {
       'auditLogs',
       'loyaltyTransactions',
       'settings',
+      'storeSettingsById',
       'vendors',
       'invoices',
       'receivingTransactions',
