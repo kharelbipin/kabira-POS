@@ -1485,8 +1485,6 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
                   </div>
                 </div>
               </div>
-            )}
-
               </div>
             )}
 
