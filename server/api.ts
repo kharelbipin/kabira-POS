@@ -57,6 +57,11 @@ import {
 } from './credentialSecurity.js';
 
 export const apiRouter = express.Router();
+// Centralized error handler helper
+const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+};
+
 apiRouter.use(express.json());
 
 // Persistent Database Auto-Save Middleware
@@ -101,30 +106,6 @@ apiRouter.get('/database/schema-sql', (req: Request, res: Response) => {
     } else {
         res.status(404).json({ error: 'SQL Schema file not found' });
     }
-});
-
-apiRouter.get('/database/status', (req: Request, res: Response) => {
-    res.json({
-        engine: 'Microsoft SQL Server 2022 / Azure SQL compatible & JSON persistence engine',
-        schemaVersion: '1.0.0-production',
-        lastSavedAt: db.lastSavedAt,
-        tables: {
-            users: { count: db.users.length, active: db.users.filter(u => u.active).length },
-            userActivities: { count: db.auditLogs.length },
-            categories: { count: db.categories.length },
-            brands: { count: db.brands.length },
-            products: { count: db.products.length, inStock: db.products.filter(p => p.stockQuantity > 0).length },
-            customers: { count: db.customers.length },
-            orders: { count: db.orders.length, completed: db.orders.filter(o => o.status === 'completed').length },
-            heldOrders: { count: db.heldOrders.length },
-            shifts: { count: db.shifts.length },
-            inventoryAdjustments: { count: db.inventoryAdjustments.length },
-            checkCashingTransactions: { count: (db as any).checkCashingTransactions?.length || 0 },
-            issuedChecks: { count: (db as any).issuedChecks?.length || 0 },
-            bankAccounts: { count: (db as any).bankAccounts?.length || 0 },
-        },
-        readyForDeploy: true,
-    });
 });
 
 apiRouter.use(shiftAndCheckRouter);
@@ -609,11 +590,6 @@ function findActiveManagerByPin(pin: unknown): User | undefined {
 
     return user;
 }
-
-// Centralized error handler helper
-const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
-    Promise.resolve(fn(req, res, next)).catch(next);
-};
 
 // ----------------------------------------------------
 // AU-01 & BE-01: Authentication & User Management
