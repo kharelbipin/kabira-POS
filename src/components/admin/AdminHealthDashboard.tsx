@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
-  Boxes,
   CheckCircle2,
   CircleAlert,
   Cpu,
@@ -21,7 +20,6 @@ interface AdminHealthDashboardProps {
   settings: StoreSettings | null;
   onOpenHardware: () => void;
   onOpenUsers: () => void;
-  onOpenInventory: () => void;
 }
 
 interface RegisterRow {
@@ -37,7 +35,6 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
   settings,
   onOpenHardware,
   onOpenUsers,
-  onOpenInventory,
 }) => {
   const [registers, setRegisters] = useState<RegisterRow[]>([]);
   const [bridgeTelemetryCount, setBridgeTelemetryCount] = useState(0);
@@ -212,6 +209,7 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
 
   const criticalAlertCount = alerts.filter(a => a.severity === 'critical').length;
   const warningAlertCount = alerts.filter(a => a.severity === 'warning').length;
+  const infoAlertCount = alerts.filter(a => a.severity === 'info').length;
 
   const runQuickAction = async (
     action: 'scan' | 'printer' | 'drawer' | 'display' | 'bridge'
@@ -305,73 +303,94 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-slate-100 text-slate-900 p-4 md:p-6 space-y-5">
+    <div className="h-full overflow-y-auto bg-[#f4f8fc] text-slate-900 p-5 md:p-7 space-y-5">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
-            <Store className="w-5 h-5 text-sky-600" />
-            <h1 className="text-xl font-black tracking-tight">Store & Register Health</h1>
+          <div className="text-[11px] text-slate-500 font-semibold mb-2">Dashboard <span className="mx-2">›</span> Store & Register Health</div>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-sky-500/10 border border-sky-200 flex items-center justify-center">
+              <Store className="w-6 h-6 text-sky-600" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black tracking-tight text-[#0d1b36]">Store & Register Health</h1>
+              <p className="text-sm text-slate-500 mt-1">
+                Live operational status for {settings?.storeName || 'KaBiRa POS Store'}.
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Live operational status for {settings?.storeName || 'KaBiRa POS Store'}.
-          </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold shadow-sm cursor-pointer"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh Health
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-bold shadow-sm cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh Health
+          </button>
+          <div className="hidden md:block">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-black">Last Updated</div>
+            <div className="text-xs font-bold text-slate-700 mt-1">{lastUpdated || '—'}</div>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-white to-emerald-50/50 border border-emerald-100 rounded-3xl p-5 shadow-sm">
           <div className="flex items-center justify-between text-slate-500">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-100 flex items-center justify-center">
+              <Server className="w-5 h-5 text-emerald-600" />
+            </div>
             <span className="text-[10px] font-black uppercase tracking-wider">Store Status</span>
-            <Server className="w-4 h-4 text-emerald-500" />
           </div>
-          <div className="mt-2">{statusPill(true, 'ONLINE', 'OFFLINE')}</div>
+          <div className="mt-3">{statusPill(true, 'ONLINE', 'OFFLINE')}</div>
           <p className="text-[11px] text-slate-500 mt-2">{settings?.cityStateZip || settings?.address || 'Primary Store'}</p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="bg-gradient-to-br from-white to-sky-50/60 border border-sky-100 rounded-3xl p-5 shadow-sm">
           <div className="flex items-center justify-between text-slate-500">
+            <div className="w-11 h-11 rounded-2xl bg-sky-100 flex items-center justify-center">
+              <Users className="w-5 h-5 text-sky-600" />
+            </div>
             <span className="text-[10px] font-black uppercase tracking-wider">Registers Online</span>
-            <Monitor className="w-4 h-4 text-sky-500" />
           </div>
-          <div className="text-2xl font-black mt-2">{onlineRegisters}/{registers.length || 2}</div>
+          <div className="text-3xl font-black mt-3 text-[#0d1b36]">{onlineRegisters}/{registers.length || 2}</div>
           <p className="text-[11px] text-slate-500 mt-1">{activeShifts} active shift{activeShifts === 1 ? '' : 's'}</p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="bg-gradient-to-br from-white to-violet-50/60 border border-violet-100 rounded-3xl p-5 shadow-sm">
           <div className="flex items-center justify-between text-slate-500">
+            <div className="w-11 h-11 rounded-2xl bg-violet-100 flex items-center justify-center">
+              <Cpu className="w-5 h-5 text-violet-600" />
+            </div>
             <span className="text-[10px] font-black uppercase tracking-wider">Bridge</span>
-            <Cpu className="w-4 h-4 text-violet-500" />
           </div>
-          <div className="mt-2">{statusPill(bridgeOnline, 'ONLINE', 'OFFLINE')}</div>
+          <div className="mt-3">{statusPill(bridgeOnline, 'ONLINE', 'OFFLINE')}</div>
           <p className="text-[11px] text-slate-500 mt-2">
             Port {bridgeHealth.port || 5055} · {bridgeTelemetryCount} telemetry terminal{bridgeTelemetryCount === 1 ? '' : 's'}
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="bg-gradient-to-br from-white to-amber-50/60 border border-amber-100 rounded-3xl p-5 shadow-sm">
           <div className="flex items-center justify-between text-slate-500">
+            <div className="w-11 h-11 rounded-2xl bg-amber-100 flex items-center justify-center">
+              <Activity className="w-5 h-5 text-amber-600" />
+            </div>
             <span className="text-[10px] font-black uppercase tracking-wider">Hardware Health</span>
-            <Activity className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="text-2xl font-black mt-2">{healthScore}%</div>
+          <div className="text-3xl font-black mt-3 text-[#0d1b36]">{healthScore}%</div>
           <p className="text-[11px] text-slate-500 mt-1">Configured and reachable health snapshot</p>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-black flex items-center gap-2">
-              <CircleAlert className={`w-4 h-4 ${criticalAlertCount > 0 ? 'text-rose-600' : warningAlertCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
+            <h2 className="text-xl font-black flex items-center gap-3 text-[#0d1b36]">
+              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center">
+                <CircleAlert className={`w-5 h-5 ${criticalAlertCount > 0 ? 'text-rose-600' : warningAlertCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
+              </div>
               Operational Alerts
             </h2>
             <p className="text-[11px] text-slate-500 mt-0.5">Prioritized issues that may affect register operation.</p>
@@ -382,6 +401,9 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
             </span>
             <span className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
               {warningAlertCount} Warning
+            </span>
+            <span className="px-2 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+              {infoAlertCount} Info
             </span>
           </div>
         </div>
@@ -404,20 +426,17 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
                   ? 'Open Hardware'
                   : alert.action === 'users'
                   ? 'Open Users'
-                  : alert.action === 'inventory'
-                  ? 'Open Inventory'
                   : null;
 
               const handleAction = () => {
                 if (alert.action === 'hardware') onOpenHardware();
                 if (alert.action === 'users') onOpenUsers();
-                if (alert.action === 'inventory') onOpenInventory();
               };
 
               return (
                 <div
                   key={alert.id}
-                  className={`flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-xl border ${
+                  className={`flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 rounded-2xl border shadow-sm ${
                     critical
                       ? 'bg-rose-50 border-rose-200'
                       : warning
@@ -780,11 +799,6 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
           <Users className="w-5 h-5 text-sky-600 mb-2" />
           <div className="text-sm font-black">Users & Roles</div>
           <div className="text-[11px] text-slate-500 mt-1">Create managers and cashiers, assign access, and manage credentials.</div>
-        </button>
-        <button onClick={onOpenInventory} className="bg-white border border-slate-200 rounded-2xl p-4 text-left hover:border-sky-300 shadow-sm cursor-pointer">
-          <Boxes className="w-5 h-5 text-amber-600 mb-2" />
-          <div className="text-sm font-black">Inventory Control</div>
-          <div className="text-[11px] text-slate-500 mt-1">Review stock health and receiving operations.</div>
         </button>
         <button onClick={onOpenHardware} className="bg-white border border-slate-200 rounded-2xl p-4 text-left hover:border-sky-300 shadow-sm cursor-pointer">
           <Cpu className="w-5 h-5 text-violet-600 mb-2" />
