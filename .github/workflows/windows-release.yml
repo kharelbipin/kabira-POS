@@ -71,28 +71,8 @@ jobs:
 
           Write-Host "Web build structure verified."
 
-      # ==========================================================
-      # BACKEND DEPENDENCIES
-      # ==========================================================
-
-      - name: Package Backend Runtime Dependencies
-        shell: pwsh
-        run: |
-          $target = "dist\node_modules"
-
-          if (Test-Path $target) {
-            Remove-Item $target -Recurse -Force
-          }
-
-          New-Item -ItemType Directory -Path $target -Force | Out-Null
-          Copy-Item "node_modules\*" $target -Recurse -Force
-
-          if (-not (Test-Path "dist\node_modules\express")) {
-            Write-Error "Express was not packaged."
-            exit 1
-          }
-
-          Write-Host "Backend dependencies packaged."
+      # Backend dependencies are bundled into dist/server.cjs by esbuild.
+      # This intentionally avoids copying the full node_modules tree into the installer.
 
       # ==========================================================
       # PACKAGE NODE RUNTIME
