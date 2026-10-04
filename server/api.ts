@@ -470,9 +470,13 @@ apiRouter.post('/bridge/telemetry', (req: Request, res: Response) => {
 });
 
 apiRouter.get('/bridge/telemetry', (req: Request, res: Response) => {
+    const storeId = String(req.query.storeId || 'all');
+    const terminals = Object.values(bridgeTelemetryFleet).filter(
+        (terminal: any) => storeId === 'all' || terminal.storeId === storeId
+    );
     res.json({
-        terminals: Object.values(bridgeTelemetryFleet),
-        count: Object.keys(bridgeTelemetryFleet).length,
+        terminals,
+        count: terminals.length,
         serverTime: new Date().toISOString(),
     });
 });
@@ -2822,9 +2826,13 @@ apiRouter.post('/orders', asyncHandler(async (req: Request, res: Response) => {
 
 // BE-07: Order History & Search
 apiRouter.get('/orders', (req: Request, res: Response) => {
-    const { search, cashierId, status, paymentMethod, startDate, endDate } = req.query;
+    const { search, cashierId, status, paymentMethod, startDate, endDate, storeId } = req.query;
 
     let results = [...db.orders];
+
+    if (storeId && storeId !== 'all') {
+        results = results.filter(order => (order.storeId || 'store-1') === String(storeId));
+    }
 
     if (search) {
         const q = (search as string).toLowerCase().trim();
