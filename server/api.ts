@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import net from 'net';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { execFile } from 'child_process';
 import { db } from './db.js';
 import {
@@ -167,6 +167,295 @@ apiRouter.get('/registers', (_req: Request, res: Response) => {
     ];
 
     res.json({ registers });
+});
+
+// POS Deployment & Terminal Enrollment
+const deploymentTokenHash = (value: string) =>
+    createHash('sha256').update(String(value || '')).digest('hex');
+
+const createActivationCode = () => {
+    const raw = randomBytes(6).toString('hex').toUpperCase();
+    return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
+};
+
+apiRouter.get('/deployments', (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin') {
+        return res.status(403).json({ error: 'Only Admins can view deployment packages' });
+    }
+
+    res.json({
+        deployments: [...db.deploymentPackages].sort((a: any, b: any) =>
+            String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
+        ),
+    });
+});
+
+apiRouter.post('/deployments', asyncHandler(async (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin') {
+        return res.status(403).json({ error: 'Only Admins can create deployment packages' });
+    }
+
+    const {
+        storeId,
+        registerId,
+        storeName,
+        registerName,
+        configurationVersion,
+        environment = 'production',
+        expiresInDays = 7,
+        options = {},
+    } = req.body || {};
+
+    if (!storeId || !registerId || !storeName || !registerName) {
+        return res.status(400).json({ error: 'Store and register are required' });
+    }
+
+    const createdAt = new Date();
+    const expiresAt = new Date(
+        createdAt.getTime() + Math.max(1, Number(expiresInDays || 7)) * 86400000
+    );
+    const oneTimeDeploymentToken = randomBytes(32).toString('hex');
+    const activationCode = createActivationCode();
+
+    const deployment = {
+        id: `deploy-${Date.now()}-${randomBytes(4).toString('hex')}`,
+        storeId: String(storeId),
+        registerId: String(registerId),
+        storeName: String(storeName),
+        registerName: String(registerName),
+        configurationVersion: Number(configurationVersion || 1),
+        environment: environment === 'test' ? 'test' : 'production',
+        activationCode,
+        deploymentTokenHash: deploymentTokenHash(oneTimeDeploymentToken),
+        status: 'ready',
+        options,
+        createdAt: createdAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        createdByUserId: currentUser.id,
+        createdByUserName: currentUser.name,
+        activatedAt: null,
+        activatedTerminalId: null,
+        revokedAt: null,
+    };
+
+    db.deploymentPackages.unshift(deployment);
+    db.addAudit(
+        currentUser.id,
+        currentUser.name,
+        currentUser.role,
+        'POS_DEPLOYMENT_CREATE',
+        'system',
+        deployment.id,
+        `Created POS deployment for ${deployment.storeName} / ${deployment.registerName}`
+    );
+
+    res.status(201).json({
+        deployment: {
+            ...deployment,
+            deploymentTokenHash: undefined,
+        },
+        oneTimeDeploymentToken,
+    });
+}));
+
+apiRouter.post('/deployments/:id/revoke', asyncHandler(async (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin') {
+        return res.status(403).json({ error: 'Only Admins can revoke deployment packages' });
+    }
+
+    const deployment = db.deploymentPackages.find((row: any) => row.id === req.params.id);
+    if (!deployment) {
+        return res.status(404).json({ error: 'Deployment package not found' });
+    }
+
+    deployment.status = 'revoked';
+    deployment.revokedAt = new Date().toISOString();
+
+    db.addAudit(
+        currentUser.id,
+        currentUser.name,
+        currentUser.role,
+        'POS_DEPLOYMENT_REVOKE',
+        'system',
+        deployment.id,
+        `Revoked POS deployment for ${deployment.storeName} / ${deployment.registerName}`
+    );
+
+    res.json({ success: true, deployment });
+}));
+
+apiRouter.post('/device-activation', (req: Request, res: Response) => {
+    const {
+        activationCode,
+        deploymentToken,
+        deviceId,
+        deviceName,
+        hostname,
+        posVersion,
+        bridgeVersion,
+    } = req.body || {};
+
+    if (!activationCode || !deploymentToken || !deviceId) {
+        return res.status(400).json({
+            error: 'Activation code, deployment token, and device ID are required',
+        });
+    }
+
+    const deployment = db.deploymentPackages.find(
+        (row: any) =>
+            row.activationCode === String(activationCode).trim().toUpperCase() &&
+            row.status === 'ready'
+    );
+
+    if (!deployment) {
+        return res.status(404).json({ error: 'Activation package not found or no longer available' });
+    }
+
+    if (new Date(deployment.expiresAt).getTime() < Date.now()) {
+        deployment.status = 'expired';
+        return res.status(410).json({ error: 'This activation package has expired' });
+    }
+
+    if (deployment.deploymentTokenHash !== deploymentTokenHash(deploymentToken)) {
+        return res.status(401).json({ error: 'Invalid deployment token' });
+    }
+
+    const existing = db.registeredTerminals.find(
+        (terminal: any) => terminal.deviceId === String(deviceId)
+    );
+
+    const terminalId = existing?.id || `terminal-${Date.now()}-${randomBytes(4).toString('hex')}`;
+    const permanentCredential = randomBytes(32).toString('hex');
+    const now = new Date().toISOString();
+
+    const terminal = {
+        ...(existing || {}),
+        id: terminalId,
+        deviceId: String(deviceId),
+        deviceName: String(deviceName || deviceId),
+        hostname: String(hostname || ''),
+        storeId: deployment.storeId,
+        storeName: deployment.storeName,
+        registerId: deployment.registerId,
+        registerName: deployment.registerName,
+        configurationVersion: deployment.configurationVersion,
+        posVersion: String(posVersion || 'unknown'),
+        bridgeVersion: String(bridgeVersion || 'unknown'),
+        credentialHash: deploymentTokenHash(permanentCredential),
+        status: 'online',
+        enabled: true,
+        activatedAt: existing?.activatedAt || now,
+        lastSeenAt: now,
+        deploymentId: deployment.id,
+    };
+
+    if (existing) {
+        Object.assign(existing, terminal);
+    } else {
+        db.registeredTerminals.unshift(terminal);
+    }
+
+    deployment.status = 'activated';
+    deployment.activatedAt = now;
+    deployment.activatedTerminalId = terminalId;
+    deployment.deploymentTokenHash = '';
+
+    res.json({
+        success: true,
+        terminal: {
+            ...terminal,
+            credentialHash: undefined,
+        },
+        deviceCredential: permanentCredential,
+    });
+});
+
+apiRouter.get('/terminals', (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin') {
+        return res.status(403).json({ error: 'Only Admins can view terminals' });
+    }
+
+    res.json({
+        terminals: db.registeredTerminals.map((terminal: any) => ({
+            ...terminal,
+            credentialHash: undefined,
+        })),
+    });
+});
+
+apiRouter.patch('/terminals/:id', asyncHandler(async (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin') {
+        return res.status(403).json({ error: 'Only Admins can update terminals' });
+    }
+
+    const terminal = db.registeredTerminals.find((row: any) => row.id === req.params.id);
+    if (!terminal) {
+        return res.status(404).json({ error: 'Terminal not found' });
+    }
+
+    if (req.body.enabled !== undefined) {
+        terminal.enabled = Boolean(req.body.enabled);
+        terminal.status = terminal.enabled ? terminal.status : 'disabled';
+    }
+
+    if (req.body.registerName !== undefined) {
+        terminal.registerName = String(req.body.registerName);
+    }
+
+    terminal.updatedAt = new Date().toISOString();
+
+    res.json({
+        ...terminal,
+        credentialHash: undefined,
+    });
+}));
+
+apiRouter.post('/terminals/:id/revoke', asyncHandler(async (req: Request, res: Response) => {
+    const currentUser = getAuthUser(req);
+    if (currentUser.role !== 'Admin') {
+        return res.status(403).json({ error: 'Only Admins can revoke terminals' });
+    }
+
+    const terminal = db.registeredTerminals.find((row: any) => row.id === req.params.id);
+    if (!terminal) {
+        return res.status(404).json({ error: 'Terminal not found' });
+    }
+
+    terminal.enabled = false;
+    terminal.status = 'revoked';
+    terminal.credentialHash = '';
+    terminal.revokedAt = new Date().toISOString();
+
+    res.json({ success: true });
+}));
+
+apiRouter.post('/terminal-heartbeat', (req: Request, res: Response) => {
+    const { terminalId, deviceCredential, posVersion, bridgeVersion } = req.body || {};
+    const terminal = db.registeredTerminals.find((row: any) => row.id === String(terminalId || ''));
+
+    if (!terminal || !terminal.enabled) {
+        return res.status(404).json({ error: 'Terminal is not active' });
+    }
+
+    if (!deviceCredential || terminal.credentialHash !== deploymentTokenHash(deviceCredential)) {
+        return res.status(401).json({ error: 'Invalid terminal credential' });
+    }
+
+    terminal.status = 'online';
+    terminal.lastSeenAt = new Date().toISOString();
+    if (posVersion) terminal.posVersion = String(posVersion);
+    if (bridgeVersion) terminal.bridgeVersion = String(bridgeVersion);
+
+    res.json({
+        success: true,
+        configurationVersion: terminal.configurationVersion,
+        serverTime: new Date().toISOString(),
+    });
 });
 
 // In-memory Cloud Bridge Telemetry Fleet Store
