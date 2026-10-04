@@ -42,9 +42,10 @@ const inventoryTabs = [
   { id: 'inventory', label: 'Items', icon: Package },
   { id: 'inventory-categories', label: 'Categories', icon: Layers },
   { id: 'inventory-vendors', label: 'Vendors / Suppliers', icon: Users },
-  { id: 'receiving', label: 'Receive Inventory', icon: Truck },
-  { id: 'inventory-history', label: 'Invoice History', icon: History },
-  { id: 'inventory-count', label: 'Inventory Count / ATS', icon: ClipboardList },
+  { id: 'receiving', label: 'Receive / Invoice Intake', icon: Truck },
+  { id: 'inventory-receiving-ledger', label: 'Receiving Ledger', icon: History },
+  { id: 'inventory-updates', label: 'Updates & Recounts', icon: ClipboardList },
+  { id: 'inventory-count', label: 'ATS / Online Stock', icon: Boxes },
   { id: 'inventory-ledger', label: 'Omnichannel Ledger', icon: BookOpen },
 ];
 
