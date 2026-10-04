@@ -5,14 +5,13 @@ import {
   PackageCheck,
   Plus,
   Search,
-  Truck,
   Upload,
   Download,
   Edit2,
   Save,
   X,
 } from 'lucide-react';
-import { Category, Product, ScannedInvoice, StoreSettings } from '../../types';
+import { Category, Product, StoreSettings } from '../../types';
 import { api } from '../../utils/api';
 
 interface ManagerInventoryDashboardProps {
@@ -41,28 +40,10 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
   const [categoryId, setCategoryId] = useState('all');
   const [vendor, setVendor] = useState('all');
   const [status, setStatus] = useState('all');
-  const [recentInvoices, setRecentInvoices] = useState<ScannedInvoice[]>([]);
   const [savingLabelSettings, setSavingLabelSettings] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState<Partial<Product>>({});
   const [savingProduct, setSavingProduct] = useState(false);
-
-  useEffect(() => {
-    api
-      .getInvoices()
-      .then(list =>
-        setRecentInvoices(
-          [...list]
-            .sort(
-              (a, b) =>
-                new Date(b.receivedDate || b.createdAt).getTime() -
-                new Date(a.receivedDate || a.createdAt).getTime()
-            )
-            .slice(0, 5)
-        )
-      )
-      .catch(() => setRecentInvoices([]));
-  }, [products]);
 
   const activeProducts = useMemo(() => products.filter(product => product.active), [products]);
 
@@ -267,10 +248,6 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
               <Plus className="w-4 h-4" />
               Add Item
             </button>
-            <button type="button" onClick={() => onNavigate('receiving')} className="h-11 px-4 rounded-lg bg-[#08274d] hover:bg-[#0b315f] text-white text-xs font-black flex items-center gap-2 cursor-pointer">
-              <Truck className="w-4 h-4" />
-              Receive Items
-            </button>
             <button type="button" onClick={() => onNavigate('inventory-import')} className="h-11 px-4 rounded-lg bg-white border border-[#25467b] text-[#10234a] text-xs font-black flex items-center gap-2 cursor-pointer">
               <Upload className="w-4 h-4" />
               Import CSV
@@ -472,55 +449,7 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <Truck className="w-5 h-5 text-[#08274d]" />
-                <div>
-                  <h3 className="text-sm font-black text-[#10234a]">Recent Receiving</h3>
-                  <p className="text-[10px] text-slate-500">Most recent inventory receipts</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => onNavigate('receiving')} className="text-[10px] font-black text-blue-600 cursor-pointer">View All</button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-[10px]">
-                <thead className="bg-[#f4f7fb] text-[#33476b]">
-                  <tr>
-                    <th className="px-3 py-2">Receipt #</th>
-                    <th className="px-3 py-2">Vendor</th>
-                    <th className="px-3 py-2">Date</th>
-                    <th className="px-3 py-2 text-right">Items</th>
-                    <th className="px-3 py-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {recentInvoices.length === 0 ? (
-                    <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">No recent receipts.</td></tr>
-                  ) : (
-                    recentInvoices.map(invoice => (
-                      <tr key={invoice.id}>
-                        <td className="px-3 py-2 font-bold text-blue-600">{invoice.invoiceNumber}</td>
-                        <td className="px-3 py-2 text-[#36517a]">{invoice.vendorName}</td>
-                        <td className="px-3 py-2 text-[#36517a]">{new Date(invoice.receivedDate || invoice.createdAt).toLocaleDateString()}</td>
-                        <td className="px-3 py-2 text-right font-bold">
-                          {invoice.lineItems.reduce((sum, line) => sum + Number(line.totalInventoryUnits || line.quantity || 0), 0)}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className={'inline-flex px-2 py-1 rounded-full font-bold ' + (invoice.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' : invoice.status === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700')}>
-                            {invoice.status === 'confirmed' ? 'Received' : invoice.status.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
+        <div className="grid grid-cols-1 gap-3">
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200">
               <div className="flex items-center gap-2">
@@ -573,6 +502,7 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
               </table>
             </div>
           </div>
+
         </div>
 
         <div className="flex items-center justify-between px-1 text-[10px] text-slate-500">
