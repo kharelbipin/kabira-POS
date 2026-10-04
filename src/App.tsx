@@ -59,6 +59,7 @@ import { AdminHealthDashboard } from './components/admin/AdminHealthDashboard';
 import { ManagerPortalNav } from './components/manager/ManagerPortalNav';
 import { ManagerOperationsDashboard } from './components/manager/ManagerOperationsDashboard';
 import { ManagerInventoryDashboard } from './components/manager/ManagerInventoryDashboard';
+import { ManagerCategoriesView } from './components/manager/ManagerCategoriesView';
 import { ManagerReportsCenter } from './components/manager/ManagerReportsCenter';
 import { ManagerPromotionScanDataCenter } from './components/manager/ManagerPromotionScanDataCenter';
 
@@ -1373,6 +1374,13 @@ export default function App() {
               onOpenMobileCaptureSimulator={(sid, tok) => setMobileSessionParam({ sessionId: sid, token: tok })}
             />
           )
+        )}
+
+        {currentTab === 'inventory-categories' && currentUser?.role === 'Manager' && (
+          <ManagerCategoriesView
+            categories={categories}
+            products={products}
+          />
         )}
 
         {currentTab === 'inventory-catalog' && (
