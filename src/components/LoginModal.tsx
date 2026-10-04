@@ -41,7 +41,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   // First-run Admin setup
   const [isCheckingSetup, setIsCheckingSetup] =
-    useState<boolean>(true);
+    useState<boolean>(() => !api.hasSetupCompleteHint());
 
   const [requiresSetup, setRequiresSetup] =
     useState<boolean>(false);
@@ -68,6 +68,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
+    // Normal installed terminals have already completed bootstrap. Use the
+    // local hint so the PIN pad appears immediately instead of waiting for a
+    // setup-status request on every login/switch-user operation.
+    if (api.hasSetupCompleteHint()) {
+      setRequiresSetup(false);
+      setIsCheckingSetup(false);
+      return;
+    }
+
     let cancelled = false;
 
     const checkBootstrapStatus = async () => {
@@ -75,13 +84,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       setError(null);
 
       try {
-        const status =
-          await api.getBootstrapStatus();
+        const status = await api.getBootstrapStatus();
 
         if (!cancelled) {
-          setRequiresSetup(
-            Boolean(status.requiresSetup)
-          );
+          setRequiresSetup(Boolean(status.requiresSetup));
         }
       } catch (err: any) {
         if (!cancelled) {
@@ -182,6 +188,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       onClose();
     } catch (err: any) {
       playBeep('error');
+
+      // A configured-terminal hint can outlive a database reset. Only after a
+      // failed login do the extra authoritative bootstrap check, keeping the
+      // normal fast path to a single login request.
+      try {
+        const status = await api.getBootstrapStatus(true);
+        if (status.requiresSetup) {
+          setRequiresSetup(true);
+          setError(null);
+          setPin('');
+          return;
+        }
+      } catch {
+        // Preserve the original credential error below.
+      }
 
       setError(
         err?.message ||
