@@ -44,6 +44,9 @@ export const saveDisplay2Media = async (file: File): Promise<DisplayMediaRecord>
       tx.onerror = () => reject(tx.error || new Error('Unable to save Display 2 media.'));
     });
 
+    try {
+      localStorage.setItem('kabira_display2_media_changed', String(Date.now()));
+    } catch {}
     return record;
   } finally {
     db.close();
@@ -73,6 +76,9 @@ export const removeDisplay2Media = async (): Promise<void> => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error || new Error('Unable to remove Display 2 media.'));
     });
+    try {
+      localStorage.setItem('kabira_display2_media_changed', String(Date.now()));
+    } catch {}
   } finally {
     db.close();
   }
