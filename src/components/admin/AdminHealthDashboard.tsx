@@ -794,7 +794,7 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <button onClick={onOpenUsers} className="bg-white border border-slate-200 rounded-2xl p-4 text-left hover:border-sky-300 shadow-sm cursor-pointer">
           <Users className="w-5 h-5 text-sky-600 mb-2" />
           <div className="text-sm font-black">Users & Roles</div>
