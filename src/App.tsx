@@ -11,6 +11,7 @@ import {
 } from './types';
 import { api } from './utils/api';
 import { playBeep } from './utils/audio';
+import { useAdminStore } from './contexts/AdminStoreContext';
 
 import { Navbar } from './components/Navbar';
 import { POSView } from './components/POSView';
@@ -56,6 +57,9 @@ import { StoreFeatureManagementModal } from './components/admin/StoreFeatureMana
 import { HardwareDeviceManager } from './components/admin/HardwareDeviceManager';
 import { AdminPortalNav } from './components/admin/AdminPortalNav';
 import { AdminHealthDashboard } from './components/admin/AdminHealthDashboard';
+import { AdminStoreSettingsView } from './components/admin/AdminStoreSettingsView';
+import { AdminRegistersView } from './components/admin/AdminRegistersView';
+import { AdminHardwareStoreView } from './components/admin/AdminHardwareStoreView';
 import { ManagerPortalNav } from './components/manager/ManagerPortalNav';
 import { ManagerOperationsDashboard } from './components/manager/ManagerOperationsDashboard';
 import { ManagerInventoryDashboard } from './components/manager/ManagerInventoryDashboard';
@@ -66,6 +70,11 @@ import { ManagerPromotionScanDataCenter } from './components/manager/ManagerProm
 const HELD_ORDERS_STORAGE_KEY = 'kabira_pos_held_orders_v1';
 
 export default function App() {
+  const {
+    selectedStoreId: adminSelectedStoreId,
+    isAllStores: adminAllStores,
+  } = useAdminStore();
+
   // Authentication & Current User (AU-01)
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(true);
@@ -1264,7 +1273,10 @@ export default function App() {
         )}
 
         {currentTab === 'pos' && (
-          <POSView
+          currentUser?.role === 'Admin' ? (
+            <AdminRegistersView onOpenDesigner={() => setShowDesignerModal(true)} />
+          ) : (
+                      <POSView
             products={products}
             categories={categories}
             cartItems={cartItems}
@@ -1299,6 +1311,8 @@ export default function App() {
             onDismissScanNotification={() => setScanNotification(null)}
             onPrintLastReceipt={handleOpenLastReceipt}
           />
+
+          )
         )}
 
         {currentTab === 'orders' && (
@@ -1574,6 +1588,8 @@ export default function App() {
                 </div>
               </div>
             </div>
+          ) : currentUser?.role === 'Admin' ? (
+            <AdminStoreSettingsView currentUser={currentUser} />
           ) : (
             <ManagerSettingsCenter
               settings={settings}
@@ -1603,15 +1619,11 @@ export default function App() {
 
         {(currentTab === 'hardware-manager' || currentTab === 'device-manager') && (
           currentUser.role === 'Admin' ? (
-            <div className="h-full overflow-y-auto p-4 md:p-6 bg-[#0A0A0A]">
-              <div className="max-w-7xl mx-auto">
-                <HardwareDeviceManager
-                  onOpenCustomerDisplay={() => {
-                    setShowCustomerDisplayModal(true);
-                  }}
-                />
-              </div>
-            </div>
+            <AdminHardwareStoreView
+              onOpenCustomerDisplay={() => {
+                setShowCustomerDisplayModal(true);
+              }}
+            />
           ) : (
             <div className="h-full flex items-center justify-center bg-[#0A0A0A] p-6">
               <div className="max-w-md w-full rounded-2xl border border-red-900/50 bg-[#141414] p-8 text-center">
@@ -1972,7 +1984,7 @@ export default function App() {
         isOpen={showStoreFeatureModal}
         onClose={() => setShowStoreFeatureModal(false)}
         currentUser={currentUser}
-        activeStoreId="store-1"
+        activeStoreId={adminAllStores ? 'store-1' : adminSelectedStoreId}
       />
 
       {/* Auto-Open Customer Display 2 Screen Banner & Floating Controller (Webform & Dual-Display) */}
