@@ -56,6 +56,7 @@ interface ManagerSettingsCenterProps {
   currentUser: User | null;
   onRefresh: () => void;
   onClose?: () => void;
+  storeId?: string;
 }
 
 export type SettingsSectionId =
@@ -114,6 +115,7 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
   currentUser,
   onRefresh,
   onClose,
+  storeId,
 }) => {
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
   const [searchQuery, setSearchQuery] = useState('');
@@ -522,10 +524,17 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
 
       // Persist scope-level overrides locally
       try {
-        localStorage.setItem(`pos_settings_scope_${scopeLevel}`, JSON.stringify(formData));
+        localStorage.setItem(
+          `pos_settings_scope_${storeId || 'store-1'}_${scopeLevel}`,
+          JSON.stringify(formData)
+        );
       } catch (e) {}
 
-      if (displayModeChanged && currentUser?.role === 'Admin') {
+      if (
+        displayModeChanged &&
+        currentUser?.role === 'Admin' &&
+        (!storeId || storeId === 'store-1')
+      ) {
         try {
           await hardwareStore.restartCustomerDisplay();
         } catch (error) {
