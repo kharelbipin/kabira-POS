@@ -16,6 +16,11 @@ import {
 } from '../../services/industryConfigService';
 import { playBeep } from '../../utils/audio';
 import {
+  posDeploymentService,
+  PosDeploymentOptions,
+  PosDeploymentRecord,
+} from '../../services/posDeploymentService';
+import {
   Sliders,
   Store,
   Monitor,
@@ -45,6 +50,10 @@ import {
   History,
   X,
   Lock,
+  Download,
+  PackageCheck,
+  KeyRound,
+  Copy,
 } from 'lucide-react';
 
 interface AdminPosDesignerProps {
@@ -70,6 +79,19 @@ export const AdminPosDesigner: React.FC<AdminPosDesignerProps> = ({
 
   const [devicePreview, setDevicePreview] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [showPublishModal, setShowPublishModal] = useState<boolean>(false);
+  const [showInstallerModal, setShowInstallerModal] = useState<boolean>(false);
+  const [buildingInstaller, setBuildingInstaller] = useState<boolean>(false);
+  const [deploymentRecord, setDeploymentRecord] = useState<PosDeploymentRecord | null>(null);
+  const [deploymentOptions, setDeploymentOptions] = useState<PosDeploymentOptions>({
+    installHardwareBridge: true,
+    launchOnStartup: true,
+    enableCustomerDisplay: true,
+    enableOfflineMode: true,
+    enableAutoUpdate: true,
+    environment: 'production',
+    expiresInDays: 7,
+    adminApiUrl: window.location.origin + '/api',
+  });
   const [publishTarget, setPublishTarget] = useState<'company' | 'store' | 'register'>('store');
   const [publishMessage, setPublishMessage] = useState<string>('');
   const [publishSuccessBanner, setPublishSuccessBanner] = useState<string | null>(null);
@@ -169,6 +191,37 @@ export const AdminPosDesigner: React.FC<AdminPosDesignerProps> = ({
     }, 4500);
   };
 
+  const handleBuildInstaller = async () => {
+    const store = SAMPLE_STORES.find(s => s.id === selectedStoreId);
+    const register = SAMPLE_REGISTERS.find(r => r.id === selectedRegisterId);
+
+    if (!store || !register) {
+      setPublishSuccessBanner('Select a valid store and register before building the installer.');
+      return;
+    }
+
+    setBuildingInstaller(true);
+    try {
+      const config = industryConfigService.resolveActiveConfiguration(
+        selectedStoreId,
+        selectedRegisterId,
+        'Admin'
+      );
+      const record = await posDeploymentService.buildPackage(
+        store,
+        register,
+        config,
+        deploymentOptions
+      );
+      setDeploymentRecord(record);
+      playBeep('success');
+    } catch (error: any) {
+      setPublishSuccessBanner(error?.message || 'Unable to build POS deployment package.');
+    } finally {
+      setBuildingInstaller(false);
+    }
+  };
+
   const activeStore = SAMPLE_STORES.find(s => s.id === selectedStoreId);
   const activeRegister = SAMPLE_REGISTERS.find(r => r.id === selectedRegisterId);
 
@@ -261,10 +314,22 @@ export const AdminPosDesigner: React.FC<AdminPosDesignerProps> = ({
           <button
             type="button"
             onClick={() => setShowPublishModal(true)}
-            className="flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-transform active:scale-95 cursor-pointer"
+            className="flex items-center space-x-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-transform active:scale-95 cursor-pointer"
           >
             <UploadCloud className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-            <span>Publish Configuration</span>
+            <span>Publish to POS</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setDeploymentRecord(null);
+              setShowInstallerModal(true);
+            }}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-transform active:scale-95 cursor-pointer"
+          >
+            <Download className="w-4 h-4 stroke-[2.5]" />
+            <span>Build POS Installer</span>
           </button>
 
           {onClose && (
@@ -835,7 +900,7 @@ export const AdminPosDesigner: React.FC<AdminPosDesignerProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2.5">
                 <UploadCloud className="w-6 h-6 text-amber-400" />
-                <h3 className="text-lg font-black text-white">Publish Configuration</h3>
+                <h3 className="text-lg font-black text-white">Publish to POS</h3>
               </div>
               <button onClick={() => setShowPublishModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -843,7 +908,7 @@ export const AdminPosDesigner: React.FC<AdminPosDesignerProps> = ({
             </div>
 
             <p className="text-xs text-slate-400 leading-relaxed">
-              Select the deployment target level for this POS template:
+              Send this configuration to POS terminals that are already installed and connected:
             </p>
 
             {/* Target Level */}
@@ -885,8 +950,217 @@ export const AdminPosDesigner: React.FC<AdminPosDesignerProps> = ({
                 onClick={handlePublish}
                 className="flex-1 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg cursor-pointer"
               >
-                Deploy & Sync Now ✓
+                Publish & Sync Now ✓
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* Build POS Installer Modal */}
+      {showInstallerModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 select-none">
+          <div className="bg-[#0F172A] border border-sky-500/40 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto text-slate-100">
+            <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center">
+                  <PackageCheck className="w-6 h-6 text-sky-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white">Build Store POS Installer</h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Create a store/register-specific Windows deployment package.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInstallerModal(false)}
+                className="w-9 h-9 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 font-black">Store</div>
+                  <div className="text-sm font-black text-white mt-1">{activeStore?.name || selectedStoreId}</div>
+                  <div className="text-[11px] text-slate-400 mt-1">{activeStore?.cityStateZip || 'Selected store'}</div>
+                </div>
+                <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 font-black">Register</div>
+                  <div className="text-sm font-black text-white mt-1">{activeRegister?.name || selectedRegisterId}</div>
+                  <div className="text-[11px] text-slate-400 mt-1">Configuration v{currentConfig.version}</div>
+                </div>
+              </div>
+
+              {!deploymentRecord ? (
+                <>
+                  <div>
+                    <div className="text-xs font-black text-white uppercase tracking-wider mb-3">Installer Options</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {[
+                        ['installHardwareBridge', 'Install Hardware Bridge', 'Printer, drawer, scanner and display service'],
+                        ['launchOnStartup', 'Launch on Windows Startup', 'Start POS automatically after login'],
+                        ['enableCustomerDisplay', 'Enable Customer Display', 'Prepare Display 2 support for this register'],
+                        ['enableOfflineMode', 'Enable Offline Mode', 'Allow local operation during internet outages'],
+                        ['enableAutoUpdate', 'Enable Auto Updates', 'Receive future POS releases from Admin'],
+                      ].map(([key, label, desc]) => (
+                        <label key={key} className="flex items-start gap-3 rounded-xl border border-slate-700 bg-slate-900/80 p-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={Boolean((deploymentOptions as any)[key])}
+                            onChange={e =>
+                              setDeploymentOptions(prev => ({ ...prev, [key]: e.target.checked }))
+                            }
+                            className="mt-0.5 w-4 h-4 accent-sky-500"
+                          />
+                          <span>
+                            <span className="block text-xs font-bold text-slate-100">{label}</span>
+                            <span className="block text-[10px] text-slate-500 mt-1">{desc}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <label>
+                      <span className="block text-[10px] uppercase tracking-wider text-slate-500 font-black mb-1.5">Environment</span>
+                      <select
+                        value={deploymentOptions.environment}
+                        onChange={e =>
+                          setDeploymentOptions(prev => ({
+                            ...prev,
+                            environment: e.target.value as 'production' | 'test',
+                          }))
+                        }
+                        className="w-full h-10 rounded-xl border border-slate-700 bg-slate-900 px-3 text-xs text-white"
+                      >
+                        <option value="production">Production</option>
+                        <option value="test">Test / Staging</option>
+                      </select>
+                    </label>
+
+                    <label>
+                      <span className="block text-[10px] uppercase tracking-wider text-slate-500 font-black mb-1.5">Installer Expires</span>
+                      <select
+                        value={deploymentOptions.expiresInDays}
+                        onChange={e =>
+                          setDeploymentOptions(prev => ({
+                            ...prev,
+                            expiresInDays: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full h-10 rounded-xl border border-slate-700 bg-slate-900 px-3 text-xs text-white"
+                      >
+                        <option value={1}>1 Day</option>
+                        <option value={3}>3 Days</option>
+                        <option value={7}>7 Days</option>
+                        <option value={14}>14 Days</option>
+                        <option value={30}>30 Days</option>
+                      </select>
+                    </label>
+
+                    <label>
+                      <span className="block text-[10px] uppercase tracking-wider text-slate-500 font-black mb-1.5">Admin API</span>
+                      <input
+                        value={deploymentOptions.adminApiUrl}
+                        onChange={e =>
+                          setDeploymentOptions(prev => ({ ...prev, adminApiUrl: e.target.value }))
+                        }
+                        className="w-full h-10 rounded-xl border border-slate-700 bg-slate-900 px-3 text-xs text-white"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="rounded-xl border border-sky-900/60 bg-sky-950/25 p-4 text-[11px] text-sky-200 leading-relaxed">
+                    This package contains the selected POS configuration, store/register identity,
+                    one-time enrollment credentials and a Windows setup script. It does not store
+                    an administrator password.
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowInstallerModal(false)}
+                      className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={buildingInstaller}
+                      onClick={() => void handleBuildInstaller()}
+                      className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      {buildingInstaller ? 'Building Package...' : 'Generate & Download'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-emerald-700/50 bg-emerald-950/25 p-5 flex items-start gap-4">
+                    <CheckCircle2 className="w-7 h-7 text-emerald-400 shrink-0" />
+                    <div>
+                      <div className="text-base font-black text-emerald-300">POS Deployment Package Ready</div>
+                      <div className="text-xs text-slate-300 mt-1 break-all">{deploymentRecord.fileName}</div>
+                      <div className="text-[11px] text-slate-500 mt-2">
+                        Package downloaded. Install it on the target store/register computer.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-400">
+                      <KeyRound className="w-4 h-4 text-amber-400" />
+                      One-Time Activation Code
+                    </div>
+                    <div className="flex items-center justify-between gap-3 mt-3">
+                      <div className="font-mono text-2xl font-black tracking-[0.18em] text-amber-300">
+                        {deploymentRecord.activationCode}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard?.writeText(deploymentRecord.activationCode)}
+                        className="px-3 py-2 rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 text-xs font-bold flex items-center gap-2 cursor-pointer"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copy
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-3">
+                      Expires {new Date(deploymentRecord.expiresAt).toLocaleString()} · Store {deploymentRecord.storeId} · Register {deploymentRecord.registerId}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-amber-800/50 bg-amber-950/20 p-4 text-[11px] text-amber-200">
+                    Production activation should exchange the package's one-time deployment token
+                    for a permanent device credential, then invalidate the token.
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setDeploymentRecord(null)}
+                      className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold cursor-pointer"
+                    >
+                      Build Another
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowInstallerModal(false)}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black cursor-pointer"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
