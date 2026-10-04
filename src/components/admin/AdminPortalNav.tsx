@@ -29,7 +29,7 @@ const navItems = [
   { id: 'users', label: 'Users & Roles', icon: Users },
   { id: 'hardware-manager', label: 'Hardware', icon: Cpu },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
-  { id: 'user-activity', label: 'Audit & Activity', icon: Activity },
+  { id: 'audit', label: 'Audit & Activity', icon: Activity },
   { id: 'settings', label: 'System Settings', icon: Settings },
 ];
 
