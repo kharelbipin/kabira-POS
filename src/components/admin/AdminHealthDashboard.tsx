@@ -15,6 +15,7 @@ import {
 import { AuditLog, Order, StoreSettings } from '../../types';
 import { api } from '../../utils/api';
 import { hardwareStore } from '../../hardware';
+import { useAdminStore } from '../../contexts/AdminStoreContext';
 
 interface AdminHealthDashboardProps {
   settings: StoreSettings | null;
@@ -36,6 +37,7 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
   onOpenHardware,
   onOpenUsers,
 }) => {
+  const { selectedStoreId, selectedStore, isAllStores } = useAdminStore();
   const [registers, setRegisters] = useState<RegisterRow[]>([]);
   const [bridgeTelemetryCount, setBridgeTelemetryCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -52,10 +54,10 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
     setLoading(true);
     try {
       const [registerResult, telemetryResult, ordersResult, auditResult] = await Promise.all([
-        api.getRegisters().catch(() => ({ registers: [] })),
-        api.getBridgeTelemetry().catch(() => ({ terminals: [], count: 0, serverTime: new Date().toISOString() })),
-        api.getOrders().catch(() => []),
-        api.getAuditLogs().catch(() => []),
+        api.getRegisters(isAllStores ? 'all' : selectedStoreId).catch(() => ({ registers: [] })),
+        api.getBridgeTelemetry(isAllStores ? 'all' : selectedStoreId).catch(() => ({ terminals: [], count: 0, serverTime: new Date().toISOString() })),
+        api.getOrders({ storeId: isAllStores ? 'all' : selectedStoreId }).catch(() => []),
+        api.getAuditLogs(isAllStores ? 'all' : selectedStoreId).catch(() => []),
         hardwareStore.refreshHealth().catch(() => hardwareStore.getHealth()),
       ]);
 
@@ -76,7 +78,7 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedStoreId, isAllStores]);
 
   useEffect(() => {
     void refresh();
@@ -314,7 +316,9 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
             <div>
               <h1 className="text-3xl font-black tracking-tight text-[#0d1b36]">Store & Register Health</h1>
               <p className="text-sm text-slate-500 mt-1">
-                Live operational status for {settings?.storeName || 'KaBiRa POS Store'}.
+                {isAllStores
+                  ? 'Corporate operational status across all stores.'
+                  : `Live operational status for ${selectedStore?.name || settings?.storeName || 'KaBiRa POS Store'}.`}
               </p>
             </div>
           </div>
