@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  BarChart3,
   Boxes,
-  ClipboardList,
   PackageCheck,
   Plus,
   Search,
@@ -13,7 +11,6 @@ import {
   Edit2,
   Save,
   X,
-  Users,
 } from 'lucide-react';
 import { Category, Product, ScannedInvoice, StoreSettings } from '../../types';
 import { api } from '../../utils/api';
@@ -132,13 +129,6 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
     inventoryTotals.retailValue - inventoryTotals.totalCost
   );
 
-  const navItems = [
-    { label: 'Items', icon: Boxes, tab: 'inventory', active: true },
-    { label: 'Receive Inventory', icon: Truck, tab: 'receiving' },
-    { label: 'Stock Count', icon: ClipboardList, tab: 'inventory-count' },
-    { label: 'Vendors', icon: Users, tab: 'inventory-vendors' },
-  ];
-
   const saveLabelSetting = async (patch: Partial<StoreSettings>) => {
     setSavingLabelSettings(true);
     try {
@@ -252,7 +242,7 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
               Inventory Control Center
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Manage items, receive stock, run stock counts, manage vendors, and monitor inventory.
+              Search, price, edit, import, export, and maintain the store item catalog.
             </p>
           </div>
 
@@ -340,23 +330,6 @@ export const ManagerInventoryDashboard: React.FC<ManagerInventoryDashboardProps>
               Manual Print
             </button>
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
-          {navItems.map(item => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => onNavigate(item.tab)}
-                className={'h-16 rounded-lg border flex items-center justify-center gap-3 text-xs font-black cursor-pointer transition ' + (item.active ? 'bg-[#08274d] text-white border-[#08274d] shadow-sm' : 'bg-white text-[#10234a] border-slate-200 hover:border-[#c78d20]')}
-              >
-                <Icon className="w-5 h-5" />
-                {item.label}
-              </button>
-            );
-          })}
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
