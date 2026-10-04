@@ -537,7 +537,7 @@ export const AdminHealthDashboard: React.FC<AdminHealthDashboardProps> = ({
             {[
               ['Bridge', bridgeOnline, bridgeHealth.version || 'Local bridge', Cpu],
               ['Receipt Printer', printerConfigured, configuredHardware.receipt_printer?.deviceName || 'Not configured', Printer],
-              ['Cash Drawer', drawerConfigured, configuredHardware.cash_drawer?.deviceName || 'Not configured', Boxes],
+              ['Cash Drawer', drawerConfigured, configuredHardware.cash_drawer?.deviceName || 'Not configured', Activity],
               ['Barcode Scanner', scannerConfigured, configuredHardware.barcode_scanner?.deviceName || 'Not configured', CheckCircle2],
               ['Customer Display', customerDisplayConfigured, configuredHardware.customer_display?.deviceName || 'Not configured', Monitor],
             ].map(([label, ok, detail, Icon]: any) => (
