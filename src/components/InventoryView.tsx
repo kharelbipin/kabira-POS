@@ -10,6 +10,7 @@ import { VendorDirectoryView } from './invoice/VendorDirectoryView';
 import { ReceivingLedgerView } from './invoice/ReceivingLedgerView';
 import { InvoiceQrUploadModal } from './invoice/InvoiceQrUploadModal';
 import { MultiBarcodeReceivingModal } from './invoice/MultiBarcodeReceivingModal';
+import { ManualInvoiceModal } from './invoice/ManualInvoiceModal';
 import { AiShelfCounterModal } from './inventory/AiShelfCounterModal';
 import { InventoryUpdatesHistoryView } from './inventory/InventoryUpdatesHistoryView';
 import { UnifiedLedgerView } from './inventory/UnifiedLedgerView';
@@ -66,6 +67,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [showScannerModal, setShowScannerModal] = useState<boolean>(false);
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
   const [showMultiBarcodeModal, setShowMultiBarcodeModal] = useState<boolean>(false);
+  const [showManualInvoiceModal, setShowManualInvoiceModal] = useState<boolean>(false);
   const [showAiShelfModal, setShowAiShelfModal] = useState<boolean>(false);
   const [activeReviewInvoice, setActiveReviewInvoice] = useState<ScannedInvoice | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
@@ -520,6 +522,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
           onReviewInvoice={inv => setActiveReviewInvoice(inv)}
           onOpenQrModal={() => setShowQrModal(true)}
           onOpenMultiBarcodeModal={() => setShowMultiBarcodeModal(true)}
+          onOpenManualInvoice={() => setShowManualInvoiceModal(true)}
         />
       )}
 
@@ -1246,7 +1249,20 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
       {/* Continuous Multi-Barcode Receiving Modal (INV-MB-01 to INV-MB-20) */}
       {showMultiBarcodeModal && (
-        <MultiBarcodeReceivingModal
+        <ManualInvoiceModal
+        isOpen={showManualInvoiceModal}
+        products={products}
+        onClose={() => setShowManualInvoiceModal(false)}
+        onSaved={() => {
+          setSuccessBanner('Manual invoice saved for later.');
+        }}
+        onFinalize={invoice => {
+          setActiveReviewInvoice(invoice);
+          setSuccessBanner('Manual invoice created. Review and confirm it to receive inventory.');
+        }}
+      />
+
+      <MultiBarcodeReceivingModal
           isOpen={showMultiBarcodeModal}
           onClose={() => setShowMultiBarcodeModal(false)}
           onComplete={receivingNumber => {
