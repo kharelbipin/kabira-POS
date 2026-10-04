@@ -600,20 +600,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <span>Hardware & Device Manager</span>
                   </button>
 
-                  {onOpenBridgeHub && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onOpenBridgeHub();
-                        setShowMoreMenu(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center space-x-2 cursor-pointer"
-                    >
-                      <Cpu className="w-4 h-4 text-slate-500" />
-                      <span>POS Hardware Bridge</span>
-                    </button>
-                  )}
-
                   {onOpenCustomerDisplay && (
                     <button
                       type="button"
