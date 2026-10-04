@@ -1339,6 +1339,11 @@ export default function App() {
               onNavigate={setCurrentTab}
               onOpenPrintLabel={() => setShowPrintLabelModal(true)}
               onSettingsUpdated={setSettings}
+              onProductUpdated={updatedProduct =>
+                setProducts(prev =>
+                  prev.map(product => product.id === updatedProduct.id ? updatedProduct : product)
+                )
+              }
             />
           ) : currentUser?.role === 'Cashier' && !settings?.cashierPermissions?.allowInventory ? (
             <div className="h-full flex flex-col items-center justify-center bg-[#0D0D0D] text-[#E5E5E5] p-6">
