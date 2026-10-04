@@ -555,6 +555,12 @@ export interface StoreSettings {
   requireManagerDiscountAbove: number; // e.g. 20 (%)
   requireManagerToOpenDrawerNoSale?: boolean; // Default false: cashier can open drawer directly
   customerDisplayFullscreen?: boolean; // Default true: launch customer display locked/borderless on Display 2
+  display2MediaEnabled?: boolean;
+  display2MediaType?: 'image' | 'video' | 'none';
+  display2MediaFileName?: string;
+  display2MediaMuted?: boolean;
+  display2MediaFit?: 'cover' | 'contain';
+  display2ShowMediaWhenIdle?: boolean;
 
   // General POS display & usability settings
   useOnScreenKeypad?: boolean;
