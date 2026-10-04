@@ -109,14 +109,14 @@ class PosDeploymentService {
       '$ErrorActionPreference = "Stop"',
       '',
       'Write-Host "KaBiRa POS Store Deployment" -ForegroundColor Cyan',
-      'Write-Host "Store: " + store.name.replace(/\"/g, '') + ""',
-      'Write-Host "Register: " + register.name.replace(/\"/g, '') + ""',
+      'Write-Host "Store: ' + store.name.replace(/"/g, '') + '"',
+      'Write-Host "Register: ' + register.name.replace(/"/g, '') + '"',
       'New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null',
       'New-Item -ItemType Directory -Force -Path "$InstallRoot\\deployment" | Out-Null',
       'Copy-Item "$PSScriptRoot\\deployment-manifest.json" "$InstallRoot\\deployment\\deployment-manifest.json" -Force',
       'Copy-Item "$PSScriptRoot\\activation.json" "$InstallRoot\\deployment\\activation.json" -Force',
       'Copy-Item "$PSScriptRoot\\pos-configuration.json" "$InstallRoot\\deployment\\pos-configuration.json" -Force',
-      'Write-Host "Activation Code: " + code + "" -ForegroundColor Yellow',
+      'Write-Host "Activation Code: ' + code + '" -ForegroundColor Yellow',
       'Write-Host "Deployment bootstrap installed to $InstallRoot" -ForegroundColor Green',
     ].join('\r\n');
 
