@@ -6,6 +6,11 @@ import { PaymentAuditModal } from '../payment/PaymentAuditModal';
 import { WindowsPosManagerTab } from './WindowsPosManagerTab';
 import { hardwareStore } from '../../hardware';
 import {
+  createDisplay2MediaUrl,
+  removeDisplay2Media,
+  saveDisplay2Media,
+} from '../../utils/displayMediaStore';
+import {
   Settings,
   Store,
   CreditCard,
@@ -41,6 +46,9 @@ import {
   KeyRound,
   Percent,
   Download,
+  Monitor,
+  UploadCloud,
+  Trash2,
 } from 'lucide-react';
 
 interface ManagerSettingsCenterProps {
@@ -52,6 +60,7 @@ interface ManagerSettingsCenterProps {
 
 export type SettingsSectionId =
   | 'general'
+  | 'customer_display'
   | 'register'
   | 'printing'
   | 'users'
@@ -80,6 +89,7 @@ interface SectionMeta {
 
 const SETTINGS_SECTIONS: SectionMeta[] = [
   { id: 'general', label: 'General', icon: Store, description: 'Store name, address, contact, and branding' },
+  { id: 'customer_display', label: 'Customer Display (Display 2)', icon: Monitor, description: 'Upload image/video ads and control the second screen' },
   { id: 'register', label: 'Register & Checkout', icon: Sliders, description: 'Checkout behavior, age prompt, sounds' },
   { id: 'printing', label: 'Printing & Receipts', icon: Printer, description: 'Receipt templates, headers, auto-print' },
   { id: 'users', label: 'Users & Permissions', icon: Users, description: 'Role limits, discount thresholds, approval' },
@@ -111,6 +121,9 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showPaymentAuditModal, setShowPaymentAuditModal] = useState(false);
+  const [display2PreviewUrl, setDisplay2PreviewUrl] = useState<string | null>(null);
+  const [display2MediaError, setDisplay2MediaError] = useState<string | null>(null);
+  const [display2MediaSaving, setDisplay2MediaSaving] = useState(false);
   const persistedManagerSettings = (settings?.managerSettings || {}) as Record<string, any>;
 
   // Form State initialized with store settings + full manager controls
@@ -177,6 +190,12 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
     requireManagerForPriceOverride: true,
     requireManagerToOpenDrawerNoSale: settings?.requireManagerToOpenDrawerNoSale ?? false,
     customerDisplayFullscreen: settings?.customerDisplayFullscreen ?? true,
+    display2MediaEnabled: settings?.display2MediaEnabled ?? false,
+    display2MediaType: settings?.display2MediaType ?? 'none',
+    display2MediaFileName: settings?.display2MediaFileName ?? '',
+    display2MediaMuted: settings?.display2MediaMuted ?? true,
+    display2MediaFit: settings?.display2MediaFit ?? 'cover',
+    display2ShowMediaWhenIdle: settings?.display2ShowMediaWhenIdle ?? true,
 
     // Payments
     enableCash: settings?.enableCash !== false,
@@ -285,6 +304,118 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
     }
   }, [settings]);
 
+  const loadDisplay2Preview = async () => {
+    try {
+      const stored = await createDisplay2MediaUrl();
+      setDisplay2PreviewUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return stored?.url || null;
+      });
+    } catch {
+      setDisplay2PreviewUrl(null);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === 'customer_display') {
+      loadDisplay2Preview();
+    }
+  }, [activeSection]);
+
+  const getVideoDuration = (file: File): Promise<number> =>
+    new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        const duration = Number(video.duration || 0);
+        URL.revokeObjectURL(url);
+        resolve(duration);
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Unable to read video metadata.'));
+      };
+      video.src = url;
+    });
+
+  const handleDisplay2MediaUpload = async (file: File | null) => {
+    if (!file) return;
+    setDisplay2MediaError(null);
+
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type === 'video/mp4' || file.type === 'video/webm';
+
+    if (!isImage && !isVideo) {
+      setDisplay2MediaError('Choose an image, MP4 video, or WebM video.');
+      return;
+    }
+
+    if (isImage && file.size > 10 * 1024 * 1024) {
+      setDisplay2MediaError('Image must be 10 MB or smaller.');
+      return;
+    }
+
+    if (isVideo && file.size > 100 * 1024 * 1024) {
+      setDisplay2MediaError('Video must be 100 MB or smaller.');
+      return;
+    }
+
+    if (isVideo) {
+      try {
+        const duration = await getVideoDuration(file);
+        if (duration > 60.5) {
+          setDisplay2MediaError('Display 2 videos can be a maximum of 60 seconds.');
+          return;
+        }
+      } catch {
+        setDisplay2MediaError('The video could not be validated.');
+        return;
+      }
+    }
+
+    setDisplay2MediaSaving(true);
+    try {
+      await saveDisplay2Media(file);
+      setFormData(prev => ({
+        ...prev,
+        display2MediaEnabled: true,
+        display2MediaType: isVideo ? 'video' : 'image',
+        display2MediaFileName: file.name,
+      }));
+      await loadDisplay2Preview();
+      playBeep('success');
+    } catch (error: any) {
+      setDisplay2MediaError(error?.message || 'Unable to save Display 2 media.');
+      playBeep('error');
+    } finally {
+      setDisplay2MediaSaving(false);
+    }
+  };
+
+  const handleRemoveDisplay2Media = async () => {
+    setDisplay2MediaSaving(true);
+    setDisplay2MediaError(null);
+    try {
+      await removeDisplay2Media();
+      setDisplay2PreviewUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setFormData(prev => ({
+        ...prev,
+        display2MediaEnabled: false,
+        display2MediaType: 'none',
+        display2MediaFileName: '',
+      }));
+      playBeep('click');
+    } catch (error: any) {
+      setDisplay2MediaError(error?.message || 'Unable to remove Display 2 media.');
+    } finally {
+      setDisplay2MediaSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (activeSection === 'backup') {
       api.getDatabaseStatus().then(setDbStats).catch(console.error);
@@ -331,6 +462,12 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
         requireManagerDiscountAbove: formData.requireManagerDiscountAbove,
         requireManagerToOpenDrawerNoSale: formData.requireManagerToOpenDrawerNoSale,
         customerDisplayFullscreen: formData.customerDisplayFullscreen,
+        display2MediaEnabled: formData.display2MediaEnabled,
+        display2MediaType: formData.display2MediaType,
+        display2MediaFileName: formData.display2MediaFileName,
+        display2MediaMuted: formData.display2MediaMuted,
+        display2MediaFit: formData.display2MediaFit,
+        display2ShowMediaWhenIdle: formData.display2ShowMediaWhenIdle,
         useOnScreenKeypad: formData.useOnScreenKeypad,
         showFixedKeypad: formData.showFixedKeypad,
         autoLaunchCustomerScreen: formData.autoLaunchCustomerScreen,
@@ -547,7 +684,7 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
               <Lock className="w-3 h-3 text-slate-400" />
               <span>Manager Auth Active</span>
             </div>
-            <span>18 Sections</span>
+            <span>{SETTINGS_SECTIONS.length} Sections</span>
           </div>
         </div>
 
@@ -772,6 +909,170 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
                       <span className="text-[11px] text-slate-500 block">Electron App Version</span>
                       <span className="text-sm font-mono font-bold text-slate-900">{formData.electronAppVersionLabel}</span>
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* CUSTOMER DISPLAY (DISPLAY 2) */}
+            {activeSection === 'customer_display' && (
+              <div className="space-y-6">
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
+                  <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                        Display 2 Media & Advertising
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Upload one store image or a promotional video up to 60 seconds. Media appears while the customer display is idle.
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={formData.display2MediaEnabled}
+                        onChange={e => setFormData({ ...formData, display2MediaEnabled: e.target.checked })}
+                        className="w-4 h-4 accent-amber-500"
+                      />
+                      Enable Media
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_0.75fr] gap-5">
+                    <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 min-h-[320px] overflow-hidden flex items-center justify-center relative">
+                      {display2PreviewUrl && formData.display2MediaType === 'image' ? (
+                        <img
+                          src={display2PreviewUrl}
+                          alt="Display 2 preview"
+                          className={`w-full h-[320px] ${formData.display2MediaFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                        />
+                      ) : display2PreviewUrl && formData.display2MediaType === 'video' ? (
+                        <video
+                          src={display2PreviewUrl}
+                          controls
+                          muted={formData.display2MediaMuted}
+                          className={`w-full h-[320px] bg-black ${formData.display2MediaFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                        />
+                      ) : (
+                        <div className="text-center p-8">
+                          <Monitor className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                          <div className="text-sm font-black text-slate-700">Display 2 Preview</div>
+                          <div className="text-xs text-slate-500 mt-1">No custom media uploaded yet.</div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-2">Upload Media</label>
+                        <label className="h-11 px-4 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer">
+                          <UploadCloud className="w-4 h-4" />
+                          {display2MediaSaving ? 'Saving Media...' : display2PreviewUrl ? 'Replace Media' : 'Choose Image / Video'}
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/png,image/jpeg,image/webp,video/mp4,video/webm"
+                            disabled={display2MediaSaving}
+                            onChange={e => {
+                              const file = e.target.files?.[0] || null;
+                              handleDisplay2MediaUpload(file);
+                              e.currentTarget.value = '';
+                            }}
+                          />
+                        </label>
+                        <p className="text-[11px] text-slate-500 mt-2">
+                          Images: PNG, JPG, WebP up to 10 MB. Videos: MP4 or WebM up to 60 seconds.
+                        </p>
+                      </div>
+
+                      {formData.display2MediaFileName && (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <span className="text-[10px] uppercase font-bold text-slate-400">Current Media</span>
+                          <div className="text-xs font-bold text-slate-800 mt-1 break-all">{formData.display2MediaFileName}</div>
+                          <div className="text-[11px] text-slate-500 mt-1 capitalize">{formData.display2MediaType}</div>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="text-xs font-semibold text-slate-700 block mb-1">Display Fit</label>
+                        <select
+                          value={formData.display2MediaFit}
+                          onChange={e => setFormData({ ...formData, display2MediaFit: e.target.value as 'cover' | 'contain' })}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900"
+                        >
+                          <option value="cover">Fill Screen (Crop if needed)</option>
+                          <option value="contain">Fit Entire Image / Video</option>
+                        </select>
+                      </div>
+
+                      <label className="flex items-center justify-between gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-xs font-semibold text-slate-800">Show media when Display 2 is idle</span>
+                        <input
+                          type="checkbox"
+                          checked={formData.display2ShowMediaWhenIdle}
+                          onChange={e => setFormData({ ...formData, display2ShowMediaWhenIdle: e.target.checked })}
+                          className="w-4 h-4 accent-amber-500"
+                        />
+                      </label>
+
+                      {formData.display2MediaType === 'video' && (
+                        <label className="flex items-center justify-between gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                          <div>
+                            <span className="text-xs font-semibold text-slate-800 block">Mute promotional video</span>
+                            <span className="text-[10px] text-slate-500">Recommended for customer-facing displays.</span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={formData.display2MediaMuted}
+                            onChange={e => setFormData({ ...formData, display2MediaMuted: e.target.checked })}
+                            className="w-4 h-4 accent-amber-500"
+                          />
+                        </label>
+                      )}
+
+                      {display2PreviewUrl && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveDisplay2Media}
+                          disabled={display2MediaSaving}
+                          className="w-full h-10 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Remove Media
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {display2MediaError && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">
+                      {display2MediaError}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2 mb-4">
+                    Display 2 Transaction Behavior
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[
+                      ['autoLaunchCustomerScreen', 'Auto Launch Display 2'],
+                      ['customerDisplayShowTotal', 'Show Running Total'],
+                      ['customerDisplayShowPrice', 'Show Item Prices'],
+                      ['customerDisplayShowCustomerNumber', 'Show Customer Number'],
+                      ['customerDisplayShowSaleNotes', 'Show Sale Notes'],
+                    ].map(([key, label]) => (
+                      <label key={key} className="flex items-center justify-between gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer">
+                        <span className="text-xs font-semibold text-slate-800">{label}</span>
+                        <input
+                          type="checkbox"
+                          checked={Boolean((formData as any)[key])}
+                          onChange={e => setFormData({ ...formData, [key]: e.target.checked })}
+                          className="w-4 h-4 accent-sky-600"
+                        />
+                      </label>
+                    ))}
                   </div>
                 </div>
               </div>
