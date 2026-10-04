@@ -3381,7 +3381,9 @@ apiRouter.post('/promotions', asyncHandler(async (req: Request, res: Response) =
         minPurchaseAmount, maxUsages, fundingSource, manufacturerName, distributorName,
         productHeading, programType, customerPhoneRequired, loyaltyRequired,
         ageVerificationRequired, reimbursementPerUnit, reportingFrequency, exportTemplate,
-        customerIdentifierMode
+        customerIdentifierMode, dealType, buyProductIds, rewardProductIds, buyCategoryIds,
+        rewardCategoryIds, buyQuantity, rewardQuantity, maxRewardsPerTransaction,
+        repeatable, rewardSelection
     } = req.body;
     if (!name || !code || value === undefined) {
         return res.status(400).json({ error: 'Promotion name, code, and discount value are required' });
@@ -3431,6 +3433,16 @@ apiRouter.post('/promotions', asyncHandler(async (req: Request, res: Response) =
         reportingFrequency: reportingFrequency || undefined,
         exportTemplate: exportTemplate || undefined,
         customerIdentifierMode: customerIdentifierMode || 'token',
+        dealType: dealType || 'simple',
+        buyProductIds: Array.isArray(buyProductIds) ? buyProductIds : [],
+        rewardProductIds: Array.isArray(rewardProductIds) ? rewardProductIds : [],
+        buyCategoryIds: Array.isArray(buyCategoryIds) ? buyCategoryIds : [],
+        rewardCategoryIds: Array.isArray(rewardCategoryIds) ? rewardCategoryIds : [],
+        buyQuantity: buyQuantity !== undefined ? Math.max(1, Number(buyQuantity)) : 1,
+        rewardQuantity: rewardQuantity !== undefined ? Math.max(1, Number(rewardQuantity)) : 1,
+        maxRewardsPerTransaction: maxRewardsPerTransaction !== undefined ? Math.max(1, Number(maxRewardsPerTransaction)) : 1,
+        repeatable: Boolean(repeatable),
+        rewardSelection: rewardSelection || 'any_eligible',
     };
 
     db.promotions.unshift(newPromo);
@@ -3472,14 +3484,28 @@ apiRouter.put('/promotions/:id', asyncHandler(async (req: Request, res: Response
         'minPurchaseAmount', 'maxUsages', 'fundingSource', 'manufacturerName', 'distributorName',
         'productHeading', 'programType', 'customerPhoneRequired', 'loyaltyRequired',
         'ageVerificationRequired', 'reimbursementPerUnit', 'reportingFrequency', 'exportTemplate',
-        'customerIdentifierMode'
+        'customerIdentifierMode', 'dealType', 'buyProductIds', 'rewardProductIds',
+        'buyCategoryIds', 'rewardCategoryIds', 'buyQuantity', 'rewardQuantity',
+        'maxRewardsPerTransaction', 'repeatable', 'rewardSelection'
     ];
     extendedFields.forEach(field => {
         if (req.body[field] !== undefined) {
             const value = req.body[field];
-            if (field === 'reimbursementPerUnit' || field === 'minPurchaseAmount' || field === 'maxUsages') {
+            if (
+                field === 'reimbursementPerUnit' ||
+                field === 'minPurchaseAmount' ||
+                field === 'maxUsages' ||
+                field === 'buyQuantity' ||
+                field === 'rewardQuantity' ||
+                field === 'maxRewardsPerTransaction'
+            ) {
                 (promo as any)[field] = Number(value);
-            } else if (field === 'customerPhoneRequired' || field === 'loyaltyRequired' || field === 'ageVerificationRequired') {
+            } else if (
+                field === 'customerPhoneRequired' ||
+                field === 'loyaltyRequired' ||
+                field === 'ageVerificationRequired' ||
+                field === 'repeatable'
+            ) {
                 (promo as any)[field] = Boolean(value);
             } else {
                 (promo as any)[field] = value;
