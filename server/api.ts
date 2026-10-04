@@ -631,10 +631,6 @@ apiRouter.post('/auth/bootstrap-admin', asyncHandler(async (req: Request, res: R
     const email = String(req.body?.email || '').trim().toLowerCase();
     const pin = String(req.body?.pin || '').trim();
     const password = String(req.body?.password || '');
-    const requestedStoreIds = Array.isArray(req.body?.storeIds)
-        ? req.body.storeIds.map((value: any) => String(value)).filter(Boolean)
-        : [];
-
     if (!name) {
         return res.status(400).json({ error: 'Admin name is required.' });
     }
@@ -663,9 +659,7 @@ apiRouter.post('/auth/bootstrap-admin', asyncHandler(async (req: Request, res: R
         pin: hashCredential(pin),
         password: hashCredential(password),
         active: true,
-        storeIds: role === 'Admin'
-            ? (requestedStoreIds.length > 0 ? requestedStoreIds : ['all'])
-            : (requestedStoreIds.length > 0 ? requestedStoreIds : ['store-1']),
+        storeIds: ['all'],
         createdAt: new Date().toISOString(),
     };
 
@@ -846,6 +840,9 @@ apiRouter.post('/users', asyncHandler(async (req: Request, res: Response) => {
     const role = String(req.body?.role || '').trim() as User['role'];
     const pin = String(req.body?.pin || '').trim();
     const password = String(req.body?.password || '');
+    const requestedStoreIds = Array.isArray(req.body?.storeIds)
+        ? req.body.storeIds.map((value: any) => String(value)).filter(Boolean)
+        : [];
 
     if (!name || !email || !role || !pin) {
         return res.status(400).json({
@@ -893,6 +890,9 @@ apiRouter.post('/users', asyncHandler(async (req: Request, res: Response) => {
         pin: hashCredential(pin),
         ...(password ? { password: hashCredential(password) } : {}),
         active: true,
+        storeIds: role === 'Admin'
+            ? (requestedStoreIds.length > 0 ? requestedStoreIds : ['all'])
+            : (requestedStoreIds.length > 0 ? requestedStoreIds : ['store-1']),
         createdAt: new Date().toISOString(),
     };
 
