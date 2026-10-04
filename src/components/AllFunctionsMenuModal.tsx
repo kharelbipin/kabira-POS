@@ -291,7 +291,7 @@ export const AllFunctionsMenuModal: React.FC<AllFunctionsMenuModalProps> = ({
 
       // Inventory & Shelf
       {
-        id: 'inventory-catalog',
+        id: 'inventory',
         title: 'Inventory & Product Catalog',
         category: 'inventory',
         categoryLabel: 'Inventory & Stock',
