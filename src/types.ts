@@ -99,8 +99,6 @@ export interface ScanDataTransaction {
   registerId: string;
   cashierId: string;
   cashierName: string;
-  storeId?: string;
-  registerId?: string;
   customerId?: string;
   customerPhoneToken?: string;
   productId: string;
@@ -459,6 +457,8 @@ export interface Order {
   orderNumber: string; // e.g. "ORD-10492"
   cashierId: string;
   cashierName: string;
+  storeId?: string;
+  registerId?: string;
   customerId?: string;
   customerName?: string;
   customerPhone?: string;
