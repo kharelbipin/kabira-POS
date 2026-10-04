@@ -335,7 +335,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Main Navigation Strip matching fin.png */}
-      <div className="bg-white px-4 h-11 flex items-center justify-between border-b border-slate-200 text-slate-700 relative z-30 shrink-0">
+      <div className="bg-[#0A1728] px-4 h-11 flex items-center justify-between border-b border-slate-800 text-slate-300 relative z-30 shrink-0">
         <nav className="flex items-center space-x-1 py-0.5">
           {/* POS REGISTER */}
           <button
@@ -344,7 +344,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
               currentTab === 'pos'
                 ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             <ShoppingCart className={`w-3.5 h-3.5 ${currentTab === 'pos' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
@@ -358,7 +358,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
               currentTab === 'orders'
                 ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             <ReceiptText className={`w-3.5 h-3.5 ${currentTab === 'orders' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
@@ -372,11 +372,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
               currentTab === 'shifts'
                 ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             <Coins className={`w-3.5 h-3.5 ${currentTab === 'shifts' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
-            <span>Shifts & Drawer</span>
+            <span>Cash Reconcile</span>
           </button>
 
           {/* CUSTOMERS */}
@@ -386,7 +386,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
               currentTab === 'customers'
                 ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             <Users className={`w-3.5 h-3.5 ${currentTab === 'customers' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
@@ -401,7 +401,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                 currentTab === 'inventory'
                   ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
               <Boxes className={`w-3.5 h-3.5 ${currentTab === 'inventory' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
@@ -416,7 +416,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
               currentTab === 'checks'
                 ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             <Landmark className={`w-3.5 h-3.5 ${currentTab === 'checks' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
@@ -429,7 +429,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               id="tab-print-label"
               type="button"
               onClick={onOpenPrintLabel}
-              className="flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+              className="flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer text-slate-400 hover:text-white hover:bg-slate-800"
               title="Scan item and print product label"
             >
               <Printer className="w-3.5 h-3.5 text-slate-500" />
@@ -445,7 +445,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                 currentTab === 'settings'
                   ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
               title="General POS Settings"
             >
@@ -462,7 +462,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                 currentTab === 'reports'
                   ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
               <BarChart3 className={`w-3.5 h-3.5 ${currentTab === 'reports' ? 'text-[#F5BD47]' : 'text-slate-500'}`} />
@@ -479,7 +479,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                   currentTab === 'user-activity' || currentTab === 'audit-log'
                     ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
                 }`}
                 title="Track All User Activities and Audit Logs"
               >
@@ -493,7 +493,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                   currentTab === 'users'
                     ? 'bg-[#1E293B] text-[#F5BD47] shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
                 }`}
                 title="Manage Cashier, Manager and Admin accounts"
               >
@@ -513,7 +513,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                   ['online-store', 'settings'].includes(currentTab)
                     ? 'bg-[#1E293B] text-[#F5BD47]'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
                 }`}
               >
                 <MoreHorizontal className="w-3.5 h-3.5" />
