@@ -14,6 +14,7 @@ import {
   Cpu,
 } from 'lucide-react';
 import { StoreSettings, User } from '../../types';
+import { useAdminStore } from '../../contexts/AdminStoreContext';
 
 interface AdminPortalNavProps {
   currentTab: string;
@@ -42,6 +43,14 @@ export const AdminPortalNav: React.FC<AdminPortalNavProps> = ({
   onOpenDesigner,
   onLogout,
 }) => {
+  const {
+    stores,
+    selectedStoreId,
+    selectedStore,
+    isAllStores,
+    setSelectedStoreId,
+  } = useAdminStore();
+
   return (
     <aside className="w-[240px] shrink-0 h-screen bg-slate-950 border-r border-slate-800 flex flex-col text-slate-100">
       <div className="px-4 py-4 border-b border-slate-800">
@@ -57,13 +66,47 @@ export const AdminPortalNav: React.FC<AdminPortalNavProps> = ({
       </div>
 
       <div className="px-3 py-3 border-b border-slate-800">
-        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Current Store</div>
-        <div className="mt-1 text-xs font-bold text-slate-200 truncate">
-          {settings?.storeName || 'KaBiRa POS Store'}
+        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-2">
+          Current Store
         </div>
-        <div className="mt-1 flex items-center gap-1.5 text-[10px] text-emerald-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          Store connected
+
+        <div className="relative">
+          <select
+            value={selectedStoreId}
+            onChange={event => setSelectedStoreId(event.target.value)}
+            className="w-full h-10 appearance-none rounded-xl border border-slate-700 bg-slate-900 px-3 pr-8 text-[11px] font-bold text-slate-100 outline-none focus:border-amber-400 cursor-pointer"
+          >
+            <option value="all">All Stores / Corporate</option>
+            {stores.map(store => (
+              <option key={store.id} value={store.id}>
+                {store.name}
+              </option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">
+            ▼
+          </div>
+        </div>
+
+        <div className="mt-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div className="text-[10px] font-black text-slate-200 truncate">
+            {isAllStores
+              ? 'Corporate View'
+              : selectedStore?.name || settings?.storeName || 'KaBiRa POS Store'}
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <span className="text-[9px] text-slate-500 truncate">
+              {isAllStores
+                ? `${stores.length} stores`
+                : selectedStore
+                ? `Store #${selectedStore.storeNumber} · ${selectedStore.businessType.replace('_', ' ')}`
+                : 'Selected store'}
+            </span>
+            <span className="flex items-center gap-1 text-[9px] text-emerald-400 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              Active
+            </span>
+          </div>
         </div>
       </div>
 
