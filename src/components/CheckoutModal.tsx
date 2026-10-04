@@ -237,6 +237,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const handleCancelCardTerminal = () => {
     playBeep('click');
+    void api.paymentCancel('store-1', 'reg-01').catch(() => {});
     setActiveCardCharge(null);
     setTerminalStatus('idle');
     setIsProcessing(false);
@@ -368,65 +369,73 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setCardTimerSeconds(30);
   };
 
-  // Process Card Terminal Outcomes (Simulate Approved, Declined, Cancelled, Timeout)
+  // Process card outcome through the provider-agnostic payment service.
+  // The KaBiRa Test Terminal uses testOutcome; real provider adapters ignore it
+  // and return their processor/terminal result.
   const handleTerminalOutcome = async (outcome: 'approved' | 'declined' | 'cancelled' | 'timeout') => {
     const cashier = getAuthenticatedCashier();
     if (!cashier) return;
-
     if (!activeCardCharge || activeCardCharge <= 0) return;
 
     setIsProcessing(true);
     setTerminalStatus('waiting');
     setTerminalErrorMsg(null);
 
-    // Realistic terminal PIN pad simulation latency
-    await new Promise(r => setTimeout(r, 600));
-
-    if (outcome === 'approved') {
-      playBeep('success');
-      setTerminalStatus('approved');
-
-      const cardRecord: PaymentRecord = {
-        id: `pay-${Date.now()}-card-${Math.random().toString(36).substr(2, 4)}`,
-        method: 'card',
-        amount: activeCardCharge,
-        status: 'approved',
-        timestamp: new Date().toISOString(),
-        cashierId: cashier.id,
-        cashierName: cashier.name,
+    try {
+      const result = await api.paymentSale({
+        storeId: 'store-1',
         registerId: 'reg-01',
-        cardBrand,
-        cardLast4: Math.floor(1000 + Math.random() * 9000).toString(),
-        authCode: `AUTH-${Math.floor(100000 + Math.random() * 900000)}`,
-        paymentReference: `${cardBrand} PIN Pad Approved`,
-      };
+        orderId: `checkout-${Date.now()}`,
+        amount: activeCardCharge,
+        testOutcome: outcome,
+      });
 
-      setRecordedPayments(prev => [...prev, cardRecord]);
-      setActiveCardCharge(null);
-      setTenderInput('');
-      setIsProcessing(false);
-      setCardTimeoutNotification(null);
-    } else if (outcome === 'declined') {
+      if (result.status === 'approved') {
+        playBeep('success');
+        setTerminalStatus('approved');
+
+        const cardRecord: PaymentRecord = {
+          id: result.id || `pay-${Date.now()}-card`,
+          method: 'card',
+          amount: Number(result.amount || activeCardCharge),
+          status: 'approved',
+          timestamp: result.timestamp || new Date().toISOString(),
+          cashierId: cashier.id,
+          cashierName: cashier.name,
+          registerId: 'reg-01',
+          cardBrand: result.cardBrand || cardBrand,
+          cardLast4: result.last4,
+          authCode: result.authCode,
+          paymentReference: `${result.provider || 'terminal'} • ${result.providerTransactionId || 'Approved'}`,
+        };
+
+        setRecordedPayments(prev => [...prev, cardRecord]);
+        setActiveCardCharge(null);
+        setTenderInput('');
+        setCardTimeoutNotification(null);
+      } else {
+        playBeep(result.status === 'cancelled' ? 'click' : 'error');
+        setTerminalStatus(
+          result.status === 'declined' ||
+          result.status === 'cancelled' ||
+          result.status === 'timeout'
+            ? result.status
+            : 'declined'
+        );
+        setTerminalErrorMsg(
+          result.errorMessage ||
+          `Payment ${String(result.status || 'failed').toUpperCase()}. Previously collected payments ($${totalAmountPaid.toFixed(2)}) remain preserved.`
+        );
+      }
+    } catch (error: any) {
       playBeep('error');
-      setIsProcessing(false);
       setTerminalStatus('declined');
       setTerminalErrorMsg(
-        `Card Terminal: DECLINED (Code 51: Insufficient funds). Previous payments ($${totalAmountPaid.toFixed(2)}) remain safely recorded. Remaining balance is $${remainingBalance.toFixed(2)}.`
+        error?.message ||
+        `Payment terminal is unavailable. Previously collected payments ($${totalAmountPaid.toFixed(2)}) remain preserved.`
       );
-    } else if (outcome === 'cancelled') {
-      playBeep('click');
+    } finally {
       setIsProcessing(false);
-      setTerminalStatus('cancelled');
-      setTerminalErrorMsg(
-        `Customer Cancelled: Transaction was cancelled at the PIN pad. Previously collected payments ($${totalAmountPaid.toFixed(2)}) remain preserved.`
-      );
-    } else if (outcome === 'timeout') {
-      playBeep('error');
-      setIsProcessing(false);
-      setTerminalStatus('timeout');
-      setTerminalErrorMsg(
-        `Device Timeout: Terminal response timed out. Previously collected payments ($${totalAmountPaid.toFixed(2)}) remain preserved.`
-      );
     }
   };
 
