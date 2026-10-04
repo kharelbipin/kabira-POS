@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { AdminStoreProvider } from './contexts/AdminStoreContext';
 
 /**
  * Remove legacy PWA/service-worker caching.
@@ -85,7 +86,9 @@ async function startKabiraPos() {
 
   createRoot(rootElement).render(
     <StrictMode>
-      <App />
+      <AdminStoreProvider>
+        <App />
+      </AdminStoreProvider>
     </StrictMode>
   );
 }
