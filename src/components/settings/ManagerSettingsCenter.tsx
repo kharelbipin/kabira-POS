@@ -3,6 +3,7 @@ import { StoreSettings, User } from '../../types';
 import { api } from '../../utils/api';
 import { playBeep } from '../../utils/audio';
 import { PaymentAuditModal } from '../payment/PaymentAuditModal';
+import { PaymentTerminalSettings } from '../payment/PaymentTerminalSettings';
 import { WindowsPosManagerTab } from './WindowsPosManagerTab';
 import { hardwareStore } from '../../hardware';
 import {
@@ -1277,6 +1278,12 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
 
             {/* SECTION 5: PAYMENTS */}
             {activeSection === 'payments' && (
+              <div className="space-y-5">
+                <PaymentTerminalSettings
+                  storeId={storeId || 'store-1'}
+                  registerId="reg-01"
+                  currentUserRole={currentUser?.role}
+                />
               <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
                   Payment Methods & Processing
@@ -1477,6 +1484,9 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
               </div>
             )}
 
