@@ -27,6 +27,8 @@ export class PaymentService {
       registerId: input.registerId,
       provider: input.provider || existing?.provider || 'mock',
       processor: input.processor ?? existing?.processor,
+      connectorId: input.connectorId ?? existing?.connectorId,
+      merchantAccountLabel: input.merchantAccountLabel ?? existing?.merchantAccountLabel,
       terminalModel: input.terminalModel ?? existing?.terminalModel,
       terminalId: input.terminalId ?? existing?.terminalId,
       deviceId: input.deviceId ?? existing?.deviceId,
@@ -63,6 +65,25 @@ export class PaymentService {
       allowVoid: true,
       allowManualEntry: false,
     });
+  }
+
+  getConnectorCatalog(provider?: string) {
+    const all = [
+      { id: 'kabira_pax_sandbox', provider: 'pax', processor: 'PAX Sandbox', label: 'KaBiRa PAX Sandbox', installed: true, sandbox: true, modes: ['semi_integrated_lan', 'local_agent', 'processor_cloud'] },
+      { id: 'pax_tsys', provider: 'pax', processor: 'TSYS / Global Payments', label: 'PAX + TSYS / Global Payments', installed: false, sandbox: false, modes: ['semi_integrated_lan', 'processor_cloud'] },
+      { id: 'pax_fiserv', provider: 'pax', processor: 'Fiserv', label: 'PAX + Fiserv', installed: false, sandbox: false, modes: ['semi_integrated_lan', 'processor_cloud'] },
+      { id: 'pax_worldpay', provider: 'pax', processor: 'Worldpay', label: 'PAX + Worldpay', installed: false, sandbox: false, modes: ['semi_integrated_lan', 'processor_cloud'] },
+      { id: 'pax_heartland', provider: 'pax', processor: 'Heartland', label: 'PAX + Heartland', installed: false, sandbox: false, modes: ['semi_integrated_lan', 'local_agent'] },
+      { id: 'pax_elavon', provider: 'pax', processor: 'Elavon', label: 'PAX + Elavon', installed: false, sandbox: false, modes: ['semi_integrated_lan', 'processor_cloud'] },
+      { id: 'pax_custom', provider: 'pax', processor: 'Custom / Other', label: 'PAX + Custom Certified Connector', installed: false, sandbox: false, modes: ['semi_integrated_lan', 'local_agent', 'processor_cloud'] },
+      { id: 'clover_direct', provider: 'clover', processor: 'Clover', label: 'Clover Direct', installed: false, sandbox: false, modes: ['processor_cloud'] },
+      { id: 'square_terminal', provider: 'square', processor: 'Square', label: 'Square Terminal', installed: false, sandbox: false, modes: ['processor_cloud'] },
+      { id: 'stripe_terminal', provider: 'stripe_terminal', processor: 'Stripe', label: 'Stripe Terminal', installed: false, sandbox: false, modes: ['processor_cloud'] },
+      { id: 'verifone_custom', provider: 'verifone', processor: 'Custom / Other', label: 'Verifone Certified Connector', installed: false, sandbox: false, modes: ['semi_integrated_lan', 'local_agent', 'processor_cloud'] },
+      { id: 'ingenico_custom', provider: 'ingenico', processor: 'Custom / Other', label: 'Ingenico Certified Connector', installed: false, sandbox: false, modes: ['semi_integrated_lan', 'local_agent', 'processor_cloud'] },
+    ];
+
+    return provider ? all.filter(item => item.provider === provider) : all;
   }
 
   async status(storeId: string, registerId: string) {
