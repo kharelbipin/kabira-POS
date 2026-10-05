@@ -120,11 +120,49 @@ async function main() {
   assert.ok(transactions.some(tx => tx.status === 'refunded'));
   assert.ok(transactions.some(tx => tx.status === 'voided'));
 
+
+  // PAX sandbox adapter uses the same universal contract while production stays
+  // blocked until a certified processor connector is installed.
+  paymentService.saveConfig({
+    storeId,
+    registerId,
+    provider: 'pax',
+    processor: 'PAX Sandbox',
+    terminalModel: 'A920 Simulator',
+    terminalId: 'PAX-SIM-01',
+    integrationMode: 'semi_integrated_lan',
+    connectionType: 'lan',
+    ipAddress: '127.0.0.1',
+    port: 10009,
+    environment: 'sandbox',
+    isEnabled: true,
+    autoConnect: true,
+    allowRefund: true,
+    allowVoid: true,
+    allowManualEntry: false,
+  });
+
+  const paxStatus = await paymentService.connect(storeId, registerId);
+  assert.equal(paxStatus.provider, 'pax');
+  assert.equal(paxStatus.connected, true);
+
+  const paxApproved = await paymentService.sale({
+    storeId,
+    registerId,
+    orderId: 'ORDER-PAX-SANDBOX',
+    amount: 19.99,
+    testOutcome: 'approved',
+  });
+
+  assert.equal(paxApproved.provider, 'pax');
+  assert.equal(paxApproved.status, 'approved');
+  assert.equal(paxApproved.last4, '4242');
+
   const storeFile = path.join(testRoot, 'KaBiRa POS', 'data', 'payment_store.json');
   assert.equal(fs.existsSync(storeFile), true);
 
   console.log('KaBiRa universal payment E2E test passed.');
-  console.log('Approved sale, decline, timeout, cancel, refund, void, and persistence verified.');
+  console.log('Approved sale, decline, timeout, cancel, refund, void, persistence, and PAX sandbox adapter verified.');
 
   fs.rmSync(testRoot, { recursive: true, force: true });
 }
