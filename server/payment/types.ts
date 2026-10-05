@@ -26,6 +26,8 @@ export interface PaymentProviderConfig {
   registerId: string;
   provider: PaymentProviderKind;
   processor?: string;
+  connectorId?: string;
+  merchantAccountLabel?: string;
   terminalModel?: string;
   terminalId?: string;
   deviceId?: string;
