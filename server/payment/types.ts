@@ -29,6 +29,8 @@ export interface PaymentProviderConfig {
   terminalModel?: string;
   terminalId?: string;
   deviceId?: string;
+  integrationMode?: 'semi_integrated_lan' | 'local_agent' | 'processor_cloud';
+  credentialProfileId?: string;
   connectionType: PaymentConnectionType;
   ipAddress?: string;
   port?: number;
