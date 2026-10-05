@@ -12,6 +12,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { api } from '../../utils/api';
+import { useAdminStore } from '../../contexts/AdminStoreContext';
 
 interface Props {
   storeId?: string;
@@ -53,6 +54,16 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
   registerId = 'reg-01',
   currentUserRole,
 }) => {
+  const { stores } = useAdminStore();
+  const initialStoreId =
+    storeId === 'all'
+      ? (stores[0]?.id || 'store-1')
+      : storeId;
+
+  const [selectedStoreId, setSelectedStoreId] = useState(initialStoreId);
+  const [selectedRegisterId, setSelectedRegisterId] = useState(registerId);
+  const [registers, setRegisters] = useState<any[]>([]);
+  const [scopeBusy, setScopeBusy] = useState(false);
   const [config, setConfig] = useState<any>(null);
   const [status, setStatus] = useState<any>(null);
   const [connectors, setConnectors] = useState<ConnectorOption[]>([]);
@@ -89,9 +100,9 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
     setBusy(true);
     setMessage(null);
     try {
-      const cfg = await api.getPaymentConfig(storeId, registerId);
+      const cfg = await api.getPaymentConfig(selectedStoreId, selectedRegisterId);
       const [sts, list] = await Promise.all([
-        api.getPaymentTerminalStatus(storeId, registerId),
+        api.getPaymentTerminalStatus(selectedStoreId, selectedRegisterId),
         api.getPaymentConnectors(cfg.provider),
       ]);
       setConfig(cfg);
@@ -105,8 +116,40 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
   };
 
   useEffect(() => {
+    const loadRegisters = async () => {
+      setScopeBusy(true);
+      try {
+        const result = await api.getRegisters(selectedStoreId).catch(() => ({ registers: [] }));
+        const apiRegisters = result.registers || [];
+        const fallbackRegisters =
+          stores.find(store => store.id === selectedStoreId)?.registers?.map(register => ({
+            id: register.id,
+            name: register.name,
+            location: register.number,
+            status: 'configured',
+          })) || [];
+
+        const nextRegisters = apiRegisters.length > 0 ? apiRegisters : fallbackRegisters;
+        setRegisters(nextRegisters);
+
+        if (
+          nextRegisters.length > 0 &&
+          !nextRegisters.some((register: any) => register.id === selectedRegisterId)
+        ) {
+          setSelectedRegisterId(nextRegisters[0].id);
+        }
+      } finally {
+        setScopeBusy(false);
+      }
+    };
+
+    void loadRegisters();
+  }, [selectedStoreId, stores]);
+
+  useEffect(() => {
+    if (!selectedStoreId || !selectedRegisterId) return;
     void load();
-  }, [storeId, registerId]);
+  }, [selectedStoreId, selectedRegisterId]);
 
   const updateProvider = async (provider: string) => {
     const list = await loadConnectors(provider);
@@ -163,12 +206,12 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
     try {
       const saved = await api.savePaymentConfig({
         ...config,
-        storeId,
-        registerId,
+        storeId: selectedStoreId,
+        registerId: selectedRegisterId,
       });
       setConfig(saved);
       setMessage('Payment configuration saved for this register.');
-      setStatus(await api.getPaymentTerminalStatus(storeId, registerId));
+      setStatus(await api.getPaymentTerminalStatus(selectedStoreId, selectedRegisterId));
     } catch (error: any) {
       setMessage(error?.message || 'Unable to save payment terminal settings.');
     } finally {
@@ -188,7 +231,7 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
         : config;
       setConfig(saved);
 
-      const result = await api.connectPaymentTerminal(storeId, registerId);
+      const result = await api.connectPaymentTerminal(selectedStoreId, selectedRegisterId);
       setStatus(result);
       setMessage(
         result.connected
@@ -220,6 +263,67 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
 
   return (
     <div className="space-y-5">
+      <div className="rounded-2xl border border-slate-700 bg-[#0B1828] p-5 shadow-lg space-y-4">
+        <div className="flex items-center gap-2">
+          <ServerCog className="h-4 w-4 text-amber-400" />
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-white">Store & Register Scope</div>
+            <div className="text-[11px] text-slate-500">
+              Payment configuration is saved separately for each register.
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="space-y-1">
+            <span className="text-[11px] font-bold uppercase text-slate-400">Store</span>
+            <select
+              value={selectedStoreId}
+              disabled={currentUserRole !== 'Admin' || scopeBusy}
+              onChange={e => {
+                setSelectedStoreId(e.target.value);
+                setConfig(null);
+                setStatus(null);
+                setMessage(null);
+              }}
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white disabled:opacity-70"
+            >
+              {stores.map(store => (
+                <option key={store.id} value={store.id}>
+                  {store.name} • Store #{store.storeNumber}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1">
+            <span className="text-[11px] font-bold uppercase text-slate-400">Register</span>
+            <select
+              value={selectedRegisterId}
+              disabled={scopeBusy || registers.length === 0}
+              onChange={e => {
+                setSelectedRegisterId(e.target.value);
+                setConfig(null);
+                setStatus(null);
+                setMessage(null);
+              }}
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white disabled:opacity-70"
+            >
+              {registers.length === 0 ? (
+                <option value={selectedRegisterId}>No configured registers found</option>
+              ) : (
+                registers.map((register: any) => (
+                  <option key={register.id} value={register.id}>
+                    {register.name || register.id}
+                    {register.status ? ` • ${register.status}` : ''}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-slate-700 bg-[#0B1828] p-5 shadow-lg">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -243,9 +347,9 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
 
         <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-4">
           {[
-            ['1', 'Provider', providerLabel],
-            ['2', 'Connector', selectedConnector?.label || 'Not selected'],
-            ['3', 'Terminal', config.terminalModel || 'Not configured'],
+            ['1', 'Store', stores.find(store => store.id === selectedStoreId)?.name || selectedStoreId],
+            ['2', 'Register', registers.find((register: any) => register.id === selectedRegisterId)?.name || selectedRegisterId],
+            ['3', 'Provider', providerLabel],
             ['4', 'Status', status?.connected ? 'Ready' : 'Needs test'],
           ].map(([number, label, value]) => (
             <div key={number} className="rounded-xl border border-slate-700 bg-slate-900/60 p-3">
