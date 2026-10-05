@@ -158,6 +158,41 @@ async function main() {
   assert.equal(paxApproved.status, 'approved');
   assert.equal(paxApproved.last4, '4242');
 
+  // Production PAX must fail closed until a certified processor connector is installed.
+  paymentService.saveConfig({
+    storeId,
+    registerId,
+    provider: 'pax',
+    processor: 'Example Processor',
+    terminalModel: 'A920 Pro',
+    terminalId: 'PAX-PROD-01',
+    integrationMode: 'semi_integrated_lan',
+    connectionType: 'lan',
+    ipAddress: '192.168.1.80',
+    port: 10009,
+    environment: 'production',
+    isEnabled: true,
+    autoConnect: true,
+    allowRefund: true,
+    allowVoid: true,
+    allowManualEntry: false,
+  });
+
+  let productionBlocked = false;
+  try {
+    await paymentService.sale({
+      storeId,
+      registerId,
+      orderId: 'ORDER-PAX-PRODUCTION-BLOCK',
+      amount: 1,
+    });
+  } catch (error: any) {
+    productionBlocked = String(error?.message || '').includes(
+      'PAX production transactions are intentionally blocked'
+    );
+  }
+  assert.equal(productionBlocked, true);
+
   const storeFile = path.join(testRoot, 'KaBiRa POS', 'data', 'payment_store.json');
   assert.equal(fs.existsSync(storeFile), true);
 
