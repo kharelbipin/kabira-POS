@@ -12,6 +12,7 @@ import {
 import { api } from './utils/api';
 import { playBeep } from './utils/audio';
 import { useAdminStore } from './contexts/AdminStoreContext';
+import { industryConfigService } from './services/industryConfigService';
 
 import { Navbar } from './components/Navbar';
 import { POSView } from './components/POSView';
@@ -881,6 +882,11 @@ export default function App() {
     return unregTouch;
   }, [customers, isCustomerDisplayMode]);
 
+  const getActivePosTarget = () => ({
+    storeId: industryConfigService.getActiveStoreId() || 'store-1',
+    registerId: industryConfigService.getActiveRegisterId() || 'reg-1-01',
+  });
+
   // Checkout Completion (CA-06, CA-07, CA-08)
   const handleCompleteOrder = async (paymentDetails: any) => {
     if (!currentUser) throw new Error('No cashier session active');
@@ -888,6 +894,8 @@ export default function App() {
     const pointsRedeemed = paymentDetails.pointsRedeemed || 0;
     const pointsDiscountAmount = paymentDetails.pointsDiscountAmount || 0;
     const finalGrandTotal = paymentDetails.amount !== undefined ? paymentDetails.amount : grandTotal;
+
+    const activeTarget = getActivePosTarget();
 
     const orderPayload = {
       cashierId: currentUser.id,
@@ -904,7 +912,8 @@ export default function App() {
       pointsDiscountAmount,
       payment: paymentDetails,
       payments: paymentDetails.payments || undefined,
-      registerId: 'reg-01',
+      storeId: activeTarget.storeId,
+      registerId: activeTarget.registerId,
     };
 
     const completed = await api.createOrder(orderPayload);
@@ -1747,6 +1756,8 @@ export default function App() {
         customer={selectedCustomer}
         currentUser={currentUser}
         settings={settings}
+        storeId={getActivePosTarget().storeId}
+        registerId={getActivePosTarget().registerId}
         onCompleteOrder={handleCompleteOrder}
       />
 
