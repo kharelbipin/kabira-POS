@@ -1470,18 +1470,6 @@ export const ManagerSettingsCenter: React.FC<ManagerSettingsCenterProps> = ({
                       />
                     </div>
 
-                    {/* Primary Terminal IP Address */}
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      <label className="text-xs font-bold text-slate-900 block mb-1">
-                        Primary PAX Terminal IP Address
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.paymentTerminalIp}
-                        onChange={e => setFormData({ ...formData, paymentTerminalIp: e.target.value })}
-                        className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-800"
-                      />
-                    </div>
                   </div>
                 </div>
               </div>
