@@ -1,6 +1,7 @@
 import { PaymentProvider } from './PaymentProvider.js';
 import { MockPaymentProvider } from './providers/MockPaymentProvider.js';
 import { UnsupportedPaymentProvider } from './providers/UnsupportedPaymentProvider.js';
+import { PaxPaymentProvider } from './providers/pax/PaxPaymentProvider.js';
 import { PaymentProviderConfig } from './types.js';
 
 export class PaymentProviderFactory {
@@ -9,6 +10,7 @@ export class PaymentProviderFactory {
       case 'mock':
         return new MockPaymentProvider(config);
       case 'pax':
+        return new PaxPaymentProvider(config);
       case 'clover':
       case 'square':
       case 'stripe_terminal':
