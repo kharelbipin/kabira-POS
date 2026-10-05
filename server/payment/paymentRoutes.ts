@@ -20,6 +20,11 @@ paymentRouter.use((req, res, next) => {
   }
 });
 
+paymentRouter.get('/connectors', (req: Request, res: Response) => {
+  const provider = req.query.provider ? String(req.query.provider) : undefined;
+  res.json(paymentService.getConnectorCatalog(provider));
+});
+
 paymentRouter.get('/config', (req: Request, res: Response) => {
   const { storeId, registerId } = ids(req);
   res.json(paymentService.getConfig(storeId, registerId));
