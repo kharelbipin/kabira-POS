@@ -30,6 +30,8 @@ export class PaymentService {
       terminalModel: input.terminalModel ?? existing?.terminalModel,
       terminalId: input.terminalId ?? existing?.terminalId,
       deviceId: input.deviceId ?? existing?.deviceId,
+      integrationMode: input.integrationMode ?? existing?.integrationMode,
+      credentialProfileId: input.credentialProfileId ?? existing?.credentialProfileId,
       connectionType: input.connectionType || existing?.connectionType || 'cloud',
       ipAddress: input.ipAddress ?? existing?.ipAddress,
       port: input.port ?? existing?.port,
