@@ -2112,6 +2112,11 @@ class ApiService {
   }
 
   // Universal payment terminal integration
+  async getPaymentConnectors(provider?: string) {
+    const query = provider ? `?provider=${encodeURIComponent(provider)}` : '';
+    return this.request<any[]>(`/payments/connectors${query}`);
+  }
+
   async getPaymentConfig(storeId: string = 'store-1', registerId: string = 'reg-01') {
     return this.request<any>(
       `/payments/config?storeId=${encodeURIComponent(storeId)}&registerId=${encodeURIComponent(registerId)}`
