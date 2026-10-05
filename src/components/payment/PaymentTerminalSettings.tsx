@@ -1,11 +1,32 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CreditCard, PlugZap, RefreshCw, Save, ShieldCheck, Wifi, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  CreditCard,
+  PlugZap,
+  RefreshCw,
+  Save,
+  ServerCog,
+  ShieldCheck,
+  TerminalSquare,
+  Wifi,
+  XCircle,
+} from 'lucide-react';
 import { api } from '../../utils/api';
 
 interface Props {
   storeId?: string;
   registerId?: string;
   currentUserRole?: string;
+}
+
+interface ConnectorOption {
+  id: string;
+  provider: string;
+  processor: string;
+  label: string;
+  installed: boolean;
+  sandbox: boolean;
+  modes: string[];
 }
 
 const providers = [
@@ -19,6 +40,14 @@ const providers = [
   ['generic', 'Generic Terminal'],
 ] as const;
 
+const paxModels = ['A920 Pro', 'A920', 'A80', 'A35', 'A30', 'S300', 'Other'];
+
+const modeLabels: Record<string, string> = {
+  semi_integrated_lan: 'Semi-Integrated LAN',
+  local_agent: 'Local Certified Agent',
+  processor_cloud: 'Processor / Cloud',
+};
+
 export const PaymentTerminalSettings: React.FC<Props> = ({
   storeId = 'store-1',
   registerId = 'reg-01',
@@ -26,26 +55,48 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
 }) => {
   const [config, setConfig] = useState<any>(null);
   const [status, setStatus] = useState<any>(null);
+  const [connectors, setConnectors] = useState<ConnectorOption[]>([]);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const canEdit = currentUserRole === 'Admin' || currentUserRole === 'Manager';
 
+  const canEdit = currentUserRole === 'Admin' || currentUserRole === 'Manager';
   const isMock = config?.provider === 'mock';
+  const isPax = config?.provider === 'pax';
+
   const providerLabel = useMemo(
     () => providers.find(([id]) => id === config?.provider)?.[1] || config?.provider || 'Unknown',
     [config?.provider]
   );
 
+  const selectedConnector = useMemo(
+    () => connectors.find(item => item.id === config?.connectorId),
+    [connectors, config?.connectorId]
+  );
+
+  const loadConnectors = async (provider: string) => {
+    try {
+      const list = await api.getPaymentConnectors(provider);
+      setConnectors(list);
+      return list;
+    } catch {
+      setConnectors([]);
+      return [];
+    }
+  };
+
   const load = async () => {
     setBusy(true);
     setMessage(null);
     try {
-      const [cfg, sts] = await Promise.all([
-        api.getPaymentConfig(storeId, registerId),
+      const cfg = await api.getPaymentConfig(storeId, registerId);
+      const [sts, list] = await Promise.all([
         api.getPaymentTerminalStatus(storeId, registerId),
+        api.getPaymentConnectors(cfg.provider),
       ]);
       setConfig(cfg);
       setStatus(sts);
+      setConnectors(list);
     } catch (error: any) {
       setMessage(error?.message || 'Unable to load payment terminal settings.');
     } finally {
@@ -56,6 +107,54 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
   useEffect(() => {
     void load();
   }, [storeId, registerId]);
+
+  const updateProvider = async (provider: string) => {
+    const list = await loadConnectors(provider);
+    const firstInstalled = list.find(item => item.installed);
+    const nextConnector = firstInstalled || list[0];
+
+    setConfig((prev: any) => ({
+      ...prev,
+      provider,
+      connectorId: nextConnector?.id || '',
+      processor:
+        provider === 'mock'
+          ? 'KaBiRa Sandbox'
+          : nextConnector?.processor || '',
+      environment:
+        provider === 'mock' || nextConnector?.sandbox
+          ? 'sandbox'
+          : prev.environment || 'sandbox',
+      integrationMode:
+        provider === 'pax'
+          ? nextConnector?.modes?.[0] || 'semi_integrated_lan'
+          : prev.integrationMode,
+      connectionType:
+        provider === 'pax' ? 'lan' : provider === 'mock' ? 'cloud' : prev.connectionType,
+    }));
+
+    setStatus(null);
+    setMessage(null);
+  };
+
+  const updateConnector = (connectorId: string) => {
+    const connector = connectors.find(item => item.id === connectorId);
+    if (!connector) return;
+
+    setConfig((prev: any) => ({
+      ...prev,
+      connectorId,
+      processor: connector.processor,
+      environment: connector.sandbox ? 'sandbox' : prev.environment,
+      integrationMode:
+        connector.modes?.includes(prev.integrationMode)
+          ? prev.integrationMode
+          : connector.modes?.[0] || prev.integrationMode,
+    }));
+
+    setStatus(null);
+    setMessage(null);
+  };
 
   const save = async () => {
     if (!config) return;
@@ -68,7 +167,7 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
         registerId,
       });
       setConfig(saved);
-      setMessage('Payment terminal configuration saved.');
+      setMessage('Payment configuration saved for this register.');
       setStatus(await api.getPaymentTerminalStatus(storeId, registerId));
     } catch (error: any) {
       setMessage(error?.message || 'Unable to save payment terminal settings.');
@@ -78,16 +177,32 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
   };
 
   const testConnection = async () => {
-    setBusy(true);
+    if (!config) return;
+
+    setTesting(true);
     setMessage(null);
     try {
+      // Save first so the connection test always uses what is currently on screen.
+      const saved = canEdit
+        ? await api.savePaymentConfig({ ...config, storeId, registerId })
+        : config;
+      setConfig(saved);
+
       const result = await api.connectPaymentTerminal(storeId, registerId);
       setStatus(result);
-      setMessage(result.connected ? 'Terminal connection is ready.' : result.message);
+      setMessage(
+        result.connected
+          ? `${providerLabel} terminal connection is ready.`
+          : result.message || 'Terminal is not connected.'
+      );
     } catch (error: any) {
+      setStatus({
+        connected: false,
+        message: error?.message || 'Terminal connection test failed.',
+      });
       setMessage(error?.message || 'Terminal connection test failed.');
     } finally {
-      setBusy(false);
+      setTesting(false);
     }
   };
 
@@ -99,224 +214,354 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
     );
   }
 
+  const availableModes = selectedConnector?.modes?.length
+    ? selectedConnector.modes
+    : ['semi_integrated_lan', 'local_agent', 'processor_cloud'];
+
   return (
-    <div className="rounded-2xl border border-slate-700 bg-[#0B1828] p-5 shadow-lg space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-white font-black uppercase tracking-wider text-sm">
-            <CreditCard className="h-4 w-4 text-amber-400" />
-            Universal Payment Terminal
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-slate-700 bg-[#0B1828] p-5 shadow-lg">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-white">
+              <CreditCard className="h-4 w-4 text-amber-400" />
+              Payment Terminal Configuration
+            </div>
+            <p className="mt-1 max-w-3xl text-xs text-slate-400">
+              Configure the terminal and processor for this store/register. KaBiRa checkout stays the same even when the merchant changes terminal brands or processors.
+            </p>
           </div>
-          <p className="mt-1 text-xs text-slate-400">
-            Configure the payment provider per store and register. Checkout does not depend on any one terminal brand.
-          </p>
+
+          <div className={`rounded-full border px-3 py-1 text-[11px] font-bold ${
+            status?.connected
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+              : 'border-slate-600 bg-slate-800 text-slate-400'
+          }`}>
+            {status?.connected ? '● Connected' : '○ Not Connected'}
+          </div>
         </div>
-        <div className={`rounded-full border px-3 py-1 text-[11px] font-bold ${status?.connected ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-slate-600 bg-slate-800 text-slate-400'}`}>
-          {status?.connected ? '● Connected' : '○ Not Connected'}
+
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-4">
+          {[
+            ['1', 'Provider', providerLabel],
+            ['2', 'Connector', selectedConnector?.label || 'Not selected'],
+            ['3', 'Terminal', config.terminalModel || 'Not configured'],
+            ['4', 'Status', status?.connected ? 'Ready' : 'Needs test'],
+          ].map(([number, label, value]) => (
+            <div key={number} className="rounded-xl border border-slate-700 bg-slate-900/60 p-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-slate-950">
+                  {number}
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</span>
+              </div>
+              <div className="mt-2 truncate text-xs font-bold text-slate-200">{value}</div>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <label className="space-y-1">
-          <span className="text-[11px] font-bold uppercase text-slate-400">Provider</span>
-          <select
-            value={config.provider}
-            disabled={!canEdit}
-            onChange={e => setConfig({ ...config, provider: e.target.value })}
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
-          >
-            {providers.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-          </select>
-        </label>
+      <div className="rounded-2xl border border-slate-700 bg-[#0B1828] p-5 shadow-lg space-y-5">
+        <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+          <ServerCog className="h-4 w-4 text-sky-400" />
+          <h4 className="text-xs font-black uppercase tracking-wider text-white">1. Provider & Processor Connector</h4>
+        </div>
 
-        <label className="space-y-1">
-          <span className="text-[11px] font-bold uppercase text-slate-400">Processor</span>
-          <input
-            value={config.processor || ''}
-            disabled={!canEdit}
-            onChange={e => setConfig({ ...config, processor: e.target.value })}
-            placeholder="TSYS, Fiserv, Worldpay, etc."
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
-          />
-        </label>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="space-y-1">
+            <span className="text-[11px] font-bold uppercase text-slate-400">Terminal Provider</span>
+            <select
+              value={config.provider}
+              disabled={!canEdit}
+              onChange={e => void updateProvider(e.target.value)}
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+            >
+              {providers.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            </select>
+          </label>
 
-        <label className="space-y-1">
-          <span className="text-[11px] font-bold uppercase text-slate-400">Terminal Model</span>
-          <input
-            value={config.terminalModel || ''}
-            disabled={!canEdit}
-            onChange={e => setConfig({ ...config, terminalModel: e.target.value })}
-            placeholder="A920 Pro, A35, etc."
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
-          />
-        </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-bold uppercase text-slate-400">Processor Connector</span>
+            <select
+              value={config.connectorId || ''}
+              disabled={!canEdit || connectors.length === 0}
+              onChange={e => updateConnector(e.target.value)}
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+            >
+              <option value="">Select connector</option>
+              {connectors.map(connector => (
+                <option key={connector.id} value={connector.id}>
+                  {connector.label}{connector.installed ? ' • Installed' : ' • Available later'}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="space-y-1">
-          <span className="text-[11px] font-bold uppercase text-slate-400">Terminal ID</span>
-          <input
-            value={config.terminalId || ''}
-            disabled={!canEdit}
-            onChange={e => setConfig({ ...config, terminalId: e.target.value })}
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
-          />
-        </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-bold uppercase text-slate-400">Processor / Acquirer</span>
+            <input
+              value={config.processor || ''}
+              disabled={!canEdit}
+              onChange={e => setConfig({ ...config, processor: e.target.value })}
+              placeholder="TSYS, Fiserv, Worldpay, Heartland…"
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+            />
+          </label>
 
-        <label className="space-y-1">
-          <span className="text-[11px] font-bold uppercase text-slate-400">Connection</span>
-          <select
-            value={config.connectionType}
-            disabled={!canEdit}
-            onChange={e => setConfig({ ...config, connectionType: e.target.value })}
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
-          >
-            <option value="lan">LAN / Wi-Fi</option>
-            <option value="usb">USB</option>
-            <option value="serial">Serial</option>
-            <option value="cloud">Cloud API</option>
-          </select>
-        </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-bold uppercase text-slate-400">Merchant Account Label</span>
+            <input
+              value={config.merchantAccountLabel || ''}
+              disabled={!canEdit}
+              onChange={e => setConfig({ ...config, merchantAccountLabel: e.target.value })}
+              placeholder="Front Store Merchant Account"
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+            />
+          </label>
+        </div>
 
-        <label className="space-y-1">
-          <span className="text-[11px] font-bold uppercase text-slate-400">Environment</span>
-          <select
-            value={config.environment}
-            disabled={!canEdit}
-            onChange={e => setConfig({ ...config, environment: e.target.value })}
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
-          >
-            <option value="sandbox">Sandbox / Test</option>
-            <option value="production">Production</option>
-          </select>
-        </label>
+        {selectedConnector && (
+          <div className={`rounded-xl border p-3 text-xs ${
+            selectedConnector.installed
+              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+              : 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+          }`}>
+            {selectedConnector.installed ? (
+              <CheckCircle2 className="mr-2 inline h-4 w-4" />
+            ) : (
+              <XCircle className="mr-2 inline h-4 w-4" />
+            )}
+            {selectedConnector.installed
+              ? 'This connector is installed and can be tested now.'
+              : 'This connector can be configured now, but production transactions stay blocked until its certified connector package is installed.'}
+          </div>
+        )}
+      </div>
 
-        {config.provider === 'pax' && (
-          <>
-            <label className="space-y-1">
-              <span className="text-[11px] font-bold uppercase text-slate-400">PAX Integration Mode</span>
+      <div className="rounded-2xl border border-slate-700 bg-[#0B1828] p-5 shadow-lg space-y-5">
+        <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+          <TerminalSquare className="h-4 w-4 text-violet-400" />
+          <h4 className="text-xs font-black uppercase tracking-wider text-white">2. Terminal & Connection</h4>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="space-y-1">
+            <span className="text-[11px] font-bold uppercase text-slate-400">Terminal Model</span>
+            {isPax ? (
               <select
-                value={config.integrationMode || 'semi_integrated_lan'}
+                value={config.terminalModel || ''}
+                disabled={!canEdit}
+                onChange={e => setConfig({ ...config, terminalModel: e.target.value })}
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+              >
+                <option value="">Select PAX model</option>
+                {paxModels.map(model => <option key={model} value={model}>{model}</option>)}
+              </select>
+            ) : (
+              <input
+                value={config.terminalModel || ''}
+                disabled={!canEdit}
+                onChange={e => setConfig({ ...config, terminalModel: e.target.value })}
+                placeholder="Terminal model"
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+              />
+            )}
+          </label>
+
+          <label className="space-y-1">
+            <span className="text-[11px] font-bold uppercase text-slate-400">Terminal ID</span>
+            <input
+              value={config.terminalId || ''}
+              disabled={!canEdit}
+              onChange={e => setConfig({ ...config, terminalId: e.target.value })}
+              placeholder="Processor-assigned terminal ID"
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+            />
+          </label>
+
+          {isPax && (
+            <label className="space-y-1">
+              <span className="text-[11px] font-bold uppercase text-slate-400">Integration Mode</span>
+              <select
+                value={config.integrationMode || availableModes[0]}
                 disabled={!canEdit}
                 onChange={e => setConfig({ ...config, integrationMode: e.target.value })}
                 className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
               >
-                <option value="semi_integrated_lan">Semi-Integrated LAN</option>
-                <option value="local_agent">Local Certified Agent</option>
-                <option value="processor_cloud">Processor / Cloud</option>
+                {availableModes.map(mode => (
+                  <option key={mode} value={mode}>{modeLabels[mode] || mode}</option>
+                ))}
               </select>
             </label>
+          )}
 
-            {(config.integrationMode === 'local_agent' || config.integrationMode === 'processor_cloud') && (
+          <label className="space-y-1">
+            <span className="text-[11px] font-bold uppercase text-slate-400">Connection Type</span>
+            <select
+              value={config.connectionType}
+              disabled={!canEdit}
+              onChange={e => setConfig({ ...config, connectionType: e.target.value })}
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+            >
+              <option value="lan">LAN / Wi-Fi</option>
+              <option value="usb">USB</option>
+              <option value="serial">Serial</option>
+              <option value="cloud">Cloud API</option>
+            </select>
+          </label>
+
+          {config.connectionType === 'lan' && (
+            <>
               <label className="space-y-1">
-                <span className="text-[11px] font-bold uppercase text-slate-400">Secure Credential Profile</span>
+                <span className="text-[11px] font-bold uppercase text-slate-400">Terminal IP Address</span>
                 <input
-                  value={config.credentialProfileId || ''}
+                  value={config.ipAddress || ''}
                   disabled={!canEdit}
-                  onChange={e => setConfig({ ...config, credentialProfileId: e.target.value })}
-                  placeholder="Stored securely outside POS config"
+                  onChange={e => setConfig({ ...config, ipAddress: e.target.value })}
+                  placeholder="192.168.1.80"
                   className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
                 />
               </label>
-            )}
-          </>
-        )}
 
-        {config.connectionType === 'lan' && (
-          <>
-            <label className="space-y-1">
-              <span className="text-[11px] font-bold uppercase text-slate-400">IP Address</span>
+              <label className="space-y-1">
+                <span className="text-[11px] font-bold uppercase text-slate-400">Port</span>
+                <input
+                  type="number"
+                  value={config.port || ''}
+                  disabled={!canEdit}
+                  onChange={e => setConfig({ ...config, port: e.target.value ? Number(e.target.value) : undefined })}
+                  placeholder="Processor / connector port"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+                />
+              </label>
+            </>
+          )}
+
+          {(config.integrationMode === 'local_agent' || config.integrationMode === 'processor_cloud') && (
+            <label className="space-y-1 md:col-span-2">
+              <span className="text-[11px] font-bold uppercase text-slate-400">Secure Credential Profile</span>
               <input
-                value={config.ipAddress || ''}
+                value={config.credentialProfileId || ''}
                 disabled={!canEdit}
-                onChange={e => setConfig({ ...config, ipAddress: e.target.value })}
-                placeholder="192.168.1.80"
+                onChange={e => setConfig({ ...config, credentialProfileId: e.target.value })}
+                placeholder="Reference to securely stored processor credentials"
                 className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
               />
+              <span className="block text-[10px] text-slate-500">
+                KaBiRa stores only the credential profile reference here, not raw API secrets or card data.
+              </span>
             </label>
-            <label className="space-y-1">
-              <span className="text-[11px] font-bold uppercase text-slate-400">Port</span>
-              <input
-                type="number"
-                value={config.port || ''}
-                disabled={!canEdit}
-                onChange={e => setConfig({ ...config, port: e.target.value ? Number(e.target.value) : undefined })}
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
-              />
-            </label>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {[
-          ['isEnabled', 'Enabled'],
-          ['allowRefund', 'Allow Refund'],
-          ['allowVoid', 'Allow Void'],
-        ].map(([key, label]) => (
-          <label key={key} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5">
-            <span className="text-xs font-bold text-slate-200">{label}</span>
-            <input
-              type="checkbox"
-              checked={Boolean(config[key])}
+      <div className="rounded-2xl border border-slate-700 bg-[#0B1828] p-5 shadow-lg space-y-5">
+        <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+          <ShieldCheck className="h-4 w-4 text-emerald-400" />
+          <h4 className="text-xs font-black uppercase tracking-wider text-white">3. Environment & Permissions</h4>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="space-y-1">
+            <span className="text-[11px] font-bold uppercase text-slate-400">Environment</span>
+            <select
+              value={config.environment}
               disabled={!canEdit}
-              onChange={e => setConfig({ ...config, [key]: e.target.checked })}
-              className="h-4 w-4 accent-amber-400"
-            />
+              onChange={e => setConfig({ ...config, environment: e.target.value })}
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+            >
+              <option value="sandbox">Sandbox / Test</option>
+              <option value="production">Production</option>
+            </select>
           </label>
-        ))}
+
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:col-span-2">
+            {[
+              ['isEnabled', 'Enabled'],
+              ['autoConnect', 'Auto Connect'],
+              ['allowRefund', 'Refund'],
+              ['allowVoid', 'Void'],
+            ].map(([key, label]) => (
+              <label key={key} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2.5">
+                <span className="text-[11px] font-bold text-slate-200">{label}</span>
+                <input
+                  type="checkbox"
+                  checked={Boolean(config[key])}
+                  disabled={!canEdit}
+                  onChange={e => setConfig({ ...config, [key]: e.target.checked })}
+                  className="h-4 w-4 accent-amber-400"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {(isMock || (isPax && config.environment === 'sandbox')) && (
+          <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-200">
+            <ShieldCheck className="mr-2 inline h-4 w-4" />
+            Sandbox mode uses a KaBiRa simulator and never sends a real card transaction.
+          </div>
+        )}
       </div>
 
-      {config.provider === 'pax' && config.environment === 'sandbox' && (
-        <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-3 text-xs text-violet-200">
-          <ShieldCheck className="mr-2 inline h-4 w-4" />
-          PAX Sandbox mode uses the KaBiRa PAX simulator. It follows the same provider contract without sending real card data.
+      <div className="rounded-2xl border border-slate-700 bg-[#071525] p-5 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white">
+              <Wifi className="h-4 w-4 text-sky-400" />
+              Connection Test
+            </div>
+            <div className="mt-1 text-xs text-slate-400">
+              {status?.message || 'Save and test this register before enabling live card transactions.'}
+            </div>
+            {status?.checkedAt && (
+              <div className="mt-1 text-[10px] text-slate-600">Last checked: {new Date(status.checkedAt).toLocaleString()}</div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={busy || testing}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-4 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void testConnection()}
+              disabled={busy || testing}
+              className="inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-xs font-bold text-sky-200 hover:bg-sky-500/20 disabled:opacity-50"
+            >
+              <PlugZap className={`h-4 w-4 ${testing ? 'animate-pulse' : ''}`} />
+              {testing ? 'Testing…' : 'Test Connection'}
+            </button>
+
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => void save()}
+                disabled={busy || testing}
+                className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-amber-300 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                Save Configuration
+              </button>
+            )}
+          </div>
         </div>
-      )}
 
-      {isMock && (
-        <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-200">
-          <ShieldCheck className="mr-2 inline h-4 w-4" />
-          KaBiRa Test Terminal is active. It lets you test approve, decline, cancel, timeout, refund, void, and split tender without owning payment hardware.
-        </div>
-      )}
-
-      {!isMock && status && !status.connected && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-          <XCircle className="mr-2 inline h-4 w-4" />
-          {providerLabel} is selectable now, but real transactions stay blocked until its certified adapter is configured.
-        </div>
-      )}
-
-      {message && <div className="text-xs font-semibold text-slate-300">{message}</div>}
-
-      <div className="flex flex-wrap justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={busy}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-600 px-4 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800 disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
-        <button
-          type="button"
-          onClick={() => void testConnection()}
-          disabled={busy}
-          className="inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 px-4 py-2 text-xs font-bold text-sky-200 hover:bg-sky-500/20 disabled:opacity-50"
-        >
-          <PlugZap className="h-4 w-4" />
-          Test Connection
-        </button>
-        {canEdit && (
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={busy}
-            className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-amber-300 disabled:opacity-50"
-          >
-            <Save className="h-4 w-4" />
-            Save Payment Setup
-          </button>
+        {message && (
+          <div className={`mt-4 rounded-xl border p-3 text-xs font-semibold ${
+            status?.connected
+              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+              : 'border-slate-700 bg-slate-900/60 text-slate-300'
+          }`}>
+            {message}
+          </div>
         )}
       </div>
     </div>
