@@ -61,7 +61,7 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
       : storeId;
 
   const [selectedStoreId, setSelectedStoreId] = useState(initialStoreId);
-  const [selectedRegisterId, setSelectedRegisterId] = useState(registerId);
+  const [selectedRegisterId, setSelectedRegisterId] = useState(registerId || '');
   const [registers, setRegisters] = useState<any[]>([]);
   const [scopeBusy, setScopeBusy] = useState(false);
   const [config, setConfig] = useState<any>(null);
@@ -132,11 +132,14 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
         const nextRegisters = apiRegisters.length > 0 ? apiRegisters : fallbackRegisters;
         setRegisters(nextRegisters);
 
-        if (
-          nextRegisters.length > 0 &&
-          !nextRegisters.some((register: any) => register.id === selectedRegisterId)
-        ) {
-          setSelectedRegisterId(nextRegisters[0].id);
+        if (nextRegisters.length > 0) {
+          setSelectedRegisterId(current =>
+            nextRegisters.some((register: any) => register.id === current)
+              ? current
+              : nextRegisters[0].id
+          );
+        } else {
+          setSelectedRegisterId('');
         }
       } finally {
         setScopeBusy(false);
@@ -227,7 +230,11 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
     try {
       // Save first so the connection test always uses what is currently on screen.
       const saved = canEdit
-        ? await api.savePaymentConfig({ ...config, storeId, registerId })
+        ? await api.savePaymentConfig({
+            ...config,
+            storeId: selectedStoreId,
+            registerId: selectedRegisterId,
+          })
         : config;
       setConfig(saved);
 
@@ -282,6 +289,8 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
               disabled={currentUserRole !== 'Admin' || scopeBusy}
               onChange={e => {
                 setSelectedStoreId(e.target.value);
+                setSelectedRegisterId('');
+                setRegisters([]);
                 setConfig(null);
                 setStatus(null);
                 setMessage(null);
