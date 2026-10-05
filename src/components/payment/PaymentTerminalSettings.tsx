@@ -189,6 +189,37 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
           </select>
         </label>
 
+        {config.provider === 'pax' && (
+          <>
+            <label className="space-y-1">
+              <span className="text-[11px] font-bold uppercase text-slate-400">PAX Integration Mode</span>
+              <select
+                value={config.integrationMode || 'semi_integrated_lan'}
+                disabled={!canEdit}
+                onChange={e => setConfig({ ...config, integrationMode: e.target.value })}
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+              >
+                <option value="semi_integrated_lan">Semi-Integrated LAN</option>
+                <option value="local_agent">Local Certified Agent</option>
+                <option value="processor_cloud">Processor / Cloud</option>
+              </select>
+            </label>
+
+            {(config.integrationMode === 'local_agent' || config.integrationMode === 'processor_cloud') && (
+              <label className="space-y-1">
+                <span className="text-[11px] font-bold uppercase text-slate-400">Secure Credential Profile</span>
+                <input
+                  value={config.credentialProfileId || ''}
+                  disabled={!canEdit}
+                  onChange={e => setConfig({ ...config, credentialProfileId: e.target.value })}
+                  placeholder="Stored securely outside POS config"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white"
+                />
+              </label>
+            )}
+          </>
+        )}
+
         {config.connectionType === 'lan' && (
           <>
             <label className="space-y-1">
@@ -233,6 +264,13 @@ export const PaymentTerminalSettings: React.FC<Props> = ({
           </label>
         ))}
       </div>
+
+      {config.provider === 'pax' && config.environment === 'sandbox' && (
+        <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-3 text-xs text-violet-200">
+          <ShieldCheck className="mr-2 inline h-4 w-4" />
+          PAX Sandbox mode uses the KaBiRa PAX simulator. It follows the same provider contract without sending real card data.
+        </div>
+      )}
 
       {isMock && (
         <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-200">
