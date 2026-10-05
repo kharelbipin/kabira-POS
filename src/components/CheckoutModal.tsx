@@ -45,6 +45,8 @@ interface CheckoutModalProps {
   customer: Customer | null;
   currentUser: User | null;
   settings: StoreSettings | null;
+  storeId: string;
+  registerId: string;
   onCompleteOrder: (paymentDetails: any) => Promise<void>;
 }
 
@@ -60,6 +62,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   customer,
   currentUser,
   settings,
+  storeId,
+  registerId,
   onCompleteOrder,
 }) => {
   // ----------------------------------------------------
@@ -237,7 +241,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const handleCancelCardTerminal = () => {
     playBeep('click');
-    void api.paymentCancel('store-1', 'reg-01').catch(() => {});
+    void api.paymentCancel(storeId, registerId).catch(() => {});
     setActiveCardCharge(null);
     setTerminalStatus('idle');
     setIsProcessing(false);
@@ -318,7 +322,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       timestamp: new Date().toISOString(),
       cashierId: cashier.id,
       cashierName: cashier.name,
-      registerId: 'reg-01',
+      registerId,
       paymentReference: changeFromThisPayment > 0
         ? `Tendered $${amt.toFixed(2)} • Change Due: $${changeFromThisPayment.toFixed(2)}`
         : 'Cash Tendered',
@@ -383,8 +387,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     try {
       const result = await api.paymentSale({
-        storeId: 'store-1',
-        registerId: 'reg-01',
+        storeId,
+        registerId,
         orderId: `checkout-${Date.now()}`,
         amount: activeCardCharge,
         testOutcome: outcome,
@@ -402,7 +406,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           timestamp: result.timestamp || new Date().toISOString(),
           cashierId: cashier.id,
           cashierName: cashier.name,
-          registerId: 'reg-01',
+          registerId,
           cardBrand: result.cardBrand || cardBrand,
           cardLast4: result.last4,
           authCode: result.authCode,
@@ -464,7 +468,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       timestamp: new Date().toISOString(),
       cashierId: cashier.id,
       cashierName: cashier.name,
-      registerId: 'reg-01',
+      registerId,
       paymentReference: `${methodType.toUpperCase()} ${otherReference ? `(#${otherReference})` : ''}`,
       authCode: `OTH-${Math.floor(10000 + Math.random() * 90000)}`,
     };
